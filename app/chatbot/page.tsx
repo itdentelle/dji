@@ -13,17 +13,36 @@ interface Message {
 
 export default function ChatbotPage() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      sender: "ai",
-      text: `Halo ${user?.fullName.replace(" (Demo)", "") || "Supervisor"}, saya adalah Enterprise Assistant AI. Saya terhubung ke n8n workflow untuk menyajikan analitik data hasil produksi mesin rajut, laporan deviasi kualitas, dan detail masalah mesin rajut harian. Ada yang bisa saya bantu hari ini?`,
-      timestamp: "Baru saja",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load history from sessionStorage on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem("dji_chatbot_history");
+    if (saved) {
+      setMessages(JSON.parse(saved));
+    } else {
+      setMessages([
+        {
+          id: "1",
+          sender: "ai",
+          text: `Halo ${user?.fullName.replace(" (Demo)", "") || "Supervisor"}, saya adalah Enterprise Assistant AI. Saya terhubung ke n8n workflow untuk menyajikan analitik data hasil produksi mesin rajut, laporan deviasi kualitas, dan detail masalah mesin rajut harian. Ada yang bisa saya bantu hari ini?`,
+          timestamp: "Baru saja",
+        },
+      ]);
+    }
+    setIsLoaded(true);
+  }, [user]);
+
+  // Save history to sessionStorage whenever messages update
+  useEffect(() => {
+    if (isLoaded) {
+      sessionStorage.setItem("dji_chatbot_history", JSON.stringify(messages));
+    }
+  }, [messages, isLoaded]);
 
   // Quick suggestions questions
   const suggestions = [
@@ -227,6 +246,17 @@ export default function ChatbotPage() {
           </div>
         </div>
       </div>
+
+      {/* Floating WhatsApp Button */}
+      <a
+        href="https://wa.me/6283878966707"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="absolute bottom-20 right-6 z-50 bg-[#25D366] hover:bg-[#1ebe57] text-white p-3.5 rounded-full shadow-[0_8px_20px_rgba(37,211,102,0.4)] transition-all hover:scale-110 flex items-center justify-center group"
+        title="Lanjutkan di WhatsApp"
+      >
+        <svg viewBox="0 0 24 24" width="28" height="28" className="fill-current text-white"><path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.101-.473-.15-.673.15-.197.295-.771.966-.944 1.162-.175.195-.349.21-.646.06-.301-.15-1.265-.462-2.406-1.485-.888-.795-1.484-1.77-1.66-2.07-.174-.3-.019-.465.13-.615.136-.135.301-.345.451-.525.146-.18.194-.301.297-.496.096-.21.046-.39-.034-.54-.075-.15-.673-1.62-.922-2.206-.24-.584-.487-.51-.672-.51-.172-.015-.371-.015-.571-.015-.2 0-.523.074-.797.359-.273.3-1.045 1.02-1.045 2.475s1.07 2.865 1.219 3.075c.149.21 2.095 3.2 5.076 4.485.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.767-.721 2.016-1.426.248-.705.248-1.305.174-1.426-.074-.121-.274-.195-.574-.345z"></path><path d="M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.334.101 11.895c-.002 2.105.552 4.14 1.604 5.931L0 24l6.335-1.653c1.734.943 3.712 1.44 5.71 1.44h.004c6.58 0 11.939-5.335 11.943-11.896 0-3.176-1.24-6.165-3.472-8.442zM12.045 21.67h-.004c-1.781 0-3.525-.48-5.052-1.38l-.36-.214-3.75.975.992-3.645-.235-.375a9.86 9.86 0 0 1-1.51-5.139c.003-5.445 4.446-9.88 9.907-9.88 2.65 0 5.14 1.02 7.014 2.885 1.875 1.875 2.906 4.366 2.904 7.016-.004 5.45-4.448 9.888-9.906 9.888z"></path></svg>
+      </a>
     </div>
   );
 }
