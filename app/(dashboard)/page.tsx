@@ -84,6 +84,24 @@ export default function DashboardPage() {
   // Rekap Table Expansion State
   const [isRekapExpanded, setIsRekapExpanded] = useState(false);
 
+  // Swipe State for mobile
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
+  const handleTouchEndMetric = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (diff > 40) setMetricMode("BARIS");
+    else if (diff < -40) setMetricMode("PCS");
+    setTouchStartX(null);
+  };
+  const handleTouchEndProblems = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (diff > 40) { setActiveFilter("NOL_PRODUKSI"); setMetricMode("BARIS"); }
+    else if (diff < -40) { setActiveFilter("PROBLEMS"); setMetricMode("PCS"); }
+    setTouchStartX(null);
+  };
+
   // Load real production data from Supabase
   useEffect(() => {
     async function loadLiveData() {
@@ -742,10 +760,14 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
         {/* Card 1: Hasil Produksi & Total Baris (Slider Slicer) */}
-        <div className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group transition-all duration-300 flex flex-col ${activeFilter === "ALL"
+        <div 
+          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group transition-all duration-300 flex flex-col ${activeFilter === "ALL"
             ? "bg-[#004777] shadow-xl scale-[1.03] ring-2 ring-[#0070bc] ring-offset-2"
             : "bg-[#0070bc] shadow-md hover:scale-[1.01]"
-          }`}>
+          }`}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEndMetric}
+        >
           
           {/* Background decoration */}
           <div className="absolute -right-8 -bottom-8 w-24 h-24 rounded-full bg-sky-400/20 blur-xl group-hover:scale-125 transition-all duration-300 pointer-events-none" />
@@ -807,25 +829,33 @@ export default function DashboardPage() {
           </div>
 
           {/* Dots Indicator */}
-          <div className="absolute bottom-5 right-5 flex items-center gap-1.5 z-20" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 z-20" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => { setMetricMode("PCS"); if(activeFilter === "NOL_PRODUKSI") setActiveFilter("PROBLEMS"); }}
-              className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${metricMode === "PCS" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`}
+              className="p-3 -m-3 cursor-pointer"
               title="Geser ke Total Produksi"
-            />
+            >
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`} />
+            </button>
             <button
               onClick={() => { setMetricMode("BARIS"); if(activeFilter === "PROBLEMS") setActiveFilter("NOL_PRODUKSI"); }}
-              className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${metricMode === "BARIS" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`}
+              className="p-3 -m-3 cursor-pointer ml-3"
               title="Geser ke Total Panel"
-            />
+            >
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "BARIS" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`} />
+            </button>
           </div>
         </div>
 
         {/* Card 2: Lolos Inspeksi QC (Slider Slicer) */}
-        <div className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border transition-all duration-300 flex flex-col ${activeFilter === "LOLOS"
+        <div 
+          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border transition-all duration-300 flex flex-col ${activeFilter === "LOLOS"
             ? "bg-sky-50/50 border-sky-500 text-slate-800 shadow-md scale-[1.03] ring-2 ring-sky-500"
             : "bg-white border-[#e9ecef] text-slate-800 hover:scale-[1.01] hover:shadow-xs"
-          }`}>
+          }`}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEndMetric}
+        >
 
           {/* Slide Container */}
           <div 
@@ -880,17 +910,21 @@ export default function DashboardPage() {
           </div>
 
           {/* Dots Indicator */}
-          <div className="absolute bottom-5 right-5 flex items-center gap-1.5 z-20" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 z-20" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => { setMetricMode("PCS"); if(activeFilter === "LOLOS") setActiveFilter("LOLOS"); }}
-              className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${metricMode === "PCS" ? (activeFilter === "LOLOS" ? "w-4 bg-sky-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`}
+              className="p-3 -m-3 cursor-pointer"
               title="Geser ke QC Produksi"
-            />
+            >
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? (activeFilter === "LOLOS" ? "w-4 bg-sky-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+            </button>
             <button
               onClick={() => { setMetricMode("BARIS"); if(activeFilter === "LOLOS") setActiveFilter("LOLOS"); }}
-              className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${metricMode === "BARIS" ? (activeFilter === "LOLOS" ? "w-4 bg-sky-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`}
+              className="p-3 -m-3 cursor-pointer ml-3"
               title="Geser ke QC Panel"
-            />
+            >
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "BARIS" ? (activeFilter === "LOLOS" ? "w-4 bg-sky-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+            </button>
           </div>
         </div>
 
@@ -949,7 +983,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Card 4: Masalah & Produksi Nol (Slider Slicer) */}
-        <div className="relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border border-[#e9ecef] bg-white hover:shadow-xs transition-all duration-300 flex flex-col">
+        <div 
+          className="relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border border-[#e9ecef] bg-white hover:shadow-xs transition-all duration-300 flex flex-col"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEndProblems}
+        >
           
           {/* Slide Container */}
           <div 
@@ -1016,17 +1054,21 @@ export default function DashboardPage() {
           </div>
 
           {/* Dots Indicator */}
-          <div className="absolute bottom-5 right-5 flex items-center gap-1.5 z-20" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 z-20" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => { setMetricMode("PCS"); if(activeFilter === "NOL_PRODUKSI") setActiveFilter("PROBLEMS"); }}
-              className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${metricMode === "PCS" ? (activeFilter === "PROBLEMS" ? "w-4 bg-red-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`}
+              className="p-3 -m-3 cursor-pointer"
               title="Geser ke Masalah"
-            />
+            >
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? (activeFilter === "PROBLEMS" ? "w-4 bg-red-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+            </button>
             <button
               onClick={() => { setMetricMode("BARIS"); if(activeFilter === "PROBLEMS") setActiveFilter("NOL_PRODUKSI"); }}
-              className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${metricMode === "BARIS" ? (activeFilter === "NOL_PRODUKSI" ? "w-4 bg-orange-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`}
+              className="p-3 -m-3 cursor-pointer ml-3"
               title="Geser ke Produksi Nol"
-            />
+            >
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "BARIS" ? (activeFilter === "NOL_PRODUKSI" ? "w-4 bg-orange-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+            </button>
           </div>
         </div>
 
@@ -1117,7 +1159,7 @@ export default function DashboardPage() {
               const totalWidth = svgWidth - 60; // 40 left padding, 20 right padding
               return (
                 <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar pb-4 w-full flex flex-col">
-                  <div style={{ minWidth: `${svgWidth}px` }} className="relative mx-auto w-full flex-1">
+                  <div style={{ minWidth: `${svgWidth}px` }} className="relative mx-auto w-full flex-1 min-h-[250px]">
                     <svg viewBox={`0 0 ${svgWidth} 250`} className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none">
                       <defs>
                         <pattern
