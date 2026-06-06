@@ -13,9 +13,6 @@ import {
   Users,
   AlertTriangle,
   Layers,
-  Download,
-  FileText,
-  Table as TableIcon
 } from "lucide-react";
 import { getRealProductionsData } from "@/actions/dashboard-actions";
 
@@ -57,14 +54,11 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLive, setIsLive] = useState(false);
 
-  // Dashboard View Mode (Produksi vs Kehadiran)
-  const [dashboardMode, setDashboardMode] = useState<"PRODUKSI" | "KEHADIRAN">("PRODUKSI");
-
   // Metric Mode State (also controls Card 1 and Card 4 sliders)
   const [metricMode, setMetricMode] = useState<"PCS" | "BARIS">("PCS");
 
   // Date Filtering State
-  const [dateRangeMode, setDateRangeMode] = useState<"ALL" | "TODAY" | "7DAYS" | "CUSTOM">("ALL");
+  const [dateRangeMode, setDateRangeMode] = useState<"ALL" | "TODAY" | "7DAYS" | "CUSTOM">("7DAYS");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
@@ -81,9 +75,6 @@ export default function DashboardPage() {
   const [selectedOperators, setSelectedOperators] = useState<string[]>([]);
   const [isOperatorDropdownOpen, setIsOperatorDropdownOpen] = useState(false);
 
-  // Rekap Table Expansion State
-  const [isRekapExpanded, setIsRekapExpanded] = useState(false);
-
   // Load real production data from Supabase
   useEffect(() => {
     async function loadLiveData() {
@@ -91,7 +82,13 @@ export default function DashboardPage() {
         const res = await getRealProductionsData();
         console.log("Dashboard Live Data Response:", res);
         if (res.success && res.data) {
-          setTransactions(res.data);
+          if (user?.role === 'employee' && user?.fullName) {
+            const cleanName = user.fullName.replace(" (Demo)", "");
+            const myData = res.data.filter(t => t.nama_operator.toLowerCase() === cleanName.toLowerCase());
+            setTransactions(myData);
+          } else {
+            setTransactions(res.data);
+          }
           setIsLive(true);
         } else if (!res.success) {
           console.error("Failed to load dashboard data:", res.error);
@@ -100,8 +97,10 @@ export default function DashboardPage() {
         console.error("Error calling getRealProductionsData:", err);
       }
     }
-    loadLiveData();
-  }, []);
+    if (user) {
+      loadLiveData();
+    }
+  }, [user]);
 
   // Unique Operators for Filter Dropdown
   const uniqueOperators = useMemo(() => {
@@ -189,6 +188,7 @@ export default function DashboardPage() {
 
     return {
       totalProduksi,
+      totalTarget,
       persentaseLolos,
       persentaseLolosSemua,
       efisiensi,
@@ -227,61 +227,6 @@ export default function DashboardPage() {
         return dateFilteredTransactions;
     }
   }, [activeFilter, dateFilteredTransactions]);
-
-  // Attendance Logic
-  const attendanceStats = useMemo(() => {
-    // Total registered employees
-    const totalPegawai = uniqueOperators.length;
-
-    // Filter transactions strictly by the selected date range to find who was present
-    // Note: We use dateFilteredTransactions without selectedOperators filter for attendance
-    // to correctly calculate overall attendance.
-    let dateScoped = transactions;
-    if (dateRangeMode !== "ALL") {
-      const now = new Date();
-      const todayStr = now.toISOString().split("T")[0];
-
-      dateScoped = dateScoped.filter(item => {
-        const itemDate = new Date(item.tanggal);
-        if (isNaN(itemDate.getTime())) return true;
-        if (dateRangeMode === "TODAY") return item.tanggal === todayStr;
-        if (dateRangeMode === "7DAYS") {
-          const sevenDaysAgo = new Date();
-          sevenDaysAgo.setDate(now.getDate() - 7);
-          return itemDate >= sevenDaysAgo && itemDate <= now;
-        }
-        if (dateRangeMode === "CUSTOM") {
-          if (!startDate && !endDate) return true;
-          const start = startDate ? new Date(startDate) : null;
-          const end = endDate ? new Date(endDate) : null;
-          if (start && end) {
-            end.setHours(23, 59, 59, 999);
-            return itemDate >= start && itemDate <= end;
-          } else if (start) return itemDate >= start;
-          else if (end) {
-            end.setHours(23, 59, 59, 999);
-            return itemDate <= end;
-          }
-        }
-        return true;
-      });
-    }
-
-    const hadirOperators = new Set(dateScoped.map(t => t.nama_operator));
-    const countHadir = hadirOperators.size;
-    const countTidakHadir = Math.max(0, totalPegawai - countHadir);
-    const persentaseHadir = totalPegawai > 0 ? (countHadir / totalPegawai) * 100 : 0;
-
-    const listTidakHadir = uniqueOperators.filter(op => !hadirOperators.has(op));
-
-    return {
-      totalPegawai,
-      countHadir,
-      countTidakHadir,
-      persentaseHadir,
-      listTidakHadir
-    };
-  }, [transactions, uniqueOperators, dateRangeMode, startDate, endDate]);
 
   // Aggregate daily production data for dynamic chart, segmented by grade
   const chartData = useMemo(() => {
@@ -395,190 +340,29 @@ export default function DashboardPage() {
     setMetricMode("PCS");
   };
 
-  // Rekap Data (Group x Hari)
-  const rekapData = useMemo(() => {
-    const dates = Array.from(new Set(dateFilteredTransactions.map(t => t.tanggal))).sort();
-    const groups = Array.from(new Set(dateFilteredTransactions.map(t => t.group || "Tanpa Group"))).sort();
-
-    const data = dates.map(date => {
-      const row: any = { tanggal: date };
-      let total = 0;
-      groups.forEach(group => {
-        const sum = dateFilteredTransactions
-          .filter(t => t.tanggal === date && (t.group || "Tanpa Group") === group)
-          .reduce((acc, curr) => acc + curr.hasil_pcs, 0);
-        row[group] = sum;
-        total += sum;
-      });
-      row.total = total;
-      return row;
-    });
-
-    const grandTotals: any = { tanggal: "Total" };
-    let absoluteTotal = 0;
-    groups.forEach(group => {
-      const sum = data.reduce((acc, curr) => acc + (curr[group] as number), 0);
-      grandTotals[group] = sum;
-      absoluteTotal += sum;
-    });
-    grandTotals.total = absoluteTotal;
-
-    return { dates, groups, data, grandTotals };
-  }, [dateFilteredTransactions]);
-
-  const handleExportExcel = async () => {
-    const XLSX = await import("xlsx");
-    
-    // 1. Sheet Ringkasan (Summary)
-    const totalData = dateFilteredTransactions.length;
-    let totalPcs = 0;
-    let gradeA = 0, gradeB = 0, bs = 0, ungraded = 0;
-    let lolos = 0, recheck = 0;
-    
-    const operatorMap: Record<string, number> = {};
-    const designMap: Record<string, number> = {};
-    const groupMap: Record<string, number> = {};
-
-    dateFilteredTransactions.forEach(t => {
-      totalPcs += t.hasil_pcs;
-      
-      if (t.grade === "GRADE A") gradeA++;
-      else if (t.grade === "GRADE B") gradeB++;
-      else if (t.grade === "BS") bs++;
-      else ungraded++;
-
-      if (t.status_qc === "Lolos") lolos++;
-      else if (t.status_qc === "Recheck") recheck++;
-
-      operatorMap[t.nama_operator] = (operatorMap[t.nama_operator] || 0) + t.hasil_pcs;
-      const d = t.design || "Tanpa Design";
-      designMap[d] = (designMap[d] || 0) + t.hasil_pcs;
-      const g = t.group || "Tanpa Group";
-      groupMap[g] = (groupMap[g] || 0) + t.hasil_pcs;
-    });
-
-    const topOperators = Object.entries(operatorMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const topDesigns = Object.entries(designMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    
-    const summaryData = [
-      ["RINGKASAN LAPORAN PRODUKSI"],
-      [],
-      ["1. OVERVIEW"],
-      ["Total Transaksi (Baris)", totalData],
-      ["Total Produksi (Pcs)", totalPcs],
-      [],
-      ["2. KUALITAS PRODUK (Berdasarkan Panel)"],
-      ["Lolos QC", lolos],
-      ["Recheck", recheck],
-      ["GRADE A", gradeA],
-      ["GRADE B", gradeB],
-      ["BS", bs],
-      ["Belum Diinspeksi", ungraded],
-      [],
-      ["3. PERFORMA GRUP (Pcs)"],
-      ...Object.entries(groupMap).map(([g, val]) => [g, val]),
-      [],
-      ["4. TOP 5 OPERATOR (Pcs)"],
-      ...topOperators.map(([op, val], idx) => [`${idx + 1}. ${op}`, val]),
-      [],
-      ["5. TOP 5 DESAIN (Pcs)"],
-      ...topDesigns.map(([d, val], idx) => [`${idx + 1}. ${d}`, val])
-    ];
-
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-
-    // 2. Sheet Rekap (Original)
-    const wsData = [];
-    wsData.push(["Tanggal", ...rekapData.groups, "Total"]);
-    rekapData.data.forEach(row => {
-      wsData.push([row.tanggal, ...rekapData.groups.map(g => row[g]), row.total]);
-    });
-    wsData.push(["Total", ...rekapData.groups.map(g => rekapData.grandTotals[g]), rekapData.grandTotals.total]);
-
-    const wsRekap = XLSX.utils.aoa_to_sheet(wsData);
-
-    // Create workbook and append sheets
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan Laporan");
-    XLSX.utils.book_append_sheet(wb, wsRekap, "Rekap Produksi Harian");
-    XLSX.writeFile(wb, "Laporan_Produksi.xlsx");
-  };
-
-  const handleExportPDF = async () => {
-    const { default: jsPDF } = await import("jspdf");
-    await import("jspdf-autotable");
-
-    const doc = new jsPDF();
-    doc.text("Rekap Produksi Harian per Grup", 14, 15);
-    
-    const head = [["Tanggal", ...rekapData.groups, "Total"]];
-    const body = rekapData.data.map(row => [row.tanggal, ...rekapData.groups.map(g => row[g]), row.total]);
-    const foot = [["Total", ...rekapData.groups.map(g => rekapData.grandTotals[g]), rekapData.grandTotals.total]];
-
-    (doc as any).autoTable({
-      head,
-      body,
-      foot,
-      startY: 20,
-      theme: 'grid',
-      headStyles: { fillColor: [0, 112, 188] },
-      footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold' },
-      styles: { fontSize: 8 }
-    });
-
-    doc.save("Rekap_Produksi_Harian.pdf");
-  };
-
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Welcome Header */}
       <div className="bg-white border border-[#e9ecef] rounded-[24px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5 relative z-10">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight flex flex-wrap items-center gap-3 leading-tight">
-            <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
-              Selamat Datang, {user?.fullName.replace(" (Demo)", "") || "Supervisor"}!
-            </span>
-            {isLive ? (
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold bg-white border border-sky-100 shadow-[0_2px_10px_-3px_rgba(14,165,233,0.15)] text-[#0070bc] tracking-widest uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.6)] animate-pulse" />
-                Live Database
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex flex-wrap items-center gap-3 leading-tight">
+              <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
+                My Dashboard
               </span>
-            ) : (
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold bg-white border border-slate-200 shadow-sm text-slate-500 tracking-widest uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                Mock Data (Demo)
-              </span>
-            )}
-          </h1>
-          <p className="text-slate-500 text-sm sm:text-base font-medium max-w-2xl leading-relaxed">
-            Berikut adalah ringkasan hasil produksi.
-          </p>
+              {isLive && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Live Data
+                </span>
+              )}
+            </h1>
+            <p className="text-slate-500 text-sm sm:text-base font-medium max-w-2xl leading-relaxed flex items-start gap-1.5 mt-1">
+              <svg className="w-5 h-5 text-sky-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pantau pencapaian produksi harian dan kualitas kerja Anda secara real-time.
+            </p>
         </div>
-        
-        {/* Dashboard Mode Toggle */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded-full border border-slate-200 shadow-inner z-10 shrink-0">
-          <button
-            onClick={() => setDashboardMode("PRODUKSI")}
-            className={`px-4 py-2 rounded-full text-xs sm:text-sm font-extrabold transition-all duration-300 cursor-pointer flex items-center gap-2 ${dashboardMode === "PRODUKSI"
-              ? "bg-white text-slate-800 shadow-[0_2px_10px_rgba(0,0,0,0.08)] text-[#0070bc]"
-              : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-              }`}
-          >
-            <BarChart2 className="w-4 h-4" />
-            Produksi
-          </button>
-          <button
-            onClick={() => setDashboardMode("KEHADIRAN")}
-            className={`px-4 py-2 rounded-full text-xs sm:text-sm font-extrabold transition-all duration-300 cursor-pointer flex items-center gap-2 ${dashboardMode === "KEHADIRAN"
-              ? "bg-white text-slate-800 shadow-[0_2px_10px_rgba(0,0,0,0.08)] text-emerald-600"
-              : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-              }`}
-          >
-            <Users className="w-4 h-4" />
-            Kehadiran
-          </button>
-        </div>
-
         <button
           onClick={handleResetFilters}
           className="relative z-10 flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:text-[#0070bc] hover:border-sky-200 rounded-full border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300 group shrink-0"
@@ -664,82 +448,10 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-
-        {/* Operator Slicer Component (Multi-Select Checkbox Dropdown) */}
-        <div className="flex flex-wrap items-center gap-4 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
-              <Users className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-2">
-              Filter Pegawai:
-            </span>
-            <div className="relative">
-              <button
-                onClick={() => setIsOperatorDropdownOpen(!isOperatorDropdownOpen)}
-                className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-bold cursor-pointer min-w-[170px] flex justify-between items-center"
-              >
-                <span className="truncate max-w-[130px]">
-                  {selectedOperators.length === 0
-                    ? "Semua Pegawai"
-                    : `${selectedOperators.length} Pegawai Terpilih`}
-                </span>
-                <span className="text-[9px] ml-2 text-slate-400">▼</span>
-              </button>
-
-              {isOperatorDropdownOpen && (
-                <div className="absolute top-full mt-2 left-0 w-64 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
-                  <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase">Pilih Pegawai</span>
-                    <button
-                      onClick={() => setIsOperatorDropdownOpen(false)}
-                      className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded"
-                    >
-                      Tutup
-                    </button>
-                  </div>
-                  <div className="overflow-y-auto flex-1 pr-1 custom-scrollbar">
-                    <label className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group">
-                      <input
-                        type="checkbox"
-                        checked={selectedOperators.length === 0}
-                        onChange={() => setSelectedOperators([])}
-                        className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
-                      />
-                      <span className={`text-xs font-bold transition-colors ${selectedOperators.length === 0 ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}>Semua Pegawai (Reset)</span>
-                    </label>
-                    <div className="h-px bg-slate-100 my-1" />
-                    {uniqueOperators.map(op => (
-                      <label key={op} className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group">
-                        <input
-                          type="checkbox"
-                          checked={selectedOperators.includes(op)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedOperators(prev => [...prev, op]);
-                            } else {
-                              setSelectedOperators(prev => prev.filter(o => o !== op));
-                            }
-                          }}
-                          className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
-                        />
-                        <span className={`text-xs font-semibold transition-colors ${selectedOperators.includes(op) ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}>
-                          {op}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
-      </div>
 
-      {dashboardMode === "PRODUKSI" ? (
-        <>
-          {/* Grid KPI Cards / Slicer Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* Grid KPI Cards / Slicer Buttons */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
         {/* Card 1: Hasil Produksi & Total Baris (Slider Slicer) */}
         <div className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group transition-all duration-300 flex flex-col ${activeFilter === "ALL"
@@ -894,57 +606,43 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Card 3: Chart Mode Selector (Replaced Efisiensi Produksi) */}
-        <div className="bg-white border border-[#e9ecef] rounded-[24px] p-5 flex flex-col justify-between h-full min-h-[11rem] group shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
+        {/* Card 3: Status Produksi Summary */}
+        <div className="bg-white border border-[#e9ecef] rounded-[24px] p-5 flex flex-col justify-between h-full min-h-[11rem] shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
           <div className="flex justify-between items-start">
             <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-              Mode Tampilan Grafik
+              Efisiensi Produksi Saya
             </span>
-            <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-blue-50 text-blue-600">
+            <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-purple-50 text-purple-600">
               <SlidersHorizontal className="w-3.5 h-3.5" />
             </span>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
-            <button
-              onClick={() => setChartGroupBy("HARI")}
-              className={`flex flex-col items-center justify-center gap-1 text-center p-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${chartGroupBy === "HARI"
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50"
-                }`}
-            >
-              <BarChart2 className="w-4 h-4" />
-              Per Hari
-            </button>
-            <button
-              onClick={() => setChartGroupBy("DESIGN")}
-              className={`flex flex-col items-center justify-center gap-1 text-center p-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${chartGroupBy === "DESIGN"
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50"
-                }`}
-            >
-              <Palette className="w-4 h-4" />
-              Per Design
-            </button>
-            <button
-              onClick={() => setChartGroupBy("PEGAWAI")}
-              className={`flex flex-col items-center justify-center gap-1 text-center p-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${chartGroupBy === "PEGAWAI"
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50"
-                }`}
-            >
-              <Users className="w-4 h-4" />
-              Per Pegawai
-            </button>
-            <button
-              onClick={() => setChartGroupBy("GROUP")}
-              className={`flex flex-col items-center justify-center gap-1 text-center p-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${chartGroupBy === "GROUP"
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50"
-                }`}
-            >
-              <Layers className="w-4 h-4" />
-              Per Group
-            </button>
+          <div className="mt-2">
+            <div className="text-3xl font-black tracking-tight text-slate-800">{stats.efisiensi.toFixed(1)}%</div>
+            
+            {/* Target Indicator */}
+            {stats.totalTarget > 0 ? (
+              stats.totalProduksi >= stats.totalTarget ? (
+                <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Target Tercapai
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-rose-50 border border-rose-100 rounded-lg text-[10px] text-rose-700 font-extrabold uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  Kurang {stats.totalTarget - stats.totalProduksi} Pcs
+                </div>
+              )
+            ) : (
+              <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                Belum Ada Target
+              </div>
+            )}
+            
+            <div className="flex items-center gap-1 mt-2 text-[11px] text-purple-600 font-bold">
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Berdasarkan Target vs Hasil</span>
+            </div>
           </div>
         </div>
 
@@ -1479,208 +1177,6 @@ export default function DashboardPage() {
         })()}
 
       </div>
-
-      {/* Rekap Data Section */}
-      <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] mt-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-sky-50 rounded-xl text-[#0070bc]">
-              <TableIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800 tracking-tight">Rekap Produksi Harian per Grup</h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">Ringkasan total hasil produksi (Pcs) berdasarkan grup</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-colors border border-emerald-200 cursor-pointer"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Export Excel
-            </button>
-            <button
-              onClick={handleExportPDF}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors border border-rose-200 cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export PDF
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto custom-scrollbar pb-2">
-          <table className="w-full text-left border-collapse min-w-max">
-            <thead>
-              <tr>
-                <th className="py-3 px-4 bg-slate-50 border-b border-slate-200 text-xs font-extrabold text-slate-600 uppercase tracking-wider rounded-tl-xl">
-                  Tanggal
-                </th>
-                {rekapData.groups.map(group => (
-                  <th key={group} className="py-3 px-4 bg-slate-50 border-b border-slate-200 text-xs font-extrabold text-slate-600 uppercase tracking-wider text-right">
-                    {group}
-                  </th>
-                ))}
-                <th className="py-3 px-4 bg-slate-50 border-b border-slate-200 text-xs font-extrabold text-[#0070bc] uppercase tracking-wider text-right rounded-tr-xl">
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rekapData.data.length > 0 ? (
-                (isRekapExpanded ? rekapData.data : rekapData.data.slice(0, 5)).map((row) => (
-                  <tr key={row.tanggal} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
-                    <td className="py-3 px-4 text-sm font-bold text-slate-700">
-                      {row.tanggal}
-                    </td>
-                    {rekapData.groups.map(g => (
-                      <td key={g} className="py-3 px-4 text-sm font-semibold text-slate-600 text-right">
-                        {row[g].toLocaleString()}
-                      </td>
-                    ))}
-                    <td className="py-3 px-4 text-sm font-black text-[#0070bc] text-right bg-sky-50/30">
-                      {row.total.toLocaleString()}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={rekapData.groups.length + 2} className="py-8 text-center text-sm font-semibold text-slate-400">
-                    Tidak ada data untuk ditampilkan
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {rekapData.data.length > 0 && (
-              <tfoot>
-                <tr className="bg-slate-50 border-t border-slate-200">
-                  <td className="py-3 px-4 text-sm font-black text-slate-800 rounded-bl-xl">
-                    Total Keseluruhan
-                  </td>
-                  {rekapData.groups.map(g => (
-                    <td key={g} className="py-3 px-4 text-sm font-black text-slate-800 text-right">
-                      {rekapData.grandTotals[g].toLocaleString()}
-                    </td>
-                  ))}
-                  <td className="py-3 px-4 text-sm font-black text-[#0070bc] text-right bg-sky-50/50 rounded-br-xl">
-                    {rekapData.grandTotals.total.toLocaleString()}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-        {rekapData.data.length > 5 && (
-          <div className="mt-4 flex justify-center pb-2">
-            <button
-              onClick={() => setIsRekapExpanded(!isRekapExpanded)}
-              className="px-5 py-2.5 bg-sky-50/50 text-[#0070bc] hover:bg-sky-100/50 hover:shadow-sm rounded-xl text-sm font-bold transition-all border border-sky-100/50 cursor-pointer"
-            >
-              {isRekapExpanded ? "Tampilkan Lebih Sedikit" : `Lihat Lengkap (${rekapData.data.length} baris)`}
-            </button>
-          </div>
-        )}
-      </div>
-        </>
-      ) : (
-        <div className="space-y-6 animate-fadeIn">
-          {/* Attendance KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div className="bg-white border border-[#e9ecef] rounded-[24px] p-5 flex flex-col justify-between h-full min-h-[11rem] shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
-              <div className="flex justify-between items-start">
-                <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Pegawai Pabrik</span>
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-slate-50 text-slate-600"><Users className="w-3.5 h-3.5" /></span>
-              </div>
-              <div className="mt-2">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{attendanceStats.totalPegawai} <span className="text-sm font-semibold opacity-80">Orang</span></div>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500 font-bold">Terdaftar dalam sistem</div>
-              </div>
-            </div>
-
-            <div className="bg-[#0070bc] rounded-[24px] p-5 flex flex-col justify-between h-full min-h-[11rem] shadow-md text-white relative overflow-hidden group hover:scale-[1.01] transition-transform">
-              <div className="absolute -right-8 -bottom-8 w-24 h-24 rounded-full bg-sky-400/20 blur-xl group-hover:scale-125 transition-all duration-300 pointer-events-none" />
-              <div className="flex justify-between items-start relative z-10">
-                <span className="text-sky-100 text-[10px] font-bold uppercase tracking-wider">Pegawai Hadir</span>
-                <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold"><Users className="w-3.5 h-3.5 text-white" /></span>
-              </div>
-              <div className="mt-2 relative z-10">
-                <div className="text-3xl font-black tracking-tight flex items-baseline gap-1">{attendanceStats.countHadir} <span className="text-sm font-semibold opacity-80">Orang</span></div>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-sky-200 font-semibold">Tercatat memproduksi barang</div>
-              </div>
-            </div>
-
-            <div className="bg-rose-50/40 border border-rose-100 rounded-[24px] p-5 flex flex-col justify-between h-full min-h-[11rem] shadow-[0_8px_30px_rgba(0,0,0,0.015)] relative">
-              {attendanceStats.countTidakHadir > 0 && <div className="absolute inset-0 ring-2 ring-rose-500 rounded-[24px] pointer-events-none" />}
-              <div className="flex justify-between items-start">
-                <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Tidak Hadir / 0 Hasil</span>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${attendanceStats.countTidakHadir > 0 ? "bg-rose-100 text-rose-600 animate-pulse" : "bg-slate-50 text-slate-500"}`}><AlertTriangle className="w-3.5 h-3.5" /></span>
-              </div>
-              <div className="mt-2">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{attendanceStats.countTidakHadir} <span className="text-sm font-semibold opacity-80 text-slate-500">Orang</span></div>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-rose-600 font-bold">Pegawai tidak ada rekaman hari ini</div>
-              </div>
-            </div>
-
-            <div className="bg-white border border-[#e9ecef] rounded-[24px] p-5 flex flex-col justify-between h-full min-h-[11rem] shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
-              <div className="flex justify-between items-start">
-                <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Tingkat Kehadiran</span>
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-emerald-50 text-emerald-600"><TrendingUp className="w-3.5 h-3.5" /></span>
-              </div>
-              <div className="mt-2">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{attendanceStats.persentaseHadir.toFixed(1)}%</div>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-600 font-bold">Persentase dari total pegawai</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* List Absen */}
-            <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.02)] h-[400px]">
-              <div className="border-b border-slate-100 pb-4 mb-4">
-                <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                  Daftar Tidak Hadir
-                </h3>
-                <p className="text-[11px] text-slate-400 font-semibold mt-1">Pegawai yang belum memiliki rekaman produksi di rentang waktu ini.</p>
-              </div>
-              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                {attendanceStats.listTidakHadir.length > 0 ? (
-                  attendanceStats.listTidakHadir.map(op => (
-                    <div key={op} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100/50 hover:bg-slate-100 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs uppercase">
-                          {op.substring(0, 2)}
-                        </div>
-                        <span className="text-sm font-semibold text-slate-700">{op}</span>
-                      </div>
-                      <span className="text-[10px] font-extrabold text-rose-500 bg-rose-50 px-2 py-1 rounded-md">ABSENT</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                    <Users className="w-8 h-8 mb-2 opacity-50" />
-                    <p className="text-xs font-semibold">Semua pegawai hadir!</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Attendance Chart Mockup/Placeholder */}
-            <div className="lg:col-span-2 bg-white border border-[#e9ecef] rounded-[32px] p-6 flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.02)] h-[400px]">
-              <div className="border-b border-slate-100 pb-4 mb-4">
-                <h3 className="text-base font-extrabold text-slate-800">Visualisasi Kehadiran</h3>
-                <p className="text-[11px] text-slate-400 font-semibold mt-1">Gunakan grafik ini untuk memantau tren kehadiran operator.</p>
-              </div>
-              <div className="flex-1 flex flex-col items-center justify-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                <BarChart2 className="w-12 h-12 text-slate-300 mb-3" />
-                <p className="text-sm font-bold text-slate-500">Grafik Tren Kehadiran</p>
-                <p className="text-xs text-slate-400 mt-1 text-center max-w-sm">Data kehadiran saat ini diturunkan langsung dari produksi (Hadir/Tidak). Grafik analitik historis penuh akan diaktifkan setelah sistem input absensi siap.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

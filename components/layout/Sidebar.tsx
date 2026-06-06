@@ -34,6 +34,20 @@ export default function Sidebar() {
       group: "MENU",
     },
     {
+      name: "Dashboard Pegawai",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      roles: ["admin", "manager", "employee"],
+      group: "MENU",
+    },
+    {
+      name: "Input Kehadiran",
+      href: "/attendance",
+      icon: User,
+      roles: ["employee"],
+      group: "MENU",
+    },
+    {
       name: "Employee Portal",
       href: "/input",
       icon: ClipboardList,

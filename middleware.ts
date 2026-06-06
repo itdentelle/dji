@@ -82,7 +82,7 @@ export async function middleware(request: NextRequest) {
     // Cegah masuk kembali ke halaman /login
     if (pathname === "/login") {
       if (role === "employee") {
-        return NextResponse.redirect(new URL("/input", request.url));
+        return NextResponse.redirect(new URL("/dashboard", request.url));
       } else if (role === "qc") {
         return NextResponse.redirect(new URL("/qc", request.url));
       }
@@ -91,9 +91,9 @@ export async function middleware(request: NextRequest) {
 
     // Role-Based Access Control (RBAC)
     if (role === "employee") {
-      // Employee hanya boleh mengakses halaman /input
-      if (pathname !== "/input") {
-        return NextResponse.redirect(new URL("/input", request.url));
+      // Employee hanya boleh mengakses halaman /input dan /dashboard
+      if (pathname !== "/input" && pathname !== "/dashboard") {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
       }
     } else if (role === "qc") {
       if (!pathname.startsWith("/qc")) {
