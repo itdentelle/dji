@@ -93,6 +93,9 @@ export default function DashboardPage() {
     setTouchStartX(null);
   };
 
+  // Active chart bar for mobile tap
+  const [activeChartBar, setActiveChartBar] = useState<number | null>(null);
+
   // Load real production data from Supabase
   useEffect(() => {
     async function loadLiveData() {
@@ -943,6 +946,9 @@ export default function DashboardPage() {
                         // Center align items horizontally
                         const groupCenter = 40 + (spacing * index) + (spacing / 2);
 
+                        // Active state for mobile tap
+                        const isActive = activeChartBar === index;
+
                         // Grouped Rendering Logic
                         if (chartGradeFilter === "ALL") {
                           const hA = maxChartValue > 0 ? (d.gradeA_sum / maxChartValue) * 165 : 0;
@@ -963,7 +969,7 @@ export default function DashboardPage() {
                           const xBS = groupCenter + 10;
 
                           return (
-                            <g key={d.label} className="group/bar">
+                            <g key={d.label} className="group/bar cursor-pointer" onClick={() => setActiveChartBar(isActive ? null : index)}>
                               {/* X-Axis Tick Mark for Grouping Clarity */}
                               {index > 0 && (
                                 <line x1={40 + spacing * index} y1={195} x2={40 + spacing * index} y2={205} stroke="#cbd5e1" strokeWidth="2" />
@@ -986,18 +992,18 @@ export default function DashboardPage() {
                               {/* Labels on top of bars */}
                               {chartType === "BAR" && (
                                 <>
-                                  <text x={xA + barW / 2} y={yA - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className="opacity-0 group-hover/bar:opacity-100 transition-opacity duration-200">
+                                  <text x={xA + barW / 2} y={yA - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                     {d.gradeA_sum}
                                   </text>
-                                  <text x={xB + barW / 2} y={yB - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className="opacity-0 group-hover/bar:opacity-100 transition-opacity duration-200">
+                                  <text x={xB + barW / 2} y={yB - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                     {d.gradeB_sum}
                                   </text>
-                                  <text x={xBS + barW / 2} y={yBS - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className="opacity-0 group-hover/bar:opacity-100 transition-opacity duration-200">
+                                  <text x={xBS + barW / 2} y={yBS - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                     {d.bs_sum}
                                   </text>
 
                                   {/* Total summary below tooltip */}
-                                  <text x={groupCenter} y={12} fill="#1e293b" fontSize="9" fontWeight="extrabold" textAnchor="middle" className="opacity-0 group-hover/bar:opacity-100 transition-opacity duration-200">
+                                  <text x={groupCenter} y={12} fill="#1e293b" fontSize="9" fontWeight="extrabold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                     {d.total > 0 ? `Total: ${d.total}` : ""}
                                   </text>
                                 </>
@@ -1005,7 +1011,7 @@ export default function DashboardPage() {
 
                               {/* Unified Tooltip for LINE chart */}
                               {chartType === "LINE" && (
-                                <g className="opacity-0 group-hover/bar:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                <g className={`transition-opacity duration-200 pointer-events-none ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                   {/* Crosshair Line */}
                                   <line x1={groupCenter} y1={20} x2={groupCenter} y2={195} stroke="#94a3b8" strokeDasharray="3 3" strokeWidth="1" />
                                   
@@ -1049,7 +1055,7 @@ export default function DashboardPage() {
                           const xVal = groupCenter - (barW / 2);
 
                           return (
-                            <g key={d.label} className="group/bar">
+                            <g key={d.label} className="group/bar cursor-pointer" onClick={() => setActiveChartBar(isActive ? null : index)}>
                               {/* X-Axis Tick Mark for Grouping Clarity */}
                               {index > 0 && (
                                 <line x1={40 + spacing * index} y1={195} x2={40 + spacing * index} y2={205} stroke="#cbd5e1" strokeWidth="2" />
@@ -1071,7 +1077,7 @@ export default function DashboardPage() {
 
                               {/* Unified Tooltip for LINE chart (Single Mode) */}
                               {chartType === "LINE" && (
-                                <g className="opacity-0 group-hover/bar:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                <g className={`transition-opacity duration-200 pointer-events-none ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                   <line x1={groupCenter} y1={20} x2={groupCenter} y2={195} stroke="#94a3b8" strokeDasharray="3 3" strokeWidth="1" />
                                   <rect x={index === 0 ? groupCenter + 5 : (index === chartData.length - 1 ? groupCenter - 45 : groupCenter - 20)} y={yVal > 40 ? yVal - 30 : yVal + 10} width={40} height={20} rx="4" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" className="shadow-sm" />
                                   <text x={index === 0 ? groupCenter + 25 : (index === chartData.length - 1 ? groupCenter - 25 : groupCenter)} y={yVal > 40 ? yVal - 16 : yVal + 24} fill={barFill} fontSize="10" fontWeight="extrabold" textAnchor="middle">{value}</text>
