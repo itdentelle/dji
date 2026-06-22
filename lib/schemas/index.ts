@@ -28,7 +28,7 @@ export const productionFormSchema = z.object({
   shadow: z.string().optional().nullable(),
   pinggiran: z.string().optional().nullable(),
   
-  // Panel Data
+  // Data Umum Panel (dibagikan ke semua panel dalam 1 submit)
   rpm: z
     .string()
     .optional()
@@ -40,28 +40,27 @@ export const productionFormSchema = z.object({
     .string()
     .min(1, "Potongan ke- harus diisi")
     .regex(/^\d+$/, "Nomor potongan harus berupa angka positif"),
-  panelNo: z
-    .string()
-    .min(1, "Nomor Panel harus diisi")
-    .regex(/^\d+$/, "Nomor panel harus berupa angka positif"),
   course: z.string().optional().nullable(),
   pcs: z.string().optional().nullable(),
-  jmlHasilProduksi: z
-    .string()
-    .optional() // Kadang tidak diisi di kertas
-    .nullable(),
   pic: z.string().max(100, "Nama PIC maksimal 100 karakter").optional().nullable(),
-  
-  // Data Cacat / Mesin Stop
-  indikatorStop: z.boolean().optional(),
-  kategoriMasalah: z.string().optional().nullable(),
-  detailMasalah: z.string().optional().nullable(),
-  keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
   
   fotoBefore: z.string().optional().nullable(),
   fotoAfter: z.string().optional().nullable(),
+
+  // Array of Panels
+  panels: z.array(
+    z.object({
+      panelNo: z
+        .string()
+        .min(1, "Nomor Panel harus diisi")
+        .regex(/^\d+$/, "Nomor panel harus berupa angka positif"),
+      jmlHasilProduksi: z.string().optional().nullable(),
+      indikatorStop: z.boolean().optional(),
+      kategoriMasalah: z.string().optional().nullable(),
+      detailMasalah: z.string().optional().nullable(),
+      keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
+    })
+  ).min(1, "Minimal harus ada 1 panel"),
 });
 
 export type ProductionFormInput = z.infer<typeof productionFormSchema>;
-
-
