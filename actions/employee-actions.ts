@@ -76,7 +76,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             status_inspeksi: statusInspeksiBool,
             keterangan: validated.keteranganCacat || null,
             pic: validated.pic || null,
-            // Kolom-kolom baru (pastikan sudah dibuat di Supabase)
+            // Kolom-kolom baru di-cast as any karena schema types belum diupdate via CLI
             tanggal_potong: validated.tanggalPotong || null,
             pick: validated.pick || null,
             no_order_barang: validated.noOrderBarang || null,
@@ -86,10 +86,9 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             heavy: validated.heavy || null,
             shadow: validated.shadow || null,
             pinggiran: validated.pinggiran || null,
-            // Foto sudah tidak dipakai, tapi jika ada kolomnya biarkan null
             foto_before: validated.fotoBefore || null,
             foto_after: validated.fotoAfter || null,
-          });
+          } as any);
 
         if (prodError) throw new Error(`Gagal menyimpan produksi: ${prodError.message}`);
 
