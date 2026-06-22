@@ -53,7 +53,7 @@ export const productionFormSchema = z.object({
   pic: z.string().max(100, "Nama PIC maksimal 100 karakter").optional().nullable(),
   
   // Data Cacat / Mesin Stop
-  indikatorStop: z.boolean().default(false),
+  indikatorStop: z.boolean().optional(),
   kategoriMasalah: z.string().optional().nullable(),
   detailMasalah: z.string().optional().nullable(),
   keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
