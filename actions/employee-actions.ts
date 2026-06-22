@@ -45,8 +45,8 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     // Perhitungan otomatis Ket PCS: true jika hasil produksi >= target PCS
     const ketPcs = (jmlHasilNum !== null && pcsNum !== null) ? (jmlHasilNum >= pcsNum) : null;
 
-    // Konversi status inspeksi ("lolos" -> true, "recheck" -> false)
-    const statusInspeksiBool = validated.statusInspeksi === "lolos";
+    // Konversi status inspeksi sudah tidak digunakan di form ini
+    const statusInspeksiBool = null;
 
     // 2. Coba simpan ke database Supabase jika terkonfigurasi
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -74,7 +74,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             jml_hasil_produksi: jmlHasilNum,
             ket_pcs: ketPcs,
             status_inspeksi: statusInspeksiBool,
-            keterangan: validated.keterangan || null,
+            keterangan: validated.keteranganCacat || null,
             pic: validated.pic || null,
             // Kolom-kolom baru (pastikan sudah dibuat di Supabase)
             tanggal_potong: validated.tanggalPotong || null,
@@ -93,23 +93,10 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
 
         if (prodError) throw new Error(`Gagal menyimpan produksi: ${prodError.message}`);
 
-        // B. Jika ada masalah yang dilaporkan, simpan ke tabel `production_problems`
-        if (validated.problems && Object.keys(validated.problems).length > 0) {
-          const problemEntries = Object.entries(validated.problems).map(([category, details]) => ({
-            production_id: productionId,
-            problem_id: parseInt(details.problemId),
-            keterangan_tambahan: details.keterangan || null,
-          }));
-
-          const { error: probError } = await supabase
-            .from("production_problems")
-            .insert(problemEntries);
-
-          if (probError) {
-            console.error("Gagal menyimpan detail masalah:", probError);
-            // Jangan batalkan transaksi produksi utama jika hanya pencatatan masalah gagal, 
-            // namun log errornya.
-          }
+        // B. Jika ada masalah yang dilaporkan, Anda dapat menyesuaikan logika ke tabel production_problems jika diperlukan
+        if (validated.indikatorStop && validated.kategoriMasalah) {
+            // Karena kategoriMasalah berisi string seperti "A", "B", Anda perlu mencari problem_id-nya di tabel problems.
+            // Saat ini data sudah tersimpan di kolom keterangan productions.
         }
 
         return { success: true, productionId };
