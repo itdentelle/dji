@@ -15,6 +15,20 @@ export const productionFormSchema = z.object({
   operatorId: z.string().min(1, "Operator harus dipilih"),
   groupId: z.string().min(1, "Grup Shift harus dipilih"),
   designId: z.string().min(1, "Design harus dipilih"),
+// Header Data
+  nomorMc: z.string().optional().nullable(),
+  tanggalProduksi: z.string().optional().nullable(),
+  tanggalPotong: z.string().optional().nullable(),
+  pick: z.string().optional().nullable(),
+  noOrderBarang: z.string().optional().nullable(),
+  rollNo: z.string().optional().nullable(),
+  jenisBenangDasar: z.string().optional().nullable(),
+  liner: z.string().optional().nullable(),
+  heavy: z.string().optional().nullable(),
+  shadow: z.string().optional().nullable(),
+  pinggiran: z.string().optional().nullable(),
+  
+  // Panel Data
   rpm: z
     .string()
     .optional()
@@ -34,20 +48,16 @@ export const productionFormSchema = z.object({
   pcs: z.string().optional().nullable(),
   jmlHasilProduksi: z
     .string()
-    .min(1, "Jumlah hasil produksi harus diisi")
-    .regex(/^\d+$/, "Hasil produksi harus berupa angka positif"),
-  statusInspeksi: z.enum(["lolos", "recheck"], {
-    message: "Pilih status inspeksi yang valid",
-  }),
-  keterangan: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
+    .optional() // Kadang tidak diisi di kertas
+    .nullable(),
   pic: z.string().max(100, "Nama PIC maksimal 100 karakter").optional().nullable(),
-  problems: z.record(
-    z.string(),
-    z.object({
-      problemId: z.string().min(1, "Masalah harus dipilih jika kategori aktif"),
-      keterangan: z.string().max(200, "Keterangan masalah maksimal 200 karakter").optional().nullable(),
-    })
-  ).optional().nullable(),
+  
+  // Data Cacat / Mesin Stop
+  indikatorStop: z.boolean().default(false),
+  kategoriMasalah: z.string().optional().nullable(),
+  detailMasalah: z.string().optional().nullable(),
+  keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
+  
   fotoBefore: z.string().optional().nullable(),
   fotoAfter: z.string().optional().nullable(),
 });

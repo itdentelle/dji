@@ -76,6 +76,17 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             status_inspeksi: statusInspeksiBool,
             keterangan: validated.keterangan || null,
             pic: validated.pic || null,
+            // Kolom-kolom baru (pastikan sudah dibuat di Supabase)
+            tanggal_potong: validated.tanggalPotong || null,
+            pick: validated.pick || null,
+            no_order_barang: validated.noOrderBarang || null,
+            roll_no: validated.rollNo || null,
+            jenis_benang_dasar: validated.jenisBenangDasar || null,
+            liner: validated.liner || null,
+            heavy: validated.heavy || null,
+            shadow: validated.shadow || null,
+            pinggiran: validated.pinggiran || null,
+            // Foto sudah tidak dipakai, tapi jika ada kolomnya biarkan null
             foto_before: validated.fotoBefore || null,
             foto_after: validated.fotoAfter || null,
           });
@@ -159,5 +170,38 @@ export async function uploadProductionPhoto(
   } catch (err: any) {
     console.error("Server photo upload failed:", err);
     return { success: false, error: err.message || "Gagal mengunggah foto ke server." };
+  }
+}
+
+export async function getLastPanelNoByPotongan(potonganKe: number): Promise<{ success: boolean; nextPanelNo?: number; error?: string }> {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey || supabaseAnonKey === "your_supabase_anon_key_here") {
+      return { success: true, nextPanelNo: 1 };
+    }
+
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+      .from("productions")
+      .select("panel_no")
+      .eq("potongan_ke", potonganKe)
+      .order("panel_no", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error("Error fetching last panel_no:", error);
+      return { success: false, error: error.message };
+    }
+
+    if (data && data.length > 0 && data[0].panel_no != null) {
+      return { success: true, nextPanelNo: data[0].panel_no + 1 };
+    }
+
+    return { success: true, nextPanelNo: 1 };
+  } catch (err: any) {
+    console.error("Server action error in getLastPanelNoByPotongan:", err);
+    return { success: false, error: err.message };
   }
 }
