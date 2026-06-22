@@ -598,6 +598,10 @@ export default function EmployeeForm() {
                 {errors.potonganKe && <span className="text-red-500 text-[10px] font-bold">{errors.potonganKe.message}</span>}
               </div>
               <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-sky-600 uppercase">Jml PCS per Panel</label>
+                <input type="text" {...register("pcs")} className="h-10 px-3 rounded-lg bg-sky-50/50 border border-sky-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none" placeholder="Misal: 3" />
+              </div>
+              <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-semibold text-slate-400 uppercase">Roll no</label>
                 <input type="text" {...register("rollNo")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
               </div>
