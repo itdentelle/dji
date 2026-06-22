@@ -40,6 +40,10 @@ export const productionFormSchema = z.object({
     .string()
     .min(1, "Potongan ke- harus diisi")
     .regex(/^\d+$/, "Nomor potongan harus berupa angka positif"),
+  panelNo: z
+    .string()
+    .min(1, "Nomor Panel harus diisi")
+    .regex(/^\d+$/, "Nomor panel harus berupa angka positif"),
   course: z.string().optional().nullable(),
   pcs: z.string().optional().nullable(),
   pic: z.string().max(100, "Nama PIC maksimal 100 karakter").optional().nullable(),
@@ -47,20 +51,17 @@ export const productionFormSchema = z.object({
   fotoBefore: z.string().optional().nullable(),
   fotoAfter: z.string().optional().nullable(),
 
-  // Array of Panels
-  panels: z.array(
+  // Array of PCS Data untuk satu Panel
+  pcsData: z.array(
     z.object({
-      panelNo: z
-        .string()
-        .min(1, "Nomor Panel harus diisi")
-        .regex(/^\d+$/, "Nomor panel harus berupa angka positif"),
+      pcsIndex: z.string(), // Misalnya "1", "2", "3"
       jmlHasilProduksi: z.string().optional().nullable(),
       indikatorStop: z.boolean().optional(),
       kategoriMasalah: z.string().optional().nullable(),
       detailMasalah: z.string().optional().nullable(),
       keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
     })
-  ).min(1, "Minimal harus ada 1 panel"),
+  ).min(1, "Minimal harus ada 1 PCS"),
 });
 
 export type ProductionFormInput = z.infer<typeof productionFormSchema>;

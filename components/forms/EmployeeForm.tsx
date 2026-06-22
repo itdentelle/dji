@@ -233,9 +233,10 @@ export default function EmployeeForm() {
       pic: "",
       fotoBefore: null,
       fotoAfter: null,
-      panels: [
+      panelNo: "1",
+      pcsData: [
         {
-          panelNo: "1",
+          pcsIndex: "1",
           jmlHasilProduksi: "",
           indikatorStop: false,
           kategoriMasalah: "",
@@ -248,7 +249,7 @@ export default function EmployeeForm() {
 
   const { fields, append, remove } = useFieldArray({
     control,
-    name: "panels",
+    name: "pcsData",
   });
 
   // Load Header Data dari LocalStorage
@@ -270,6 +271,35 @@ export default function EmployeeForm() {
 
   const watchPotonganKe = watch("potonganKe");
 
+  const watchPcs = watch("pcs");
+
+  // Generate PCS fields automatically based on 'pcs' header
+  useEffect(() => {
+    if (!watchPcs || isNaN(parseInt(watchPcs))) return;
+    const numPcs = parseInt(watchPcs);
+    if (numPcs > 0 && numPcs <= 10) {
+      const currentPcsData = watch("pcsData") || [];
+      const newPcsData = [];
+      for (let i = 1; i <= numPcs; i++) {
+        const existing = currentPcsData[i - 1];
+        if (existing) {
+          newPcsData.push({ ...existing, pcsIndex: i.toString() });
+        } else {
+          newPcsData.push({
+            pcsIndex: i.toString(),
+            jmlHasilProduksi: "",
+            indikatorStop: false,
+            kategoriMasalah: "",
+            detailMasalah: "",
+            keteranganCacat: "",
+          });
+        }
+      }
+      setValue("pcsData", newPcsData);
+    }
+  }, [watchPcs, setValue]);
+
+
   // Fetch the next panelNo when potonganKe changes
   useEffect(() => {
     if (!watchPotonganKe || isNaN(parseInt(watchPotonganKe))) {
@@ -279,7 +309,7 @@ export default function EmployeeForm() {
       try {
         const res = await getLastPanelNoByPotongan(parseInt(watchPotonganKe));
         if (res.success && res.nextPanelNo) {
-          setValue("panels.0.panelNo", res.nextPanelNo.toString());
+          setValue("panelNo", res.nextPanelNo.toString());
         }
       } catch (e) {
       }
@@ -292,16 +322,16 @@ export default function EmployeeForm() {
     setErrorMsg(null);
 
     // Save Header Data to LocalStorage automatically on submit
-    const currentPanels = data.panels || [];
-    const lastPanel = currentPanels[currentPanels.length - 1];
+    // Save Header Data to LocalStorage automatically on submit
+    const currentPanelNo = data.panelNo;
     let nextPanelNo = "1";
-    if (lastPanel && lastPanel.panelNo) {
-      const match = lastPanel.panelNo.match(/\d+$/);
+    if (currentPanelNo) {
+      const match = currentPanelNo.match(/\d+$/);
       if (match) {
         const num = parseInt(match[0], 10);
-        nextPanelNo = lastPanel.panelNo.replace(/\d+$/, (num + 1).toString());
+        nextPanelNo = currentPanelNo.replace(/\d+$/, (num + 1).toString());
       } else {
-        nextPanelNo = lastPanel.panelNo + " 1";
+        nextPanelNo = currentPanelNo + " 1";
       }
     }
 
@@ -324,6 +354,7 @@ export default function EmployeeForm() {
       rpm: data.rpm,
       pic: data.pic,
       potonganKe: data.potonganKe,
+      pcs: data.pcs,
       nextPanelNo, // we store the next available panel no
     };
     localStorage.setItem('dji_form_header', JSON.stringify(headerDataToSave));
@@ -360,8 +391,9 @@ export default function EmployeeForm() {
         course: "",
         rpm: "",
         potonganKe: "",
-        panels: [{
-          panelNo: "1",
+        panelNo: "1",
+        pcsData: [{
+          pcsIndex: "1",
           jmlHasilProduksi: "",
           indikatorStop: false,
           kategoriMasalah: "",
@@ -385,8 +417,9 @@ export default function EmployeeForm() {
     }
     reset({
       ...watch(),
-      panels: [{
-        panelNo: nextPanelNo,
+      panelNo: nextPanelNo,
+      pcsData: [{
+        pcsIndex: "1",
         jmlHasilProduksi: "",
         indikatorStop: false,
         kategoriMasalah: "",
@@ -397,29 +430,6 @@ export default function EmployeeForm() {
     setPreviews({ before: null, after: null });
   };
   
-  const handleAddPanel = () => {
-    const currentPanels = watch("panels") || [];
-    const lastPanel = currentPanels[currentPanels.length - 1];
-    let nextNo = "1";
-    if (lastPanel && lastPanel.panelNo) {
-      const match = lastPanel.panelNo.match(/\d+$/);
-      if (match) {
-        const num = parseInt(match[0], 10);
-        nextNo = lastPanel.panelNo.replace(/\d+$/, (num + 1).toString());
-      } else {
-        nextNo = lastPanel.panelNo + " 1";
-      }
-    }
-    append({
-      panelNo: nextNo,
-      jmlHasilProduksi: "",
-      indikatorStop: false,
-      kategoriMasalah: "",
-      detailMasalah: "",
-      keteranganCacat: "",
-    });
-  };
-
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -615,40 +625,50 @@ export default function EmployeeForm() {
 
           </div>
 
-          {/* ARRAY OF PANELS */}
+          {/* Data Panel Umum */}
+          <div className="mt-8 pt-6 border-t-2 border-slate-200/60 relative">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-3 text-[10px] font-bold text-sky-500 uppercase tracking-widest border border-slate-200 rounded-full">
+              Wajib Diisi Per Panel
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-slate-500 uppercase">No. Panel (PNL NO)</label>
+                <input type="text" {...register("panelNo")} className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm font-semibold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none transition-all shadow-sm" placeholder="1, 2, 3..." />
+                {errors.panelNo && <span className="text-red-500 text-[10px] font-bold">{errors.panelNo.message}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* ARRAY OF PCS */}
           <div className="mt-8">
             <div className="text-center mb-6">
-              <h4 className="text-sm font-bold text-slate-700">Data Panel (Bisa lebih dari 1)</h4>
+              <h4 className="text-sm font-bold text-slate-700">Detail per PCS (Otomatis dari nilai Header)</h4>
             </div>
 
             <div className="space-y-6">
               {fields.map((field, index) => {
-                const watchIndikator = watch(`panels.${index}.indikatorStop` as any);
+                const watchIndikator = watch(`pcsData.${index}.indikatorStop` as any);
                 return (
                   <div key={field.id} className="border-t-2 border-slate-200/60 relative pt-6 pb-2">
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-3 py-0.5 text-[10px] font-bold text-sky-500 uppercase tracking-widest border border-slate-200 rounded-full flex gap-3 items-center shadow-sm">
-                      <span>Baris Ke-{index + 1}</span>
-                      {index > 0 && (
-                        <button type="button" onClick={() => remove(index)} className="text-red-400 hover:text-red-600 transition-colors p-1" title="Hapus baris ini">
-                          <X className="w-3 h-3" strokeWidth={3} />
-                        </button>
-                      )}
+                      <span>PCS Ke-{index + 1}</span>
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-4">
                       <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-semibold text-slate-500 uppercase">No. Panel (PNL NO)</label>
-                        <input type="text" {...register(`panels.${index}.panelNo` as const)} className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm font-semibold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none transition-all shadow-sm" placeholder="1, 2, 3..." />
-                        {errors.panels?.[index]?.panelNo && <span className="text-red-500 text-[10px] font-bold">{errors.panels[index]?.panelNo?.message}</span>}
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase">Jumlah Hasil Produksi</label>
+                        <input type="text" {...register(`pcsData.${index}.jmlHasilProduksi` as const)} className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm focus:border-sky-400 outline-none transition-all shadow-sm" placeholder="Masukkan hasil pcs" />
+                        {errors.pcsData?.[index]?.jmlHasilProduksi && <span className="text-red-500 text-[10px] font-bold">{errors.pcsData[index]?.jmlHasilProduksi?.message}</span>}
                       </div>
                     </div>
 
                     <div className={`mt-4 border rounded-xl overflow-hidden transition-all duration-300 ${watchIndikator ? 'border-red-200 bg-red-50/20' : 'border-slate-200 bg-slate-50/50'}`}>
                       <label className="flex items-center justify-between p-4 cursor-pointer select-none">
                         <div className="flex items-center gap-3">
-                          <input type="checkbox" {...register(`panels.${index}.indikatorStop` as const)} className="w-5 h-5 rounded text-red-600 focus:ring-red-500 border-slate-300 cursor-pointer" />
+                          <input type="checkbox" {...register(`pcsData.${index}.indikatorStop` as const)} className="w-5 h-5 rounded text-red-600 focus:ring-red-500 border-slate-300 cursor-pointer" />
                           <div>
-                            <h5 className={`text-sm font-bold ${watchIndikator ? 'text-red-650' : 'text-slate-600'}`}>Terdapat Kendala / Mesin Stop / Cacat?</h5>
+                            <h5 className={`text-sm font-bold ${watchIndikator ? 'text-red-650' : 'text-slate-600'}`}>Terdapat Cacat / Kendala pada PCS ini?</h5>
                           </div>
                         </div>
                       </label>
@@ -657,7 +677,7 @@ export default function EmployeeForm() {
                         <div className="p-4 border-t border-red-100/50 space-y-4 animate-fadeIn">
                           <div className="flex flex-col gap-1">
                             <label className="text-[10px] font-bold text-red-600 uppercase">Kategori Masalah (Kode A-H)</label>
-                            <select {...register(`panels.${index}.kategoriMasalah` as const)} className="h-11 px-3 rounded-xl bg-white border border-red-200 text-xs focus:border-red-400 outline-none">
+                            <select {...register(`pcsData.${index}.kategoriMasalah` as const)} className="h-11 px-3 rounded-xl bg-white border border-red-200 text-xs focus:border-red-400 outline-none">
                               <option value="">-- Pilih Kategori --</option>
                               {NEW_PROBLEM_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
@@ -669,10 +689,6 @@ export default function EmployeeForm() {
                 );
               })}
             </div>
-
-            <button type="button" onClick={handleAddPanel} className="w-full mt-6 h-12 rounded-xl border-2 border-dashed border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 hover:border-sky-300 flex items-center justify-center gap-2 font-bold transition-all text-sm">
-              <Plus className="w-5 h-5" /> Tambah Baris Panel Baru
-            </button>
           </div>
         </div>
 
@@ -699,7 +715,7 @@ export default function EmployeeForm() {
             </div>
             <h4 className="text-lg font-bold text-slate-800">Panel Berhasil Disimpan</h4>
             <p className="text-xs text-slate-500 mt-1 mb-5">
-              Data laporan untuk ${successData.panels?.length || 0} Panel (Potongan {successData.potonganKe}) telah terekam.
+              Data laporan untuk Panel #${successData.panelNo} (Potongan {successData.potonganKe}) telah terekam.
             </p>
             <button onClick={handleCloseSuccess} className="w-full py-3 bg-[#0070bc] text-white font-bold rounded-xl active:scale-95 transition-all text-sm">
               Input Panel Berikutnya
