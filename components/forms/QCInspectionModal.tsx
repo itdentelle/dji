@@ -281,7 +281,7 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
             </div>
 
             {/* Bagian 3: Rincian Grade */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Grade Produksi */}
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Total Grade (Produksi)</h4>

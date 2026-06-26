@@ -202,7 +202,7 @@ export async function getRealProductionsData(): Promise<{
             const hasProblems = detail.kategori_masalah && detail.kategori_masalah.trim() !== "";
             const isProduction = (detail.jml_hasil_produksi || 0) > 0 || (detail.meter_kain || 0) > 0;
 
-            let grade: "GRADE A" | "GRADE B" | "BS" | "UNGRADED" = "UNGRADED";
+            let grade: "GRADE A" | "GRADE B" | "BS" | "UNGRADED" = "GRADE A";
             if (detail.final_inspection_id === 1) grade = "GRADE A";
             else if (detail.final_inspection_id === 2) grade = "GRADE B";
             else if (detail.final_inspection_id === 3) grade = "BS";

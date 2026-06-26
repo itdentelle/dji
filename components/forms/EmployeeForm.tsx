@@ -708,7 +708,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
           </div>
 
           {/* Form Utama sesuai layout referensi gambar */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 border-t border-slate-100 pt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-4 border-t border-slate-100 pt-5">
             
             {/* Kolom Kiri */}
             <div className="space-y-4">
