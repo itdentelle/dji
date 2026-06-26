@@ -13,6 +13,11 @@ import {
   Users,
   AlertTriangle,
   Layers,
+  Search,
+  ArrowRight,
+  LogOut,
+  Download,
+  X,
 } from "lucide-react";
 import { getRealProductionsData } from "@/actions/dashboard-actions";
 
@@ -23,6 +28,7 @@ interface Transaction {
   nama_operator: string;
   mesin_id: string;
   hasil_pcs: number;
+  hasil_meter?: number;
   target_pcs: number;
   status_qc: "Lolos" | "Recheck";
   rpm_mesin: number;
@@ -30,6 +36,7 @@ interface Transaction {
   design: string;
   group?: string;
   is_production?: boolean;
+  total_downtime_menit?: number;
 }
 
 const dummyData: Transaction[] = [
@@ -53,9 +60,13 @@ export default function DashboardPage() {
   const [activeFilter, setActiveFilter] = useState<"ALL" | "LOLOS" | "EFISIENSI" | "PROBLEMS" | "NOL_PRODUKSI">("ALL");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLive, setIsLive] = useState(false);
+  
+  // Kiosk Mode State
+  const [activeEmployeeName, setActiveEmployeeName] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Metric Mode State (also controls Card 1 and Card 4 sliders)
-  const [metricMode, setMetricMode] = useState<"PCS" | "BARIS">("PCS");
+  // Metric Mode State (also controls sliders)
+  const [metricMode, setMetricMode] = useState<"PCS" | "METER" | "BARIS">("PCS");
 
   // Date Filtering State
   const [dateRangeMode, setDateRangeMode] = useState<"ALL" | "TODAY" | "7DAYS" | "CUSTOM">("7DAYS");
@@ -71,30 +82,36 @@ export default function DashboardPage() {
   // Chart Type State
   const [chartType, setChartType] = useState<"BAR" | "LINE">("BAR");
 
-  // Operator Filter State
-  const [selectedOperators, setSelectedOperators] = useState<string[]>([]);
-  const [isOperatorDropdownOpen, setIsOperatorDropdownOpen] = useState(false);
-
   // Swipe State for mobile
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
   const handleTouchEndMetric = (e: React.TouchEvent) => {
     if (touchStartX === null) return;
     const diff = touchStartX - e.changedTouches[0].clientX;
-    if (diff > 40) setMetricMode("BARIS");
+    if (diff > 40) setMetricMode("METER");
     else if (diff < -40) setMetricMode("PCS");
     setTouchStartX(null);
   };
   const handleTouchEndProblems = (e: React.TouchEvent) => {
     if (touchStartX === null) return;
     const diff = touchStartX - e.changedTouches[0].clientX;
-    if (diff > 40) { setActiveFilter("NOL_PRODUKSI"); setMetricMode("BARIS"); }
+    if (diff > 40) { setActiveFilter("NOL_PRODUKSI"); setMetricMode("METER"); }
     else if (diff < -40) { setActiveFilter("PROBLEMS"); setMetricMode("PCS"); }
     setTouchStartX(null);
   };
 
   // Active chart bar for mobile tap
   const [activeChartBar, setActiveChartBar] = useState<number | null>(null);
+
+  // Export Modal State
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportMonth, setExportMonth] = useState<number>(new Date().getMonth() + 1);
+  const [exportYear, setExportYear] = useState<number>(new Date().getFullYear());
+
+  const handleDownloadRekap = () => {
+    window.open(`/api/export?month=${exportMonth}&year=${exportYear}`, '_blank');
+    setIsExportModalOpen(false);
+  };
 
   // Load real production data from Supabase
   useEffect(() => {
@@ -103,13 +120,7 @@ export default function DashboardPage() {
         const res = await getRealProductionsData();
         console.log("Dashboard Live Data Response:", res);
         if (res.success && res.data) {
-          if (user?.role === 'employee' && user?.fullName) {
-            const cleanName = user.fullName.replace(" (Demo)", "");
-            const myData = res.data.filter(t => t.nama_operator.toLowerCase() === cleanName.toLowerCase());
-            setTransactions(myData);
-          } else {
-            setTransactions(res.data);
-          }
+          setTransactions(res.data);
           setIsLive(true);
         } else if (!res.success) {
           console.error("Failed to load dashboard data:", res.error);
@@ -125,7 +136,12 @@ export default function DashboardPage() {
 
   // Unique Operators for Filter Dropdown
   const uniqueOperators = useMemo(() => {
-    const ops = new Set(transactions.map(t => t.nama_operator));
+    const ops = new Set<string>();
+    transactions.forEach(t => {
+      // Split by comma in case there are multiple operators, trim spaces
+      const names = t.nama_operator.split(',').map(n => n.trim()).filter(Boolean);
+      names.forEach(name => ops.add(name));
+    });
     return Array.from(ops).sort();
   }, [transactions]);
 
@@ -171,12 +187,15 @@ export default function DashboardPage() {
       });
     }
 
-    if (selectedOperators.length > 0) {
-      result = result.filter(item => selectedOperators.includes(item.nama_operator));
+    if (activeEmployeeName) {
+      // Check if the comma-separated string contains the active employee name
+      result = result.filter(item => 
+        item.nama_operator.split(',').map(n => n.trim()).includes(activeEmployeeName)
+      );
     }
 
     return result;
-  }, [transactions, dateRangeMode, startDate, endDate, selectedOperators]);
+  }, [transactions, dateRangeMode, startDate, endDate, activeEmployeeName]);
 
   // KPI Calculations (Pivot values calculated from active dataset, filtered by grade)
   const stats = useMemo(() => {
@@ -191,32 +210,50 @@ export default function DashboardPage() {
     }
 
     const productionOnly = gradeScoped.filter(item => item.is_production);
-    
     const totalProduksi = productionOnly.reduce((acc, curr) => acc + curr.hasil_pcs, 0);
+    const totalProduksiMeter = productionOnly.reduce((acc, curr) => acc + (curr.hasil_meter || 0), 0);
+    
+    // Variables for other cards
     const totalTarget = productionOnly.reduce((acc, curr) => acc + curr.target_pcs, 0);
-    const countLolos = productionOnly.filter(item => item.status_qc === "Lolos").length;
-    const countLolosSemua = gradeScoped.filter(item => item.status_qc === "Lolos").length;
     const totalItems = productionOnly.length;
     
-    const persentaseLolos = totalItems > 0 ? (countLolos / totalItems) * 100 : 0;
-    const efisiensi = totalTarget > 0 ? (totalProduksi / totalTarget) * 100 : 0;
+    // Perhitungan Efisiensi Waktu Kerja (7 Jam / 420 menit per shift/hari aktif)
+    const distinctDaysCount = new Set(gradeScoped.map(item => item.tanggal)).size;
+    const totalMenitTersedia = distinctDaysCount * 420;
+    const totalDowntimeMenit = gradeScoped.reduce((acc, curr) => acc + (curr.total_downtime_menit || 0), 0);
+    const totalMenitKerjaEfektif = Math.max(0, totalMenitTersedia - totalDowntimeMenit);
+    const efisiensi = totalMenitTersedia > 0 ? (totalMenitKerjaEfektif / totalMenitTersedia) * 100 : 0;
     
-    // We count problems only for actual productions (is_production === true) and exclude UNGRADED
     const countMasalah = gradeScoped.filter(item => item.status_qc === "Recheck" && item.grade !== "UNGRADED" && item.is_production).length;
     const countNolProduksi = gradeScoped.filter(item => item.hasil_pcs === 0).length;
     const totalPanel = gradeScoped.length;
-    const persentaseLolosSemua = totalPanel > 0 ? (countLolosSemua / totalPanel) * 100 : 0;
+
+    // Cacat Panel
+    const countMasalahPanel = gradeScoped.filter(item => item.hasil_pcs > 0 && item.status_qc === "Recheck").length;
+    const totalPanelValid = gradeScoped.filter(item => item.hasil_pcs > 0).length; // Total panels submitted
+    const persentaseCacatPanel = totalPanelValid > 0 ? (countMasalahPanel / totalPanelValid) * 100 : 0;
+
+    // Cacat Meteran
+    // Meter problems are recorded when hasil_pcs == 0 and status_qc == Recheck
+    const countMasalahMeteran = gradeScoped.filter(item => item.hasil_pcs === 0 && (item.hasil_meter || 0) === 0 && item.status_qc === "Recheck").length;
+    const persentaseCacatMeteran = totalProduksiMeter > 0 ? (countMasalahMeteran / totalProduksiMeter) * 100 : 0;
 
     return {
       totalProduksi,
+      totalProduksiMeter,
       totalTarget,
-      persentaseLolos,
-      persentaseLolosSemua,
       efisiensi,
       countMasalah,
       totalItems,
       totalPanel,
-      countNolProduksi
+      countNolProduksi,
+      countMasalahPanel,
+      totalPanelValid,
+      persentaseCacatPanel,
+      countMasalahMeteran,
+      persentaseCacatMeteran,
+      totalMenitTersedia,
+      totalDowntimeMenit
     };
   }, [dateFilteredTransactions, chartGradeFilter]);
 
@@ -286,15 +323,15 @@ export default function DashboardPage() {
 
       const gradeA_sum = items
         .filter(item => item.grade === "GRADE A")
-        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
+        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
 
       const gradeB_sum = items
         .filter(item => item.grade === "GRADE B")
-        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
+        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
 
       const bs_sum = items
         .filter(item => item.grade === "BS")
-        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
+        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
 
       const total = gradeA_sum + gradeB_sum + bs_sum;
 
@@ -332,16 +369,16 @@ export default function DashboardPage() {
         items = dateFilteredTransactions.filter(item => (item.group || "Tanpa Group") === groupName);
       }
       if (chartGradeFilter === "ALL") {
-        const gA = items.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
-        const gB = items.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
-        const bs = items.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
+        const gA = items.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
+        const gB = items.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
+        const bs = items.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
         return Math.max(gA, gB, bs);
       } else if (chartGradeFilter === "GRADE_A") {
-        return items.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
+        return items.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
       } else if (chartGradeFilter === "GRADE_B") {
-        return items.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
+        return items.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
       } else if (chartGradeFilter === "BS") {
-        return items.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
+        return items.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
       }
       return 0;
     });
@@ -356,21 +393,147 @@ export default function DashboardPage() {
     setDateRangeMode("ALL");
     setStartDate("");
     setEndDate("");
-    setSelectedOperators([]);
-    setIsOperatorDropdownOpen(false);
     setMetricMode("PCS");
   };
 
+  // KIOSK IDENTITY SELECTOR UI
+  if (!activeEmployeeName) {
+    const filteredOperators = uniqueOperators.filter(op => op.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center animate-fadeIn p-4">
+        <div className="bg-white rounded-[32px] p-8 sm:p-12 max-w-xl w-full shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col items-center text-center">
+          <div className="w-24 h-24 bg-sky-50 rounded-full flex items-center justify-center mb-6">
+            <Users className="w-12 h-12 text-sky-500" />
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-3">Pilih Nama Anda</h1>
+          <p className="text-slate-500 mb-8 max-w-md font-medium">Silakan temukan dan pilih nama Anda pada daftar di bawah ini untuk mengakses Dashboard pribadi Anda.</p>
+          
+          <div className="w-full relative mb-6">
+            <Search className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Ketik nama Anda di sini..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-14 pr-5 py-4 bg-slate-50/50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 font-bold text-slate-700 transition-all text-lg"
+            />
+          </div>
+
+          <div className="w-full max-h-[350px] overflow-y-auto custom-scrollbar flex flex-col gap-3 p-1 text-left pr-2">
+            {filteredOperators.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-sm font-semibold border-2 border-dashed border-slate-100 rounded-2xl">Tidak ada pegawai yang cocok dengan pencarian.</div>
+            ) : (
+              filteredOperators.map(op => (
+                <button
+                  key={op}
+                  onClick={() => setActiveEmployeeName(op)}
+                  className="w-full p-5 rounded-2xl border-2 border-slate-100 hover:border-sky-200 hover:bg-sky-50 text-slate-600 hover:text-sky-700 font-extrabold flex items-center justify-between group transition-all cursor-pointer"
+                >
+                  <span className="text-lg">{op}</span>
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                    <ArrowRight className="w-5 h-5 text-sky-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* KIOSK STYLES */}
+      <style dangerouslySetInnerHTML={{__html: `
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}} />
+
+      {/* Export Modal */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                <Download className="w-5 h-5 text-[#0070bc]" />
+                Download Rekap Bulanan
+              </h3>
+              <button 
+                onClick={() => setIsExportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-100 p-1.5 rounded-full transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Bulan</label>
+                <select 
+                  value={exportMonth}
+                  onChange={(e) => setExportMonth(Number(e.target.value))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#0070bc]/30 focus:border-[#0070bc]"
+                >
+                  <option value={1}>Januari</option>
+                  <option value={2}>Februari</option>
+                  <option value={3}>Maret</option>
+                  <option value={4}>April</option>
+                  <option value={5}>Mei</option>
+                  <option value={6}>Juni</option>
+                  <option value={7}>Juli</option>
+                  <option value={8}>Agustus</option>
+                  <option value={9}>September</option>
+                  <option value={10}>Oktober</option>
+                  <option value={11}>November</option>
+                  <option value={12}>Desember</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tahun</label>
+                <select 
+                  value={exportYear}
+                  onChange={(e) => setExportYear(Number(e.target.value))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#0070bc]/30 focus:border-[#0070bc]"
+                >
+                  {[2024, 2025, 2026, 2027, 2028].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex gap-3 justify-end">
+              <button 
+                onClick={() => setIsExportModalOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleDownloadRekap}
+                className="px-5 py-2 text-sm font-bold text-white bg-[#0070bc] hover:bg-[#005a96] rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Generate Excel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Welcome Header */}
       <div className="bg-white border border-[#e9ecef] rounded-[24px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5 relative z-10">
         <div className="flex flex-col gap-2">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex flex-wrap items-center gap-3 leading-tight">
-              <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
-                My Dashboard
-              </span>
-              {isLive && (
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex flex-wrap items-center gap-3 leading-tight">
+            <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
+              Dashboard: {activeEmployeeName}
+            </span>
+            {isLive && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs animate-pulse">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Live Data
@@ -384,14 +547,35 @@ export default function DashboardPage() {
               Pantau pencapaian produksi harian dan kualitas kerja Anda secara real-time.
             </p>
         </div>
-        <button
-          onClick={handleResetFilters}
-          className="relative z-10 flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:text-[#0070bc] hover:border-sky-200 rounded-full border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300 group shrink-0"
-          title="Reset Slicer"
-        >
-          <RefreshCw className="w-4 h-4 transition-transform duration-500 group-hover:rotate-180" />
-          Reset Semua
-        </button>
+        <div className="flex items-center gap-2 z-10 shrink-0 flex-wrap">
+          <button
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-[#0070bc] hover:bg-[#005a96] rounded-full shadow-md hover:shadow-lg cursor-pointer transition-all duration-300 group"
+            title="Download Rekap Laporan Bulanan"
+          >
+            <Download className="w-4 h-4 transition-transform duration-500 group-hover:-translate-y-1" />
+            Rekap Excel
+          </button>
+          <button
+            onClick={handleResetFilters}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:text-[#0070bc] hover:border-sky-200 rounded-full border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300 group"
+            title="Reset Slicer"
+          >
+            <RefreshCw className="w-4 h-4 transition-transform duration-500 group-hover:rotate-180" />
+            Reset Slicer
+          </button>
+          <button
+            onClick={() => {
+              setActiveEmployeeName(null);
+              setSearchQuery("");
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-extrabold text-rose-600 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300 rounded-full border border-rose-200 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300 group"
+            title="Ganti Pegawai"
+          >
+            <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+            Ganti Pegawai
+          </button>
+        </div>
       </div>
 
       {/* Slicers Container */}
@@ -474,7 +658,7 @@ export default function DashboardPage() {
       {/* Grid KPI Cards / Slicer Buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
-        {/* Card 1: Hasil Produksi & Total Baris (Slider Slicer) */}
+        {/* Card 1: Hasil Produksi & Meteran (Slider Slicer) */}
         <div 
           className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group transition-all duration-300 flex flex-col ${activeFilter === "ALL"
             ? "bg-[#004777] shadow-xl scale-[1.03] ring-2 ring-[#0070bc] ring-offset-2"
@@ -499,7 +683,7 @@ export default function DashboardPage() {
             >
               <div className="flex justify-between items-start relative z-10">
                 <span className="text-sky-100 text-[10px] font-bold uppercase tracking-wider">
-                  Total Produksi ({gradeLabel})
+                  Total Produksi Panel
                 </span>
                 <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] font-bold">
                   All
@@ -512,19 +696,19 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-1 mt-1 text-[11px] text-sky-200 font-semibold">
                   <TrendingUp className="w-3.5 h-3.5" />
-                  <span>Berdasarkan pcs</span>
+                  <span>Berdasarkan pcs panel</span>
                 </div>
               </div>
             </div>
 
-            {/* Slide 1: Total Baris (Panel) */}
+            {/* Slide 1: Total Meter (Meter) */}
             <div 
-              onClick={() => { setActiveFilter("ALL"); setMetricMode("BARIS"); }}
+              onClick={() => { setActiveFilter("ALL"); setMetricMode("METER"); }}
               className="w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative text-white"
             >
               <div className="flex justify-between items-start relative z-10">
                 <span className="text-sky-100 text-[10px] font-bold uppercase tracking-wider">
-                  Total Panel ({gradeLabel})
+                  Total Produksi Meteran
                 </span>
                 <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] font-bold">
                   All
@@ -532,12 +716,12 @@ export default function DashboardPage() {
               </div>
               <div className="mt-2 relative z-10">
                 <div className="text-3xl font-black tracking-tight flex items-baseline gap-1">
-                  {stats.totalPanel.toLocaleString()}
-                  <span className="text-sm font-semibold opacity-80">Baris</span>
+                  {stats.totalProduksiMeter.toLocaleString()}
+                  <span className="text-sm font-semibold opacity-80">M</span>
                 </div>
                 <div className="flex items-center gap-1 mt-1 text-[11px] text-sky-200 font-semibold">
                   <Layers className="w-3.5 h-3.5" />
-                  <span>Berdasarkan baris data</span>
+                  <span>Panjang meter (Mode Kontinu)</span>
                 </div>
               </div>
             </div>
@@ -553,19 +737,19 @@ export default function DashboardPage() {
               <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`} />
             </button>
             <button
-              onClick={() => { setMetricMode("BARIS"); if(activeFilter === "PROBLEMS") setActiveFilter("NOL_PRODUKSI"); }}
+              onClick={() => { setMetricMode("METER"); if(activeFilter === "PROBLEMS") setActiveFilter("NOL_PRODUKSI"); }}
               className="p-3 -m-3 cursor-pointer ml-3"
-              title="Geser ke Total Panel"
+              title="Geser ke Total Meteran"
             >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "BARIS" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`} />
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "METER" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`} />
             </button>
           </div>
         </div>
 
-        {/* Card 2: Lolos Inspeksi QC (Slider Slicer) */}
+        {/* Card 2: Persentase Cacat (Slider Slicer) */}
         <div 
-          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border transition-all duration-300 flex flex-col ${activeFilter === "LOLOS"
-            ? "bg-sky-50/50 border-sky-500 text-slate-800 shadow-md scale-[1.03] ring-2 ring-sky-500"
+          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border transition-all duration-300 flex flex-col ${activeFilter === "PROBLEMS"
+            ? "bg-rose-50/50 border-rose-500 text-slate-800 shadow-md scale-[1.03] ring-2 ring-rose-500"
             : "bg-white border-[#e9ecef] text-slate-800 hover:scale-[1.01] hover:shadow-xs"
           }`}
           onTouchStart={handleTouchStart}
@@ -577,48 +761,48 @@ export default function DashboardPage() {
             className="flex h-full w-[200%] transition-transform duration-500 ease-in-out"
             style={{ transform: `translateX(-${metricMode === "PCS" ? 0 : 50}%)` }}
           >
-            {/* Slide 0: Lolos QC (Berdasarkan PCS/ProduksiOnly) */}
+            {/* Slide 0: Persentase Cacat Panel */}
             <div 
-              onClick={() => { setActiveFilter("LOLOS"); setMetricMode("PCS"); }}
+              onClick={() => { setActiveFilter("PROBLEMS"); setMetricMode("PCS"); }}
               className="w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative"
             >
               <div className="flex justify-between items-start relative z-10">
                 <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                  Lolos QC ({gradeLabel})
+                  Cacat Panel ({gradeLabel})
                 </span>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "LOLOS" ? "bg-sky-100 text-[#0070bc]" : "bg-slate-100 text-slate-500"
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "PROBLEMS" ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-500"
                   }`}>
-                  OK
+                  <AlertTriangle className="w-3.5 h-3.5" />
                 </span>
               </div>
               <div className="mt-2 relative z-10">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{stats.persentaseLolos.toFixed(1)}%</div>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-[#0070bc] font-bold">
+                <div className="text-3xl font-black tracking-tight text-slate-800">{stats.persentaseCacatPanel.toFixed(1)}%</div>
+                <div className="flex items-center gap-1 mt-1 text-[11px] text-rose-600 font-bold">
                   <TrendingUp className="w-3.5 h-3.5" />
-                  <span>{stats.totalItems} data terhitung</span>
+                  <span>{stats.countMasalahPanel} dari {stats.totalPanelValid} panel cacat</span>
                 </div>
               </div>
             </div>
 
-            {/* Slide 1: Lolos QC (Berdasarkan Panel/Semua) */}
+            {/* Slide 1: Persentase Cacat Meteran */}
             <div 
-              onClick={() => { setActiveFilter("LOLOS"); setMetricMode("BARIS"); }}
+              onClick={() => { setActiveFilter("PROBLEMS"); setMetricMode("METER"); }}
               className="w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative"
             >
               <div className="flex justify-between items-start relative z-10">
                 <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                  Lolos QC Panel ({gradeLabel})
+                  Cacat Meteran ({gradeLabel})
                 </span>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "LOLOS" ? "bg-sky-100 text-[#0070bc]" : "bg-slate-100 text-slate-500"
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "PROBLEMS" ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-500"
                   }`}>
-                  OK
+                  <AlertTriangle className="w-3.5 h-3.5" />
                 </span>
               </div>
               <div className="mt-2 relative z-10">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{stats.persentaseLolosSemua.toFixed(1)}%</div>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-[#0070bc] font-bold">
+                <div className="text-3xl font-black tracking-tight text-slate-800">{stats.persentaseCacatMeteran.toFixed(2)}%</div>
+                <div className="flex items-center gap-1 mt-1 text-[11px] text-rose-600 font-bold">
                   <Layers className="w-3.5 h-3.5" />
-                  <span>{stats.totalPanel} panel terhitung</span>
+                  <span>{stats.countMasalahMeteran} masalah di {stats.totalProduksiMeter} Meter</span>
                 </div>
               </div>
             </div>
@@ -627,18 +811,16 @@ export default function DashboardPage() {
           {/* Dots Indicator */}
           <div className="absolute bottom-3 right-3 flex items-center gap-1 z-20" onClick={(e) => e.stopPropagation()}>
             <button
-              onClick={() => { setMetricMode("PCS"); if(activeFilter === "LOLOS") setActiveFilter("LOLOS"); }}
+              onClick={() => { setMetricMode("PCS"); setActiveFilter("PROBLEMS"); }}
               className="p-3 -m-3 cursor-pointer"
-              title="Geser ke QC Produksi"
             >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? (activeFilter === "LOLOS" ? "w-4 bg-sky-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? (activeFilter === "PROBLEMS" ? "w-4 bg-rose-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
             </button>
             <button
-              onClick={() => { setMetricMode("BARIS"); if(activeFilter === "LOLOS") setActiveFilter("LOLOS"); }}
+              onClick={() => { setMetricMode("METER"); setActiveFilter("PROBLEMS"); }}
               className="p-3 -m-3 cursor-pointer ml-3"
-              title="Geser ke QC Panel"
             >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "BARIS" ? (activeFilter === "LOLOS" ? "w-4 bg-sky-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "METER" ? (activeFilter === "PROBLEMS" ? "w-4 bg-rose-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
             </button>
           </div>
         </div>
@@ -647,7 +829,7 @@ export default function DashboardPage() {
         <div className="bg-white border border-[#e9ecef] rounded-[24px] p-5 flex flex-col justify-between h-full min-h-[11rem] shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
           <div className="flex justify-between items-start">
             <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-              Efisiensi Produksi Saya
+              Efisiensi Waktu Kerja
             </span>
             <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-purple-50 text-purple-600">
               <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -657,119 +839,51 @@ export default function DashboardPage() {
             <div className="text-3xl font-black tracking-tight text-slate-800">{stats.efisiensi.toFixed(1)}%</div>
             
             {/* Target Indicator */}
-            {stats.totalTarget > 0 ? (
-              stats.totalProduksi >= stats.totalTarget ? (
-                <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Target Tercapai
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-rose-50 border border-rose-100 rounded-lg text-[10px] text-rose-700 font-extrabold uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                  Kurang {stats.totalTarget - stats.totalProduksi} Pcs
-                </div>
-              )
+            {stats.totalDowntimeMenit > 0 ? (
+              <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-700 font-extrabold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Terpotong {stats.totalDowntimeMenit} Menit
+              </div>
             ) : (
-              <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                Belum Ada Target
+              <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                0 Menit Terbuang
               </div>
             )}
             
             <div className="flex items-center gap-1 mt-2 text-[11px] text-purple-600 font-bold">
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Berdasarkan Target vs Hasil</span>
+              <span>Shift 7 Jam (420 mnt)</span>
             </div>
           </div>
         </div>
 
-        {/* Card 4: Masalah & Produksi Nol (Slider Slicer) */}
+        {/* Card 4: Masalah */}
         <div 
-          className="relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border border-[#e9ecef] bg-white hover:shadow-xs transition-all duration-300 flex flex-col"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEndProblems}
+          onClick={() => { setActiveFilter("PROBLEMS"); setMetricMode("PCS"); }}
+          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${activeFilter === "PROBLEMS"
+            ? "bg-red-50/40 shadow-[0_8px_30px_rgba(239,68,68,0.12)] text-slate-800"
+            : "bg-white hover:shadow-xs text-slate-800"
+          }`}
         >
-          
-          {/* Slide Container */}
-          <div 
-            className="flex h-full w-[200%] transition-transform duration-500 ease-in-out"
-            style={{ transform: `translateX(-${metricMode === "PCS" ? 0 : 50}%)` }}
-          >
-            {/* Slide 0: Masalah */}
-            <div 
-              onClick={() => { setActiveFilter("PROBLEMS"); setMetricMode("PCS"); }}
-              className={`w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative ${activeFilter === "PROBLEMS"
-                ? "bg-red-50/40 text-slate-800"
-                : "bg-white text-slate-800"
-              }`}
-            >
-              {activeFilter === "PROBLEMS" && (
-                <div className="absolute inset-0 ring-2 ring-red-500 rounded-[24px] pointer-events-none" />
-              )}
-              <div className="flex justify-between items-start relative z-10">
-                <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                  Masalah ({gradeLabel})
-                </span>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "PROBLEMS" ? "bg-red-100 text-red-600 animate-pulse" : "bg-slate-100 text-slate-500"
-                  }`}>
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                </span>
-              </div>
-              <div className="mt-2 relative z-10">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{stats.countMasalah} Masalah</div>
-                <div className="flex items-center gap-1.5 mt-1 text-[11px] text-red-600 font-extrabold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                  <span>Butuh Pemeriksaan</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Slide 1: Produksi Nol */}
-            <div 
-              onClick={() => { setActiveFilter("NOL_PRODUKSI"); setMetricMode("BARIS"); }}
-              className={`w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative ${activeFilter === "NOL_PRODUKSI"
-                ? "bg-orange-50/40 text-slate-800"
-                : "bg-white text-slate-800"
-              }`}
-            >
-              {activeFilter === "NOL_PRODUKSI" && (
-                <div className="absolute inset-0 ring-2 ring-orange-500 rounded-[24px] pointer-events-none" />
-              )}
-              <div className="flex justify-between items-start relative z-10">
-                <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                  Produksi Nol ({gradeLabel})
-                </span>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "NOL_PRODUKSI" ? "bg-orange-100 text-orange-600 animate-pulse" : "bg-slate-100 text-slate-500"
-                  }`}>
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                </span>
-              </div>
-              <div className="mt-2 relative z-10">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{stats.countNolProduksi} Baris</div>
-                <div className="flex items-center gap-1.5 mt-1 text-[11px] text-orange-600 font-extrabold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                  <span>Hasil 0 Pcs</span>
-                </div>
-              </div>
-            </div>
+          {activeFilter === "PROBLEMS" && (
+            <div className="absolute inset-0 ring-2 ring-red-500 rounded-[24px] pointer-events-none" />
+          )}
+          <div className="flex justify-between items-start relative z-10">
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+              Masalah ({gradeLabel})
+            </span>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "PROBLEMS" ? "bg-red-100 text-red-600 animate-pulse" : "bg-slate-100 text-slate-500"
+              }`}>
+              <AlertTriangle className="w-3.5 h-3.5" />
+            </span>
           </div>
-
-          {/* Dots Indicator */}
-          <div className="absolute bottom-3 right-3 flex items-center gap-1 z-20" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => { setMetricMode("PCS"); if(activeFilter === "NOL_PRODUKSI") setActiveFilter("PROBLEMS"); }}
-              className="p-3 -m-3 cursor-pointer"
-              title="Geser ke Masalah"
-            >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? (activeFilter === "PROBLEMS" ? "w-4 bg-red-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
-            </button>
-            <button
-              onClick={() => { setMetricMode("BARIS"); if(activeFilter === "PROBLEMS") setActiveFilter("NOL_PRODUKSI"); }}
-              className="p-3 -m-3 cursor-pointer ml-3"
-              title="Geser ke Produksi Nol"
-            >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "BARIS" ? (activeFilter === "NOL_PRODUKSI" ? "w-4 bg-orange-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
-            </button>
+          <div className="mt-2 relative z-10">
+            <div className="text-3xl font-black tracking-tight text-slate-800">{stats.countMasalah} Masalah</div>
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-red-600 font-extrabold">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span>Butuh Pemeriksaan</span>
+            </div>
           </div>
         </div>
 

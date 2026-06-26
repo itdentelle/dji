@@ -11,17 +11,19 @@ export const pinSchema = z.object({
 export type PinSchemaInput = z.infer<typeof pinSchema>;
 
 // Skema untuk Form Portal Input Produksi Harian (Sesuai Supabase Productions Table)
-export const productionFormSchema = z.object({
-  operatorId: z.string().min(1, "Operator harus dipilih"),
+export const productionFormSchemaBase = z.object({
+  operatorId: z.array(z.string()).min(1, "Minimal pilih 1 operator"),
   groupId: z.string().min(1, "Grup Shift harus dipilih"),
+  grupName: z.string().optional(),
   designId: z.string().min(1, "Design harus dipilih"),
+  designName: z.string().optional(),
 // Header Data
   nomorMc: z.string().optional().nullable(),
   tanggalProduksi: z.string().optional().nullable(),
   tanggalPotong: z.string().optional().nullable(),
   pick: z.string().optional().nullable(),
   noOrderBarang: z.string().optional().nullable(),
-  rollNo: z.string().optional().nullable(),
+  noCustomer: z.string().optional().nullable(),
   jenisBenangDasar: z.string().optional().nullable(),
   liner: z.string().optional().nullable(),
   heavy: z.string().optional().nullable(),
@@ -45,11 +47,13 @@ export const productionFormSchema = z.object({
     .min(1, "Nomor Panel harus diisi")
     .regex(/^\d+$/, "Nomor panel harus berupa angka positif"),
   course: z.string().optional().nullable(),
-  pcs: z.string().optional().nullable(),
   pic: z.string().max(100, "Nama PIC maksimal 100 karakter").optional().nullable(),
   
   fotoBefore: z.string().optional().nullable(),
   fotoAfter: z.string().optional().nullable(),
+
+  // Waktu Berhenti (Global)
+  totalDowntime: z.string().optional().nullable(),
 
   // Array of PCS Data untuk satu Panel
   pcsData: z.array(
@@ -57,11 +61,94 @@ export const productionFormSchema = z.object({
       pcsIndex: z.string(), // Misalnya "1", "2", "3"
       jmlHasilProduksi: z.string().optional().nullable(),
       indikatorStop: z.boolean().optional(),
-      kategoriMasalah: z.string().optional().nullable(),
+      kategoriMasalah: z.array(z.string()).optional(),
       detailMasalah: z.string().optional().nullable(),
+      meterKain: z.string().optional().nullable(),
+      rollNo: z.string().optional().nullable(),
       keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
     })
   ).min(1, "Minimal harus ada 1 PCS"),
 });
 
+export const productionFormSchema = productionFormSchemaBase.superRefine((data, ctx) => {
+  const hasMasalah = data.pcsData && data.pcsData.some(pcs => pcs.indikatorStop);
+
+  if (data.pcsData && data.pcsData.length > 0) {
+    data.pcsData.forEach((pcs, index) => {
+      if (pcs.indikatorStop) {
+        if (!pcs.kategoriMasalah || pcs.kategoriMasalah.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Wajib memilih minimal 1 Kategori Masalah jika mencentang cacat",
+            path: ["pcsData", index, "kategoriMasalah"],
+          });
+        }
+      }
+    });
+  }
+
+  if (hasMasalah) {
+    if (!data.totalDowntime || data.totalDowntime.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Wajib mengisi Estimasi Waktu Mesin Berhenti (Downtime) jika terdapat masalah/cacat",
+        path: ["totalDowntime"],
+      });
+    }
+  }
+});
+
 export type ProductionFormInput = z.infer<typeof productionFormSchema>;
+
+export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: true, pcsData: true }).extend({
+  meterAwal: z.string().optional().nullable(),
+  meterAkhir: z.string().optional().nullable(),
+  hasilProduksiMeter: z.string().optional().nullable(),
+  pcsData: z.array(
+    z.object({
+      pcsIndex: z.string(),
+      jmlHasilProduksi: z.string().optional().nullable(),
+      indikatorStop: z.boolean().optional(),
+      kategoriMasalah: z.array(z.string()).optional(),
+      detailMasalah: z.string().optional().nullable(),
+      meterKain: z.string().optional().nullable(),
+      rollNo: z.string().optional().nullable(),
+      keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
+    })
+  ),
+}).superRefine((data, ctx) => {
+  const hasMeter = data.meterAkhir && data.meterAkhir.trim() !== "";
+  const hasMasalah = data.pcsData && data.pcsData.some(pcs => pcs.indikatorStop);
+  if (!hasMeter && !hasMasalah) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Anda harus mencentang 'Terdapat Cacat' pada setidaknya 1 PCS",
+      path: ["pcsData"],
+    });
+  }
+
+  if (data.pcsData && data.pcsData.length > 0) {
+    data.pcsData.forEach((pcs, index) => {
+      if (pcs.indikatorStop) {
+        if (!pcs.kategoriMasalah || pcs.kategoriMasalah.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Wajib memilih minimal 1 Kategori Masalah jika mencentang cacat",
+            path: ["pcsData", index, "kategoriMasalah"],
+          });
+        }
+      }
+    });
+  }
+
+  if (hasMasalah) {
+    if (!data.totalDowntime || data.totalDowntime.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Wajib mengisi Estimasi Waktu Mesin Berhenti (Downtime) jika terdapat masalah/cacat",
+        path: ["totalDowntime"],
+      });
+    }
+  }
+});
+export type ContinuousFormInput = z.infer<typeof continuousFormSchema>;

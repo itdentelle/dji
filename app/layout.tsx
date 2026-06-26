@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import OfflineSyncManager from "@/components/OfflineSyncManager";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
@@ -16,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Enterprise & Analytics Portal",
   description: "Sistem Portal Otomatis & Dashboard Analitik Terintegrasi Perusahaan",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
@@ -33,6 +35,7 @@ export default function RootLayout({
         <AuthProvider>
           <div className="min-h-full flex flex-col flex-1">
             {children}
+            <OfflineSyncManager />
           </div>
         </AuthProvider>
       </body>

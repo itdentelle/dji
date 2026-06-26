@@ -16,6 +16,8 @@ import {
   Settings,
   HelpCircle,
   Smartphone,
+  History,
+  RefreshCw,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -48,9 +50,16 @@ export default function Sidebar() {
       group: "MENU",
     },
     {
-      name: "Employee Portal",
+      name: "Input Produksi",
       href: "/input",
       icon: ClipboardList,
+      roles: ["admin", "employee"],
+      group: "MENU",
+    },
+    {
+      name: "Riwayat Input",
+      href: "/history",
+      icon: History,
       roles: ["admin", "employee"],
       group: "MENU",
     },
@@ -66,6 +75,20 @@ export default function Sidebar() {
       href: "/qc",
       icon: ClipboardCheck,
       roles: ["admin", "qc"],
+      group: "MENU",
+    },
+    {
+      name: "Riwayat QC",
+      href: "/qc/history",
+      icon: History,
+      roles: ["admin", "qc"],
+      group: "MENU",
+    },
+    {
+      name: "Sync Status",
+      href: "/sync",
+      icon: RefreshCw,
+      roles: ["admin"],
       group: "MENU",
     },
   ];
