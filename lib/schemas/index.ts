@@ -19,6 +19,7 @@ export const productionFormSchemaBase = z.object({
   designName: z.string().optional(),
 // Header Data
   nomorMc: z.string().optional().nullable(),
+  statusMatching: z.string().min(1, "Status Matching harus dipilih"),
   tanggalProduksi: z.string().optional().nullable(),
   tanggalPotong: z.string().optional().nullable(),
   pick: z.string().optional().nullable(),

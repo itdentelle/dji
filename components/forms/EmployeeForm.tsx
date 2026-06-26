@@ -763,6 +763,15 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                 <input type="text" {...register("designId")} placeholder="Ketik nama design..." className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
               </div>
               <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-sky-600 uppercase">Status Matching *</label>
+                <select {...register("statusMatching")} className="h-10 px-3 rounded-lg bg-sky-50 border border-sky-200 text-sm focus:border-sky-400 outline-none font-semibold">
+                  <option value="">-- Wajib Pilih --</option>
+                  <option value="OK">OK</option>
+                  <option value="Tidak OK">Tidak OK</option>
+                </select>
+                {errors.statusMatching && <span className="text-red-500 text-[10px] font-bold">{errors.statusMatching.message as string}</span>}
+              </div>
+              <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-semibold text-slate-400 uppercase">Nomo Mc</label>
                 <select {...register("nomorMc")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none">
                   <option value="">-- Pilih --</option>
