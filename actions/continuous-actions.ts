@@ -18,8 +18,18 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
     const validated = continuousFormSchema.parse(inputData);
 
     const now = new Date();
-    const tgl = now.toISOString().split("T")[0];
-    const tanggalJam = now.toLocaleString("sv-SE").replace("T", " ");
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const tanggalJam = formatter.format(now);
+    const tgl = tanggalJam.split(" ")[0];
 
     const rpmNum = validated.rpm ? parseInt(validated.rpm) : null;
     const potonganKeNum = validated.potonganKe ? parseInt(validated.potonganKe) : null;
@@ -278,8 +288,8 @@ export async function updateContinuousReport(headerId: string, data: any): Promi
       if (sheetUrl) {
         const payload = detailData.map((detail: any) => ({
           "ID Laporan": headerId,
-          "Tanggal Produksi": data.tgl || new Date().toISOString().split("T")[0],
-          "Tanggal & Jam": data.tanggalJam || new Date().toLocaleString("sv-SE").replace("T", " "),
+          "Tanggal Produksi": data.tgl || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()).split(" ")[0],
+          "Tanggal & Jam": data.tanggalJam || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()),
           "Tanggal Potong": data.tanggalPotong || "",
           "Mesin": data.nomorMc || "",
           "Pick": data.pick || "",

@@ -27,11 +27,23 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     
     const now = new Date();
     
-    // Format tanggal ke YYYY-MM-DD
-    const tgl = now.toISOString().split("T")[0];
+    // Dapatkan waktu di zona WIB (Asia/Jakarta)
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
     
     // Format timestamp lengkap ke YYYY-MM-DD HH:mm:ss
-    const tanggalJam = now.toLocaleString("sv-SE").replace("T", " ");
+    const tanggalJam = formatter.format(now);
+    
+    // Format tanggal ke YYYY-MM-DD
+    const tgl = tanggalJam.split(" ")[0];
 
     const operatorIdNum = validated.operatorId && validated.operatorId.length > 0 ? parseInt(validated.operatorId[0]) : null;
     const groupIdNum = validated.groupId ? parseInt(validated.groupId) : null;
@@ -613,7 +625,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
       if (sheetUrl) {
         const payload = detailData.map((detail: any) => ({
           id_header: headerId,
-          tanggal_jam: data.tanggalJam || new Date().toLocaleString("sv-SE").replace("T", " "),
+          tanggal_jam: data.tanggalJam || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()),
           mesin: data.nomorMc || "",
           pick: data.pick || "",
           course: data.course || "",
