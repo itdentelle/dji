@@ -705,7 +705,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
           </div>
 
           {/* Bagian Teratas: Operator & Grup */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+          <div className="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold text-slate-400 uppercase">Nama Operator (Shift {activeShiftName})</label>
               <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white custom-scrollbar">
@@ -733,7 +733,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
           </div>
 
           {/* Form Utama sesuai layout referensi gambar */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-4 border-t border-slate-100 pt-5">
+          <div className="grid grid-cols-2 gap-x-6 sm:gap-x-12 gap-y-4 border-t border-slate-100 pt-5">
             
             {/* Kolom Kiri */}
             <div className="space-y-4">
