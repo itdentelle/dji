@@ -7,7 +7,7 @@ import { productionFormSchema, ProductionFormInput } from "@/lib/schemas";
 import { useAuth } from "@/lib/auth-context";
 import { createProductionReport, uploadProductionPhoto, getLastPanelNoByPotongan, updateProductionReport } from "@/actions/employee-actions";
 import { createClient } from "@/lib/supabase/client";
-import { AlertCircle, RefreshCw, UploadCloud, X, Camera, Database, FileText, Settings2, Trash2, ChevronUp, ChevronDown, CheckCircle2, Save, Plus, Box, ClipboardList } from "lucide-react";
+import { AlertCircle, RefreshCw, UploadCloud, X, Camera, Database, FileText, Settings2, Trash2, ChevronUp, ChevronDown, CheckCircle2, Save, Plus, Box, ClipboardList, Play, Square, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // DATA FALLBACK DARI EXCEL
@@ -181,6 +181,52 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   // States untuk upload foto
   const [isUploading, setIsUploading] = useState<{ before: boolean; after: boolean }>({ before: false, after: false });
   const [previews, setPreviews] = useState<{ before: string | null; after: string | null }>({ before: null, after: null });
+
+  // Timer State for Downtime
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [timerStartRef, setTimerStartRef] = useState<number | null>(null);
+  const [liveTimerSeconds, setLiveTimerSeconds] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isTimerRunning && timerStartRef) {
+      interval = setInterval(() => {
+        const elapsedMs = Date.now() - timerStartRef;
+        setLiveTimerSeconds(Math.floor(elapsedMs / 1000));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, timerStartRef]);
+
+  const handleStartTimer = () => {
+    setIsTimerRunning(true);
+    setTimerStartRef(Date.now());
+    setLiveTimerSeconds(0);
+  };
+
+  const handleStopTimer = () => {
+    if (!isTimerRunning) return;
+    setIsTimerRunning(false);
+    
+    // Calculate elapsed minutes (round up to nearest minute)
+    const elapsedMs = Date.now() - (timerStartRef || Date.now());
+    const elapsedMins = Math.ceil(elapsedMs / 60000);
+    
+    const currentTotalStr = watch("totalDowntime");
+    const currentTotal = parseInt(currentTotalStr || "0") || 0;
+    
+    const newTotal = currentTotal + elapsedMins;
+    setValue("totalDowntime", String(newTotal), { shouldValidate: true, shouldDirty: true });
+    
+    setTimerStartRef(null);
+    setLiveTimerSeconds(0);
+  };
+
+  const formatTimer = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+    const s = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   // Hubungkan ke Supabase secara dinamis
   useEffect(() => {
@@ -905,14 +951,40 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
               <p className="text-[10px] text-orange-600">
                 Isi total keseluruhan waktu dalam menit jika mesin sempat berhenti selama produksi panel ini.
               </p>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  {...register("totalDowntime")} 
-                  className="w-full h-12 pl-4 pr-16 rounded-xl bg-white border border-orange-300 text-sm font-bold text-slate-800 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all shadow-sm" 
-                  placeholder="Misal: 45" 
-                />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-600 text-xs font-bold">Menit</span>
+              <div className="relative flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input 
+                    type="number" 
+                    {...register("totalDowntime")} 
+                    className="w-full h-12 pl-4 pr-16 rounded-xl bg-white border border-orange-300 text-sm font-bold text-slate-800 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all shadow-sm" 
+                    placeholder="Misal: 45" 
+                    disabled={isTimerRunning}
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-600 text-xs font-bold">Menit</span>
+                </div>
+                
+                {/* Timer Controls */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isTimerRunning ? (
+                    <button
+                      type="button"
+                      onClick={handleStartTimer}
+                      className="flex items-center gap-2 px-4 h-12 bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold text-xs rounded-xl transition-all shadow-sm border border-orange-300"
+                    >
+                      <Play className="w-4 h-4" />
+                      Mulai Timer
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStopTimer}
+                      className="flex items-center gap-2 px-4 h-12 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm shadow-red-500/20"
+                    >
+                      <Square className="w-4 h-4 fill-current" />
+                      Selesai ({formatTimer(liveTimerSeconds)})
+                    </button>
+                  )}
+                </div>
               </div>
               {errors.totalDowntime && (
                 <span className="text-red-500 text-[10px] font-bold mt-1 block">
