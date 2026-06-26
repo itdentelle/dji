@@ -831,15 +831,22 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
           </div>
 
           {/* Data Panel Umum */}
-          <div className="mt-8 pt-6 border-t-2 border-slate-200/60 relative">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-3 text-[10px] font-bold text-sky-500 uppercase tracking-widest border border-slate-200 rounded-full">
+          <div className="mt-8 p-6 bg-sky-50 border-2 border-sky-300 rounded-2xl relative shadow-md">
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-sky-500 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md">
               Wajib Diisi Per Panel
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase">No. Panel (PNL NO)</label>
-                <input type="text" {...register("panelNo")} className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm font-semibold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none transition-all shadow-sm" placeholder="1, 2, 3..." />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-3">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-sky-800 uppercase flex items-center gap-2">
+                  No. Panel (PNL NO)
+                </label>
+                <input 
+                  type="text" 
+                  {...register("panelNo")} 
+                  className="h-12 px-5 rounded-xl bg-white border-2 border-sky-200 text-base font-bold text-slate-800 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 outline-none transition-all shadow-inner" 
+                  placeholder="Misal: 1, 2, 3..." 
+                />
                 {errors.panelNo && <span className="text-red-500 text-[10px] font-bold">{errors.panelNo.message}</span>}
               </div>
             </div>
