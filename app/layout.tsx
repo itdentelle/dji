@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Enterprise & Analytics Portal",
-  description: "Sistem Portal Otomatis & Dashboard Analitik Terintegrasi Perusahaan",
+  title: "DJI",
+  description: "Portal Produksi dan Quality Control DJI",
   manifest: "/manifest.json",
 };
 

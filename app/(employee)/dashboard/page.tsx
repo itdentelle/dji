@@ -210,33 +210,53 @@ export default function DashboardPage() {
     }
 
     const productionOnly = gradeScoped.filter(item => item.is_production);
-    const totalProduksi = productionOnly.reduce((acc, curr) => acc + curr.hasil_pcs, 0);
-    const totalProduksiMeter = productionOnly.reduce((acc, curr) => acc + (curr.hasil_meter || 0), 0);
+
+    const panelMap = new Map<string, number>();
+    productionOnly.forEach(item => {
+      if ((item.hasil_meter || 0) === 0 && item.potongan_ke) {
+        const groupKey = `${item.tanggal}_${item.mesin_id}_${item.potongan_ke}`;
+        const currentMax = panelMap.get(groupKey) || 0;
+        if (item.panel_no && item.panel_no > currentMax) {
+          panelMap.set(groupKey, item.panel_no);
+        }
+      }
+    });
     
-    // Variables for other cards
+    let totalProduksiPanel = 0;
+    panelMap.forEach(max => totalProduksiPanel += max);
+    const totalProduksi = totalProduksiPanel; // Rename to keep compatibility
+
+    const totalProduksiMeter = productionOnly.reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
     const totalTarget = productionOnly.reduce((acc, curr) => acc + curr.target_pcs, 0);
     const totalItems = productionOnly.length;
-    
-    // Perhitungan Efisiensi Waktu Kerja (7 Jam / 420 menit per shift/hari aktif)
-    const distinctDaysCount = new Set(gradeScoped.map(item => item.tanggal)).size;
-    const totalMenitTersedia = distinctDaysCount * 420;
+
+    // Perhitungan Cacat Produksi (Panel)
+    // "menghitung baris panel yang ada kategori masalahnya di baris tsb" -> hitung baris/detail
+    const countMasalahPanel = gradeScoped.filter(item => item.status_qc === "Recheck" && item.is_production && (item.hasil_meter || 0) === 0 && (item.posisi_meter || 0) === 0).length;
+    const totalPanelValid = totalProduksiPanel; // "dari Y panel"
+    const persentaseCacatPanel = totalPanelValid > 0 ? (countMasalahPanel / totalPanelValid) * 100 : 0;
+
+    // Perhitungan Cacat Produksi (Meteran)
+    const countMasalahMeteran = gradeScoped.filter(item => item.status_qc === "Recheck" && item.is_production && (item.posisi_meter || 0) > 0).length;
+    const persentaseCacatMeteran = totalProduksiMeter > 0 ? (countMasalahMeteran / totalProduksiMeter) * 100 : 0;
+
+    // Perhitungan Efisiensi Waktu Kerja Akumulatif
+    // Menghitung jumlah kombinasi Tanggal + Operator_ID (Jumlah Sesi Shift)
+    const shiftSessions = new Set(gradeScoped.map(item => item.tanggal + "_" + item.nama_operator)).size;
+    const totalMenitTersedia = shiftSessions * 420;
     const totalDowntimeMenit = gradeScoped.reduce((acc, curr) => acc + (curr.total_downtime_menit || 0), 0);
     const totalMenitKerjaEfektif = Math.max(0, totalMenitTersedia - totalDowntimeMenit);
     const efisiensi = totalMenitTersedia > 0 ? (totalMenitKerjaEfektif / totalMenitTersedia) * 100 : 0;
+
+    // Total Masalah Umum (berdasarkan kemunculan kategori masalah)
+    let countMasalah = 0;
+    gradeScoped.filter(item => item.status_qc === "Recheck" && item.is_production && item.kategori_masalah).forEach(item => {
+      const cats = item.kategori_masalah!.split(',').map(c => c.trim()).filter(c => c !== '');
+      countMasalah += cats.length;
+    });
     
-    const countMasalah = gradeScoped.filter(item => item.status_qc === "Recheck" && item.grade !== "UNGRADED" && item.is_production).length;
     const countNolProduksi = gradeScoped.filter(item => item.hasil_pcs === 0).length;
     const totalPanel = gradeScoped.length;
-
-    // Cacat Panel
-    const countMasalahPanel = gradeScoped.filter(item => item.hasil_pcs > 0 && item.status_qc === "Recheck").length;
-    const totalPanelValid = gradeScoped.filter(item => item.hasil_pcs > 0).length; // Total panels submitted
-    const persentaseCacatPanel = totalPanelValid > 0 ? (countMasalahPanel / totalPanelValid) * 100 : 0;
-
-    // Cacat Meteran
-    // Meter problems are recorded when hasil_pcs == 0 and status_qc == Recheck
-    const countMasalahMeteran = gradeScoped.filter(item => item.hasil_pcs === 0 && (item.hasil_meter || 0) === 0 && item.status_qc === "Recheck").length;
-    const persentaseCacatMeteran = totalProduksiMeter > 0 ? (countMasalahMeteran / totalProduksiMeter) * 100 : 0;
 
     return {
       totalProduksi,
@@ -779,7 +799,7 @@ export default function DashboardPage() {
                 <div className="text-3xl font-black tracking-tight text-slate-800">{stats.persentaseCacatPanel.toFixed(1)}%</div>
                 <div className="flex items-center gap-1 mt-1 text-[11px] text-rose-600 font-bold">
                   <TrendingUp className="w-3.5 h-3.5" />
-                  <span>{stats.countMasalahPanel} dari {stats.totalPanelValid} panel cacat</span>
+                  <span>{stats.countMasalahPanel} pcs cacat dari {stats.totalPanelValid} panel</span>
                 </div>
               </div>
             </div>

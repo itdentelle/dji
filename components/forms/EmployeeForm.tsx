@@ -684,7 +684,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold text-slate-400 uppercase">Nama Operator (Shift {activeShiftName})</label>
               <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white custom-scrollbar">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 px-1">
+                <div className="grid grid-cols-1 gap-1 px-1">
                   {activeOperators.length > 0 ? (
                     activeOperators.map((op: any) => (
                       <label key={op.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 p-1.5 rounded transition-colors">
