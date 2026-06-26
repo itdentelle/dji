@@ -25,6 +25,7 @@ interface Transaction {
   id: string | number;
   tanggal: string;
   hari: string;
+  header_id?: string;
   nama_operator: string;
   mesin_id: string;
   hasil_pcs: number;
@@ -37,6 +38,10 @@ interface Transaction {
   group?: string;
   is_production?: boolean;
   total_downtime_menit?: number;
+  potongan_ke?: string;
+  panel_no?: number;
+  posisi_meter?: number;
+  kategori_masalah?: string;
 }
 
 const dummyData: Transaction[] = [
