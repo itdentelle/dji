@@ -127,6 +127,7 @@ export interface MachineStatus {
   nama_operator: string;
   design: string;
   last_input_date: string;
+  last_input_time?: string;
 }
 
 export async function getMachineStatuses(): Promise<{ success: boolean; data?: MachineStatus[]; error?: string }> {
@@ -166,12 +167,25 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
     latestPerMachine.forEach((row, mesin_id) => {
       const isBeroperasi = row.tgl === today;
       
+      let lastTime = "-";
+      if (row.tanggal_jam) {
+        // Supposing tanggal_jam is stored as UTC or Local ISO String
+        const dateObj = new Date(row.tanggal_jam);
+        if (!isNaN(dateObj.getTime())) {
+          // Format as HH.MM or HH:MM
+          lastTime = dateObj.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(/:/g, ".");
+        } else {
+          lastTime = row.tanggal_jam.split(/[ T]/)[1]?.slice(0, 5) || "-";
+        }
+      }
+      
       results.push({
         mesin_id,
         status: isBeroperasi ? "Beroperasi" : "Idle",
         nama_operator: row.pic || "-",
         design: row.design_id || "-",
-        last_input_date: row.tgl
+        last_input_date: row.tgl,
+        last_input_time: lastTime
       });
     });
 

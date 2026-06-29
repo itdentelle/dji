@@ -135,7 +135,7 @@ export default function MachineMonitoringPage() {
                   </span>
                 </div>
                 <div className="text-xs font-semibold text-slate-400">
-                  {machine.last_input_date}
+                  {machine.last_input_date} {machine.last_input_time && machine.last_input_time !== "-" && `(${machine.last_input_time})`}
                 </div>
               </div>
 
