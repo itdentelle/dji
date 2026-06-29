@@ -38,7 +38,7 @@ interface Transaction {
   design: string;
   group?: string;
   is_production?: boolean;
-  total_downtime_menit?: number;
+  total_downtime_detik?: number;
   kategori_masalah?: string;
 }
 
@@ -226,10 +226,10 @@ export default function DashboardPage() {
     // Perhitungan Efisiensi Waktu Kerja Akumulatif
     // Menghitung jumlah kombinasi Tanggal + Operator_ID (Jumlah Sesi Shift)
     const shiftSessions = new Set(gradeScoped.map(item => item.tanggal + "_" + item.nama_operator)).size;
-    const totalMenitTersedia = shiftSessions * 420;
-    const totalDowntimeMenit = gradeScoped.reduce((acc, curr) => acc + (curr.total_downtime_menit || 0), 0);
-    const totalMenitKerjaEfektif = Math.max(0, totalMenitTersedia - totalDowntimeMenit);
-    const efisiensi = totalMenitTersedia > 0 ? (totalMenitKerjaEfektif / totalMenitTersedia) * 100 : 0;
+    const totalDetikTersedia = shiftSessions * 420 * 60;
+    const totalDowntimeDetik = gradeScoped.reduce((acc, curr) => acc + (curr.total_downtime_detik || 0), 0);
+    const totalDetikKerjaEfektif = Math.max(0, totalDetikTersedia - totalDowntimeDetik);
+    const efisiensi = totalDetikTersedia > 0 ? (totalDetikKerjaEfektif / totalDetikTersedia) * 100 : 0;
 
     // Total Masalah Umum (berdasarkan kemunculan kategori masalah)
     let countMasalah = 0;
@@ -255,8 +255,8 @@ export default function DashboardPage() {
       persentaseCacatPanel,
       countMasalahMeteran,
       persentaseCacatMeteran,
-      totalMenitTersedia,
-      totalDowntimeMenit
+      totalDetikTersedia,
+      totalDowntimeDetik
     };
   }, [dateFilteredTransactions, chartGradeFilter]);
 
@@ -379,7 +379,14 @@ export default function DashboardPage() {
     let groups: string[] = [];
 
     if (chartGroupBy === "HARI") {
-      groups = ["SEN", "SEL", "RAB", "KAM", "JUM", "SAB", "MIN"];
+      // Get unique dates from the filtered data and sort them chronologically
+      const dates = Array.from(new Set(filteredData.map(item => item.tanggal)));
+      groups = dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+      
+      // If no data, show at least today's date
+      if (groups.length === 0) {
+         groups = [new Date().toISOString().split("T")[0]];
+      }
     } else if (chartGroupBy === "DESIGN") {
       // Get unique designs, sorted
       const designs = Array.from(new Set(filteredData.map(item => item.design || "Tanpa Design")));
@@ -400,7 +407,7 @@ export default function DashboardPage() {
     return groups.map(groupName => {
       let items: Transaction[] = [];
       if (chartGroupBy === "HARI") {
-        items = filteredData.filter(item => item.hari === groupName);
+        items = filteredData.filter(item => item.tanggal === groupName);
       } else if (chartGroupBy === "DESIGN") {
         items = filteredData.filter(item => (item.design || "Tanpa Design") === groupName);
       } else if (chartGroupBy === "PEGAWAI") {
@@ -423,8 +430,16 @@ export default function DashboardPage() {
 
       const total = gradeA_sum + gradeB_sum + bs_sum;
 
+      let displayLabel = groupName;
+      if (chartGroupBy === "HARI") {
+         const d = new Date(groupName);
+         if (!isNaN(d.getTime())) {
+            displayLabel = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+         }
+      }
+
       return {
-        label: groupName,
+        label: displayLabel,
         gradeA_sum,
         gradeB_sum,
         bs_sum,
@@ -441,7 +456,8 @@ export default function DashboardPage() {
 
     let groups: string[] = [];
     if (chartGroupBy === "HARI") {
-      groups = ["SEN", "SEL", "RAB", "KAM", "JUM", "SAB", "MIN"];
+      groups = Array.from(new Set(dateFilteredTransactions.map(item => item.tanggal)));
+      if (groups.length === 0) groups = [new Date().toISOString().split("T")[0]];
     } else if (chartGroupBy === "DESIGN") {
       groups = Array.from(new Set(dateFilteredTransactions.map(item => item.design || "Tanpa Design")));
     } else if (chartGroupBy === "PEGAWAI") {
@@ -1028,16 +1044,16 @@ export default function DashboardPage() {
               </div>
               <div className="mt-2 relative z-10">
                 <div className="text-3xl font-black tracking-tight text-slate-800">{stats.efisiensi.toFixed(1)}%</div>
-                <div className={`flex items-center gap-1.5 mt-1 text-[11px] font-extrabold ${stats.totalDowntimeMenit > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                  {stats.totalDowntimeMenit > 0 ? (
+                <div className={`flex items-center gap-1.5 mt-1 text-[11px] font-extrabold ${stats.totalDowntimeDetik > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                  {stats.totalDowntimeDetik > 0 ? (
                     <>
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      <span>Terpotong {stats.totalDowntimeMenit} menit (Total {stats.totalMenitTersedia} mnt)</span>
+                      <span>Terpotong {stats.totalDowntimeDetik} detik (Total {stats.totalDetikTersedia} dtk)</span>
                     </>
                   ) : (
                     <>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      <span>0 Menit Terbuang (Total {stats.totalMenitTersedia} mnt)</span>
+                      <span>0 Detik Terbuang (Total {stats.totalDetikTersedia} dtk)</span>
                     </>
                   )}
                 </div>
@@ -1099,7 +1115,7 @@ export default function DashboardPage() {
                         : "text-slate-500 hover:text-slate-800"
                         }`}
                     >
-                      <BarChart2 className="w-3 h-3" /> Hari
+                      <BarChart2 className="w-3 h-3" /> Tanggal
                     </button>
                     <button
                       onClick={() => setChartGroupBy("DESIGN")}

@@ -442,9 +442,9 @@ export default function EmployeeHistoryPage() {
                           )}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap">
-                          {row.total_downtime_menit ? (
+                          {row.total_downtime_detik ? (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-50 text-orange-600 border border-orange-100">
-                              {row.total_downtime_menit}m
+                              {row.total_downtime_detik}s
                             </span>
                           ) : (
                             <span className="text-slate-300 font-bold">-</span>
@@ -555,6 +555,10 @@ export default function EmployeeHistoryPage() {
                           <span className="text-slate-500">Tanggal Potong</span>
                           <span className="font-bold text-slate-800">{detailData.tanggal_potong || "-"}</span>
                         </div>
+                        <div className="flex justify-between p-3 border-b border-slate-100">
+                          <span className="text-slate-500">Status Matching</span>
+                          <span className="font-bold text-slate-800">{detailData.status_matching || "-"}</span>
+                        </div>
                         <div className="flex justify-between p-3">
                           <span className="text-slate-500">Pick</span>
                           <span className="font-bold text-slate-800">{detailData.pick || "-"}</span>
@@ -593,11 +597,11 @@ export default function EmployeeHistoryPage() {
                   </div>
 
                   {/* Downtime Info */}
-                  {detailData.total_downtime_menit > 0 && (
+                  {detailData.total_downtime_detik > 0 && (
                     <div className="mb-8 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
                       <Clock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                       <div>
-                        <h4 className="text-sm font-bold text-amber-800">Total Downtime: {detailData.total_downtime_menit} Menit</h4>
+                        <h4 className="text-sm font-bold text-amber-800">Total Downtime: {detailData.total_downtime_detik} Detik</h4>
                         <p className="text-xs text-amber-700 mt-1">Terdapat waktu tunggu (downtime) selama produksi sesi ini berjalan.</p>
                       </div>
                     </div>

@@ -1,7 +1,7 @@
 "use server";
 
 import { continuousFormSchema, ContinuousFormInput } from "@/lib/schemas";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 function generateExcelStyleId(): string {
@@ -46,8 +46,8 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       id: headerId,
       tgl,
       tanggal_jam: tanggalJam,
-      operator_id: validated.operatorId && validated.operatorId.length > 0 ? parseInt(validated.operatorId[0]) : null,
-      group_id: validated.groupId,
+      operator_id: validated.operatorId ? parseInt(validated.operatorId) : null,
+      group_id: parseInt(validated.groupId),
       design_id: validated.designId,
       nomor_mc: validated.nomorMc || null,
       status_matching: validated.statusMatching,
@@ -68,10 +68,11 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       pinggiran: validated.pinggiran || null,
       foto_before: validated.fotoBefore || null,
       foto_after: validated.fotoAfter || null,
-      total_downtime_menit: totalDowntimeMenit,
+      total_downtime_detik: totalDowntimeMenit,
       meter_awal: validated.meterAwal ? parseFloat(validated.meterAwal) : null,
       meter_akhir: validated.meterAkhir ? parseFloat(validated.meterAkhir) : null,
       total_produksi_meter: validated.hasilProduksiMeter ? parseFloat(validated.hasilProduksiMeter) : null,
+      idempotency_key: validated.idempotencyKey || null,
     };
 
     const detailData = validated.pcsData.map((pcsItem) => {
@@ -97,17 +98,23 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (supabaseUrl && supabaseAnonKey && supabaseAnonKey !== "your_supabase_anon_key_here") {
-      const supabase = await createAdminClient();
+      const supabase = await createClient();
 
-      const { error: headerError } = await supabase
-        .from("production_headers" as any)
-        .insert(headerData as any);
+      const { error: insertHeaderError } = await supabase
+        .from("production_headers")
+        .insert(headerData);
 
-      if (headerError) throw new Error(`Gagal menyimpan header: ${headerError.message}`);
-
-      if (detailData.length > 0) {
+      if (insertHeaderError) {
+        // Jika error kode 23505 (Unique Violation) berarti data ini sudah ada (duplikasi)
+        // Kita intercept dan biarkan sukses agar queue lokal klien dihapus
+        if (insertHeaderError.code === "23505") {
+          console.warn("Idempotency key duplicate detected. Returning success.");
+          return { success: true };
+        }
+        throw new Error("Failed to insert continuous header: " + insertHeaderError.message);
+      } if (detailData.length > 0) {
         const { error: detailError } = await supabase
-          .from("production_details" as any)
+          .from("production_details")
           .insert(detailData as any);
 
         if (detailError) throw new Error(`Gagal menyimpan detail: ${detailError.message}`);
@@ -150,6 +157,11 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
+        }).then(async (res) => {
+          if (res.ok) {
+            const client = await createClient();
+            await client.from("production_headers").update({ is_synced_to_sheet: true }).eq("id", headerId);
+          }
         }).catch(err => console.error("Gagal sinkron Google Sheets:", err));
       }
 
@@ -207,7 +219,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
 export async function updateContinuousReport(headerId: string, data: any): Promise<{ success: boolean; error?: string }> {
   try {
     console.log("UPDATE CONTINUOUS REPORT DATA:", JSON.stringify(data, null, 2));
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
     // Parse values
     const rpmNum = data.rpm ? parseInt(data.rpm) : null;
@@ -216,7 +228,7 @@ export async function updateContinuousReport(headerId: string, data: any): Promi
 
     // 1. Update Header
     const { error: headerError } = await supabase
-      .from("production_headers" as any)
+      .from("production_headers")
       .update({
         operator_id: data.operatorId && data.operatorId.length > 0 ? parseInt(data.operatorId[0]) : null,
         group_id: data.groupId,
@@ -237,7 +249,7 @@ export async function updateContinuousReport(headerId: string, data: any): Promi
         heavy: data.heavy || null,
         shadow: data.shadow || null,
         pinggiran: data.pinggiran || null,
-        total_downtime_menit: totalDowntimeNum,
+        total_downtime_detik: totalDowntimeNum,
         meter_awal: data.meterAwal ? parseFloat(data.meterAwal) : null,
         meter_akhir: data.meterAkhir ? parseFloat(data.meterAkhir) : null,
         total_produksi_meter: data.hasilProduksiMeter ? parseFloat(data.hasilProduksiMeter) : null,
@@ -248,7 +260,7 @@ export async function updateContinuousReport(headerId: string, data: any): Promi
 
     // 2. Delete old details
     const { error: delError } = await supabase
-      .from("production_details" as any)
+      .from("production_details")
       .delete()
       .eq("header_id", headerId);
 
@@ -280,7 +292,7 @@ export async function updateContinuousReport(headerId: string, data: any): Promi
       });
 
       const { error: insertError } = await supabase
-        .from("production_details" as any)
+        .from("production_details")
         .insert(detailData);
 
       if (insertError) throw new Error(insertError.message);
@@ -322,6 +334,11 @@ export async function updateContinuousReport(headerId: string, data: any): Promi
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update", id_header: headerId, data: payload })
+        }).then(async (res) => {
+          if (res.ok) {
+            const client = await createClient();
+            await client.from("production_headers").update({ is_synced_to_sheet: true }).eq("id", headerId);
+          }
         }).catch(err => console.error("Gagal sinkron Google Sheets:", err));
       }
     }

@@ -13,25 +13,15 @@ const qcSchema = z.object({
   tanggal_inspeksi: z.string().min(1, "Wajib diisi"),
   start_inspect: z.string().min(1, "Wajib diisi"),
   finish_inspect: z.string().min(1, "Wajib diisi"),
-  berat_produksi: z.number().min(0, "Wajib diisi"),
-  berat_inspecting: z.number().min(0, "Wajib diisi"),
-  hasil_matching: z.string().min(1, "Wajib diisi"),
+  berat_produksi: z.number().min(0, "Harus >= 0").optional().nullable(),
+  berat_inspecting: z.number().min(0, "Harus >= 0").optional().nullable(),
+  prod_ceklis: z.number().min(0),
+  prod_silang: z.number().min(0),
   
-  petugas_mending: z.string().optional(),
-  tanggal_mending: z.string().optional(),
-  start_mending: z.string().optional(),
-  finish_mending: z.string().optional(),
-  
-  prod_grade_a: z.number().min(0),
-  prod_grade_b: z.number().min(0),
-  prod_bs: z.number().min(0),
-  
-  qc_grade_a: z.number().min(0),
-  qc_grade_b: z.number().min(0),
-  qc_bs: z.number().min(0),
+  qc_ceklis: z.number().min(0),
+  qc_silang: z.number().min(0),
 
   notes: z.string().optional(),
-  tanggal_potong: z.string().optional(),
 });
 
 type QCFormData = z.infer<typeof qcSchema>;
@@ -58,45 +48,57 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
       finish_inspect: "",
       berat_produksi: 0,
       berat_inspecting: 0,
-      hasil_matching: "",
-      petugas_mending: "",
-      tanggal_mending: "",
-      start_mending: "",
-      finish_mending: "",
-      prod_grade_a: 0,
-      prod_grade_b: 0,
-      prod_bs: 0,
-      qc_grade_a: 0,
-      qc_grade_b: 0,
-      qc_bs: 0,
+      prod_ceklis: 0,
+      prod_silang: 0,
+      qc_ceklis: 0,
+      qc_silang: 0,
       notes: "",
-      tanggal_potong: "",
     }
   });
 
   useEffect(() => {
     if (isOpen) {
-      // Set current date when modal opens
-      setValue('tanggal_inspeksi', new Date().toISOString().split('T')[0]);
+      // Load from localStorage or set current date
+      const storedPetugas1 = localStorage.getItem('qc_petugas1');
+      const storedPetugas2 = localStorage.getItem('qc_petugas2');
+      const storedTanggal = localStorage.getItem('qc_tanggal');
+
+      setValue('tanggal_inspeksi', storedTanggal || new Date().toISOString().split('T')[0]);
+      if (storedPetugas1) setValue('petugas_inspeksi', storedPetugas1);
+      if (storedPetugas2) setValue('petugas_inspeksi_2', storedPetugas2);
       
-      // Calculate start time automatically as current time
+      const storedStart = localStorage.getItem('qc_start');
+      const storedFinish = localStorage.getItem('qc_finish');
+      
+      // Calculate start time automatically as current time if no stored value
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
       const mins = String(now.getMinutes()).padStart(2, '0');
-      setValue('start_inspect', `${hours}:${mins}`);
+      setValue('start_inspect', storedStart || `${hours}:${mins}`);
+      if (storedFinish) setValue('finish_inspect', storedFinish);
 
       // Count selections to auto-fill QC grades
-      let countA = 0;
-      let countB = 0;
-      let countBS = 0;
+      let countCeklis = 0;
+      let countSilang = 0;
       Object.values(selections).forEach(val => {
-        if (val === 1) countA++;
-        else if (val === 2) countB++;
-        else if (val === 3) countBS++;
+        if (val === 1) countCeklis++;
+        else if (val === 3) countSilang++;
       });
-      setValue('qc_grade_a', countA);
-      setValue('qc_grade_b', countB);
-      setValue('qc_bs', countBS);
+      // Auto-calculate Prod Ceklis/Silang
+      let countProdCeklis = 0;
+      let countProdSilang = 0;
+      if (headerData?.details) {
+        headerData.details.forEach((d: any) => {
+          const hasProblem = !!d.kategori_masalah || !!d.detail_masalah || !!d.keterangan_cacat || !!d.indikator_stop;
+          if (hasProblem) countProdSilang++;
+          else countProdCeklis++;
+        });
+      }
+      setValue('prod_ceklis', countProdCeklis);
+      setValue('prod_silang', countProdSilang);
+
+      setValue('qc_ceklis', countCeklis);
+      setValue('qc_silang', countSilang);
     }
   }, [isOpen, setValue, selections]);
 
@@ -127,24 +129,24 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
         finish_inspect: data.finish_inspect,
         berat_produksi: data.berat_produksi,
         berat_inspecting: data.berat_inspecting,
-        hasil_matching: data.hasil_matching,
-        petugas_mending: data.petugas_mending || undefined,
-        tanggal_mending: data.tanggal_mending || undefined,
-        start_mending: data.start_mending || undefined,
-        finish_mending: data.finish_mending || undefined,
-        prod_grade_a: data.prod_grade_a,
-        prod_grade_b: data.prod_grade_b,
-        prod_bs: data.prod_bs,
-        qc_grade_a: data.qc_grade_a,
-        qc_grade_b: data.qc_grade_b,
-        qc_bs: data.qc_bs,
-        notes: data.notes,
-        tanggal_potong: data.tanggal_potong
+        prod_ceklis: data.prod_ceklis,
+        prod_silang: data.prod_silang,
+        qc_ceklis: data.qc_ceklis,
+        qc_silang: data.qc_silang,
+        notes: data.notes
       };
 
       if (!navigator.onLine) {
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("qc", payload);
+        
+        // Save to localStorage for next time
+        localStorage.setItem('qc_petugas1', data.petugas_inspeksi || '');
+        localStorage.setItem('qc_petugas2', data.petugas_inspeksi_2 || '');
+        localStorage.setItem('qc_tanggal', data.tanggal_inspeksi || '');
+        localStorage.setItem('qc_start', data.start_inspect || '');
+        localStorage.setItem('qc_finish', data.finish_inspect || '');
+        
         onSuccess();
         handleClose();
         return;
@@ -153,6 +155,12 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
       const result = await submitQCInspection(payload);
 
       if (result.success) {
+        // Save to localStorage for next time
+        localStorage.setItem('qc_petugas1', data.petugas_inspeksi || '');
+        localStorage.setItem('qc_petugas2', data.petugas_inspeksi_2 || '');
+        localStorage.setItem('qc_tanggal', data.tanggal_inspeksi || '');
+        localStorage.setItem('qc_start', data.start_inspect || '');
+        localStorage.setItem('qc_finish', data.finish_inspect || '');
         onSuccess();
         handleClose();
       } else {
@@ -224,15 +232,25 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
             {/* Bagian 1: Waktu & Petugas */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2"><User className="w-4 h-4 text-sky-500"/> Informasi Inspeksi</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4">
-                <div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                <div className="col-span-2 sm:col-span-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Petugas 1</label>
-                  <input type="text" {...register("petugas_inspeksi")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                  <select {...register("petugas_inspeksi")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none">
+                    <option value="">Pilih</option>
+                    <option value="Nurdin">Nurdin</option>
+                    <option value="Hendra">Hendra</option>
+                    <option value="Taufik">Taufik</option>
+                  </select>
                   {errors.petugas_inspeksi && <p className="text-red-500 text-[10px] mt-1">{errors.petugas_inspeksi.message}</p>}
                 </div>
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Petugas 2</label>
-                  <input type="text" {...register("petugas_inspeksi_2")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                  <select {...register("petugas_inspeksi_2")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none">
+                    <option value="">Pilih</option>
+                    <option value="Nurdin">Nurdin</option>
+                    <option value="Hendra">Hendra</option>
+                    <option value="Taufik">Taufik</option>
+                  </select>
                   {errors.petugas_inspeksi_2 && <p className="text-red-500 text-[10px] mt-1">{errors.petugas_inspeksi_2.message}</p>}
                 </div>
                 <div>
@@ -250,18 +268,13 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
                   <input type="time" {...register("finish_inspect")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
                   {errors.finish_inspect && <p className="text-red-500 text-[10px] mt-1">{errors.finish_inspect.message}</p>}
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Tgl Potong</label>
-                  <input type="date" {...register("tanggal_potong")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                  {errors.tanggal_potong && <p className="text-red-500 text-[10px] mt-1">{errors.tanggal_potong.message}</p>}
-                </div>
               </div>
             </div>
 
             {/* Bagian 2: Hasil Fisik */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2"><Scale className="w-4 h-4 text-emerald-500"/> Data Fisik & Matching</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2"><Scale className="w-4 h-4 text-emerald-500"/> Data Fisik</h4>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Berat Produksi (kg)</label>
                   <input type="number" step="0.01" {...register("berat_produksi", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
@@ -272,11 +285,6 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
                   <input type="number" step="0.01" {...register("berat_inspecting", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
                   {errors.berat_inspecting && <p className="text-red-500 text-[10px] mt-1">{errors.berat_inspecting.message}</p>}
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Hasil Matching</label>
-                  <input type="text" {...register("hasil_matching")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" placeholder="Teks bebas..." />
-                  {errors.hasil_matching && <p className="text-red-500 text-[10px] mt-1">{errors.hasil_matching.message}</p>}
-                </div>
               </div>
             </div>
 
@@ -284,65 +292,36 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
             <div className="grid grid-cols-2 gap-x-3 sm:gap-x-6 gap-y-6">
               {/* Grade Produksi */}
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Total Grade (Produksi)</h4>
-                <div className="grid grid-cols-3 gap-3">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Total (Produksi)</h4>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Grade A</label>
-                    <input type="number" {...register("prod_grade_a", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500"/> Ceklis</label>
+                    <input type="number" {...register("prod_ceklis", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-emerald-500 outline-none" />
                   </div>
                   <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Grade B</label>
-                    <input type="number" {...register("prod_grade_b", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">BS</label>
-                    <input type="number" {...register("prod_bs", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1"><X className="w-3 h-3 text-red-500"/> Silang</label>
+                    <input type="number" {...register("prod_silang", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-red-500 outline-none" />
                   </div>
                 </div>
               </div>
               
               {/* Grade QC */}
               <div className="bg-sky-50/50 border border-sky-100 rounded-xl p-4">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Total Grade (QC)</h4>
-                <div className="grid grid-cols-3 gap-3">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Total (Inspeksi QC)</h4>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Grade A</label>
-                    <input type="number" {...register("qc_grade_a", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500"/> Ceklis</label>
+                    <input type="number" {...register("qc_ceklis", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-sky-200 text-sm focus:border-emerald-500 outline-none" />
                   </div>
                   <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Grade B</label>
-                    <input type="number" {...register("qc_grade_b", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">BS</label>
-                    <input type="number" {...register("qc_bs", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1"><X className="w-3 h-3 text-red-500"/> Silang</label>
+                    <input type="number" {...register("qc_silang", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-sky-200 text-sm focus:border-red-500 outline-none" />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Bagian 4: Data Mending */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-orange-500"/> Informasi Mending (Opsional)</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Petugas Mending</label>
-                  <input type="text" {...register("petugas_mending")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Tgl Mending</label>
-                  <input type="date" {...register("tanggal_mending")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Start Mending</label>
-                  <input type="time" {...register("start_mending")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Finish Mending</label>
-                  <input type="time" {...register("finish_mending")} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                </div>
-              </div>
-            </div>
+            {/* Bagian 4: Data Mending dihapus */}
 
             {/* Catatan Tambahan */}
             <div>

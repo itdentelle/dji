@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
         "Potongan Ke": header.potongan_ke || "",
         "No Order": header.no_order_barang || "",
         "No Customer": header.no_customer || "",
-        "Total Downtime (Menit)": header.total_downtime_menit || 0,
+        "Total Downtime (Detik)": header.total_downtime_detik || 0,
         "Meter Awal": header.meter_awal || "",
         "Meter Akhir": header.meter_akhir || "",
         "Total Produksi Meter": header.total_produksi_meter || ""
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
           "Potongan Ke": header.potongan_ke || "",
           "No Order": header.no_order_barang || "",
           "No Customer": header.no_customer || "",
-          "Total Downtime (Menit)": header.total_downtime_menit || 0,
+          "Total Downtime (Detik)": header.total_downtime_detik || 0,
           "Meter Awal": header.meter_awal || "",
           "Meter Akhir": header.meter_akhir || "",
           "Total Produksi Meter": header.total_produksi_meter || "",

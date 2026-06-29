@@ -12,7 +12,7 @@ export type PinSchemaInput = z.infer<typeof pinSchema>;
 
 // Skema untuk Form Portal Input Produksi Harian (Sesuai Supabase Productions Table)
 export const productionFormSchemaBase = z.object({
-  operatorId: z.array(z.string()).min(1, "Minimal pilih 1 operator"),
+  operatorId: z.string().min(1, "Minimal pilih 1 operator"),
   groupId: z.string().min(1, "Grup Shift harus dipilih"),
   grupName: z.string().optional(),
   designId: z.string().min(1, "Design harus dipilih"),
@@ -65,10 +65,10 @@ export const productionFormSchemaBase = z.object({
       kategoriMasalah: z.array(z.string()).optional(),
       detailMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
-      rollNo: z.string().optional().nullable(),
       keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
     })
   ).min(1, "Minimal harus ada 1 PCS"),
+  idempotencyKey: z.string().optional(),
 });
 
 export const productionFormSchema = productionFormSchemaBase.superRefine((data, ctx) => {

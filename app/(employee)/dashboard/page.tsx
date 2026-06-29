@@ -37,7 +37,7 @@ interface Transaction {
   design: string;
   group?: string;
   is_production?: boolean;
-  total_downtime_menit?: number;
+  total_downtime_detik?: number;
   potongan_ke?: string;
   panel_no?: number;
   posisi_meter?: number;
@@ -248,10 +248,10 @@ export default function DashboardPage() {
     // Perhitungan Efisiensi Waktu Kerja Akumulatif
     // Menghitung jumlah kombinasi Tanggal + Operator_ID (Jumlah Sesi Shift)
     const shiftSessions = new Set(gradeScoped.map(item => item.tanggal + "_" + item.nama_operator)).size;
-    const totalMenitTersedia = shiftSessions * 420;
-    const totalDowntimeMenit = gradeScoped.reduce((acc, curr) => acc + (curr.total_downtime_menit || 0), 0);
-    const totalMenitKerjaEfektif = Math.max(0, totalMenitTersedia - totalDowntimeMenit);
-    const efisiensi = totalMenitTersedia > 0 ? (totalMenitKerjaEfektif / totalMenitTersedia) * 100 : 0;
+    const totalDetikTersedia = shiftSessions * 420 * 60;
+    const totalDowntimeDetik = gradeScoped.reduce((acc, curr) => acc + (curr.total_downtime_detik || 0), 0);
+    const totalDetikKerjaEfektif = Math.max(0, totalDetikTersedia - totalDowntimeDetik);
+    const efisiensi = totalDetikTersedia > 0 ? (totalDetikKerjaEfektif / totalDetikTersedia) * 100 : 0;
 
     // Total Masalah Umum (berdasarkan kemunculan kategori masalah)
     let countMasalah = 0;
@@ -277,8 +277,8 @@ export default function DashboardPage() {
       persentaseCacatPanel,
       countMasalahMeteran,
       persentaseCacatMeteran,
-      totalMenitTersedia,
-      totalDowntimeMenit
+      totalDetikTersedia,
+      totalDowntimeDetik
     };
   }, [dateFilteredTransactions, chartGradeFilter]);
 
@@ -864,21 +864,21 @@ export default function DashboardPage() {
             <div className="text-3xl font-black tracking-tight text-slate-800">{stats.efisiensi.toFixed(1)}%</div>
             
             {/* Target Indicator */}
-            {stats.totalDowntimeMenit > 0 ? (
+            {stats.totalDowntimeDetik > 0 ? (
               <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-700 font-extrabold uppercase tracking-wider">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                Terpotong {stats.totalDowntimeMenit} Menit
+                Terpotong {stats.totalDowntimeDetik} Detik
               </div>
             ) : (
               <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                0 Menit Terbuang
+                0 Detik Terbuang
               </div>
             )}
             
             <div className="flex items-center gap-1 mt-2 text-[11px] text-purple-600 font-bold">
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Shift 7 Jam (420 mnt)</span>
+              <span>Shift 7 Jam (420 dtk)</span>
             </div>
           </div>
         </div>

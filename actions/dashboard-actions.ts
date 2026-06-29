@@ -21,7 +21,7 @@ export interface RealProductionItem {
   design: string;
   group?: string;
   is_production: boolean;
-  total_downtime_menit?: number;
+  total_downtime_detik?: number;
   kategori_masalah?: string;
 }
 
@@ -49,191 +49,70 @@ export async function getRealProductionsData(): Promise<{
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const dateLimit = thirtyDaysAgo.toISOString().split("T")[0];
 
-    // Fetch all records with pagination to bypass the 1000 row limit (only last 30 days)
-    let rawProductions: any[] = [];
-    let hasMore = true;
-    let from = 0;
-    const step = 1000;
+    // Query 1: Get dashboard view data
+    const { data, error } = await supabase
+      .from("dashboard_production_view")
+      .select("*")
+      .gte("tanggal", dateLimit)
+      .order("tanggal", { ascending: false });
 
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from("productions")
-        .select(`
-          id,
-          tgl,
-          rpm,
-          pcs,
-          jml_hasil_produksi,
-          status_inspeksi,
-          operator_id,
-          final_inspection_id,
-          final_inspections (
-            status_final
-          ),
-          operators (
-            nama_operator
-          ),
-          designs (
-            nama_design
-          ),
-          groups (
-            nama_grup
-          ),
-          production_problems (
-            id,
-            problems (
-              kode_masalah
-            )
-          )
-        `)
-        .gte("tgl", dateLimit)
-        .order("tgl", { ascending: false })
-        .range(from, from + step - 1);
+    if (error) {
+      console.error("Dashboard error fetching dashboard_production_view:", error);
+      throw error;
+    }
 
-      if (error) throw error;
+    // Query 2: Get the actual operator name (pic) from production_headers
+    // The view's nama_operator comes from JOIN on operator_id which can be stale
+    const headerIds = [...new Set((data || []).map((item: any) => item.header_id).filter(Boolean))];
+    const picMap = new Map<string, string>();
 
-      if (data && data.length > 0) {
-        rawProductions = rawProductions.concat(data);
-      }
-
-      if (!data || data.length < step) {
-        hasMore = false;
-      } else {
-        from += step;
+    if (headerIds.length > 0) {
+      // Supabase .in() has a limit, batch if needed
+      const batchSize = 100;
+      for (let i = 0; i < headerIds.length; i += batchSize) {
+        const batch = headerIds.slice(i, i + batchSize);
+        const { data: headerData } = await supabase
+          .from("production_headers")
+          .select("id, pic")
+          .in("id", batch);
+        
+        (headerData || []).forEach((h: any) => {
+          if (h.pic) picMap.set(h.id, h.pic);
+        });
       }
     }
 
-
-
-    // Map database records to the dashboard Transaction interface
-    const mappedData: RealProductionItem[] = [];
-
-    rawProductions.forEach((item: any) => {
-      const namaOperator = item.operators?.nama_operator || `Operator #${item.operator_id || 1}`;
-      const hasProblems = item.production_problems && item.production_problems.length > 0;
-
-      let grade: "GRADE A" | "GRADE B" | "BS" | "UNGRADED" = "UNGRADED";
-      if (item.final_inspections?.status_final) {
-        const status = item.final_inspections.status_final.toUpperCase();
-        if (status === "GRADE A" || status === "A") {
-          grade = "GRADE A";
-        } else if (status === "GRADE B" || status === "B") {
-          grade = "GRADE B";
-        } else if (status === "BS") {
-          grade = "BS";
-        }
-      } else {
-        grade = "UNGRADED";
-      }
-
-      mappedData.push({
-        id: item.id || Math.random().toString(),
-        header_id: String(item.id),
-        tanggal: item.tgl || new Date().toISOString().split("T")[0],
-        hari: getHariFromTanggal(item.tgl),
-        panel_no: undefined,
-        potongan_ke: undefined,
-        nama_operator: namaOperator,
-        mesin_id: `KNIT-${(item.operator_id || 1).toString().padStart(3, "0")}`,
-        hasil_pcs: item.jml_hasil_produksi || 0,
-        hasil_meter: 0,
-        target_pcs: item.pcs || 0,
-        status_qc: hasProblems ? "Recheck" : "Lolos",
-        rpm_mesin: item.rpm || 800,
-        grade,
-        design: item.designs?.nama_design || "Tanpa Design",
-        group: item.groups?.nama_grup || "Tanpa Group",
-        is_production: (item.jml_hasil_produksi || 0) > 0,
-        kategori_masalah: item.production_problems?.map((p: any) => p.problems?.kode_masalah || "Umum").join(", ") || undefined,
-      });
+    const mappedData: RealProductionItem[] = (data || []).map((item: any) => {
+      const isProduction = (item.hasil_pcs || 0) > 0 || (item.posisi_meter || 0) > 0 || (item.hasil_meter || 0) > 0;
+      
+      const mesinId = item.mesin_id || `KNIT-001`;
+      
+      // Use pic from production_headers if available, else fall back to view's nama_operator
+      const actualOperator = picMap.get(item.header_id) || item.nama_operator || "Operator Unknown";
+      
+      return {
+        id: item.id || `header_${item.header_id}_${Math.random().toString().slice(2, 8)}`,
+        header_id: String(item.header_id),
+        panel_no: item.panel_no ? parseInt(item.panel_no) : undefined,
+        potongan_ke: item.potongan_ke || undefined,
+        tanggal: item.tanggal || new Date().toISOString().split("T")[0],
+        hari: getHariFromTanggal(item.tanggal),
+        nama_operator: actualOperator,
+        mesin_id: mesinId,
+        hasil_pcs: item.hasil_pcs || 0,
+        hasil_meter: item.hasil_meter || 0,
+        posisi_meter: item.posisi_meter || 0,
+        target_pcs: item.target_pcs || 0,
+        status_qc: item.status_qc as "Lolos" | "Recheck",
+        rpm_mesin: item.rpm_mesin || 800,
+        grade: item.grade as "GRADE A" | "GRADE B" | "BS" | "UNGRADED",
+        design: item.design || "Tanpa Design",
+        group: item.group || "Tanpa Group",
+        is_production: isProduction,
+        total_downtime_detik: item.total_downtime_detik || 0,
+        kategori_masalah: item.kategori_masalah || undefined,
+      };
     });
-
-    // --- 2. Fetch Meter Data (from 'production_headers' table) ---
-
-    const { data: rawHeaders, error: headerError } = await (supabase as any)
-      .from("production_headers")
-      .select(`
-        id, tgl, operator_id, rpm, pcs, pic, nomor_mc, total_produksi_meter, total_downtime_menit, design_id, panel_no, potongan_ke,
-        groups ( nama_grup ),
-        operators ( nama_operator ),
-        production_details (
-          id, jml_hasil_produksi, kategori_masalah, meter_kain, final_inspection_id
-        )
-      `)
-      .gte("tgl", dateLimit);
-
-    if (headerError) {
-      console.error("Dashboard error fetching production_headers:", headerError);
-    }
-
-    if (!headerError && rawHeaders && rawHeaders.length > 0) {
-      rawHeaders.forEach((header: any) => {
-        const namaOperator = header.pic || header.operators?.nama_operator || `Operator #${header.operator_id || 1}`;
-
-        let downtimeAssigned = false;
-
-        // If there's meter input directly on header (old format/continuous), we map it
-        if (header.total_produksi_meter) {
-          mappedData.push({
-            id: `header_meter_${header.id}`,
-            header_id: String(header.id),
-            panel_no: header.panel_no ? parseInt(header.panel_no) : undefined,
-            potongan_ke: header.potongan_ke || undefined,
-            tanggal: header.tgl || new Date().toISOString().split("T")[0],
-            hari: getHariFromTanggal(header.tgl),
-            nama_operator: namaOperator,
-            mesin_id: header.nomor_mc || `KNIT-${(header.operator_id || 1).toString().padStart(3, "0")}`,
-            hasil_pcs: 0,
-            hasil_meter: parseFloat(header.total_produksi_meter),
-            target_pcs: 0,
-            status_qc: "Lolos",
-            rpm_mesin: header.rpm || 800,
-            grade: "GRADE A", // Usually continuous is just Grade A
-            design: header.design_id || "Tanpa Design",
-            group: header.groups?.nama_grup || "Tanpa Group",
-            is_production: true,
-            total_downtime_menit: header.total_downtime_menit ? parseFloat(header.total_downtime_menit) : 0,
-          });
-          downtimeAssigned = true;
-        }
-
-        if (header.production_details && header.production_details.length > 0) {
-          header.production_details.forEach((detail: any, index: number) => {
-            const hasProblems = detail.kategori_masalah && detail.kategori_masalah.trim() !== "";
-            const isProduction = (detail.jml_hasil_produksi || 0) > 0 || (detail.meter_kain || 0) > 0;
-
-            let grade: "GRADE A" | "GRADE B" | "BS" | "UNGRADED" = "GRADE A";
-            if (detail.final_inspection_id === 1) grade = "GRADE A";
-            else if (detail.final_inspection_id === 2) grade = "GRADE B";
-            else if (detail.final_inspection_id === 3) grade = "BS";
-            else if (detail.final_inspection_id === 4) grade = "GRADE A"; // C = A for now unless specified
-
-            mappedData.push({
-              id: detail.id || Math.random().toString(),
-              header_id: String(header.id),
-              panel_no: header.panel_no ? parseInt(header.panel_no) : undefined,
-              potongan_ke: header.potongan_ke || undefined,
-              tanggal: header.tgl || new Date().toISOString().split("T")[0],
-              hari: getHariFromTanggal(header.tgl),
-              nama_operator: namaOperator,
-              mesin_id: header.nomor_mc || `KNIT-${(header.operator_id || 1).toString().padStart(3, "0")}`,
-              hasil_pcs: detail.jml_hasil_produksi || 0,
-              hasil_meter: 0, // Detail rows should NOT add to total_produksi_meter
-              posisi_meter: detail.meter_kain ? parseFloat(detail.meter_kain) : 0,
-              target_pcs: header.pcs || 0,
-              status_qc: hasProblems ? "Recheck" : "Lolos",
-              rpm_mesin: header.rpm || 800,
-              grade: grade,
-              design: header.design_id || "Tanpa Design",
-              group: header.groups?.nama_grup || "Tanpa Group",
-              is_production: isProduction,
-              total_downtime_menit: (!downtimeAssigned && index === 0) ? (header.total_downtime_menit ? parseFloat(header.total_downtime_menit) : 0) : 0,
-              kategori_masalah: detail.kategori_masalah || undefined,
-            });
-          });
-        }
-      });
-    }
 
     return { success: true, data: mappedData };
   } catch (err: any) {
@@ -241,3 +120,67 @@ export async function getRealProductionsData(): Promise<{
     return { success: false, error: err.message || "Failed to load live data." };
   }
 }
+
+export interface MachineStatus {
+  mesin_id: string;
+  status: "Beroperasi" | "Idle";
+  nama_operator: string;
+  design: string;
+  last_input_date: string;
+}
+
+export async function getMachineStatuses(): Promise<{ success: boolean; data?: MachineStatus[]; error?: string }> {
+  try {
+    const supabase = await createClient();
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const dateLimit = thirtyDaysAgo.toISOString().split("T")[0];
+
+    // Query production_headers directly to use the `pic` field (actual operator name at input time)
+    // instead of the view which joins on operator_id (which can be stale/incorrect)
+    const { data, error } = await supabase
+      .from("production_headers")
+      .select("nomor_mc, tgl, pic, design_id, tanggal_jam")
+      .gte("tgl", dateLimit)
+      .order("tanggal_jam", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching machine statuses:", error);
+      throw error;
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    
+    // Create a map to store the latest record for each machine
+    const latestPerMachine = new Map<string, any>();
+    
+    // Since it's ordered by tanggal_jam desc, the first time we see a nomor_mc, it is its latest record
+    (data || []).forEach((row: any) => {
+      if (row.nomor_mc && !latestPerMachine.has(row.nomor_mc)) {
+        latestPerMachine.set(row.nomor_mc, row);
+      }
+    });
+
+    const results: MachineStatus[] = [];
+    latestPerMachine.forEach((row, mesin_id) => {
+      const isBeroperasi = row.tgl === today;
+      
+      results.push({
+        mesin_id,
+        status: isBeroperasi ? "Beroperasi" : "Idle",
+        nama_operator: row.pic || "-",
+        design: row.design_id || "-",
+        last_input_date: row.tgl
+      });
+    });
+
+    // Sort machines alphabetically
+    results.sort((a, b) => a.mesin_id.localeCompare(b.mesin_id));
+
+    return { success: true, data: results };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to load machine statuses." };
+  }
+}
+

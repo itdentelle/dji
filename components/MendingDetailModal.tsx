@@ -1,29 +1,29 @@
 import React from "react";
 import { X, ClipboardCheck, User, Scale, Clock, AlertTriangle, FileText, Package, Box } from "lucide-react";
 
-interface QCDetailModalProps {
+interface MendingDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  qcData: any | null;
+  mendingData: any | null;
 }
 
-export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModalProps) {
-  if (!isOpen || !qcData) return null;
+export default function MendingDetailModal({ isOpen, onClose, mendingData }: MendingDetailModalProps) {
+  if (!isOpen || !mendingData) return null;
 
-  const d = qcData;
-  const detail = qcData.detail || {};
-  const header = qcData.header || {};
+  const d = mendingData;
+  const detail = mendingData.detail || {};
+  const header = mendingData.header || {};
 
   let gradeColor = "text-slate-600 bg-slate-100";
   let gradeText = "Tidak Diketahui";
   
-  if (detail.final_inspection_id === 1) {
+  if (detail.status_mending === 'A') {
     gradeColor = "text-emerald-700 bg-emerald-100";
     gradeText = "Grade A";
-  } else if (detail.final_inspection_id === 2) {
+  } else if (detail.status_mending === 'B') {
     gradeColor = "text-amber-700 bg-amber-100";
     gradeText = "Grade B";
-  } else if (detail.final_inspection_id === 3) {
+  } else if (detail.status_mending === 'BS') {
     gradeColor = "text-rose-700 bg-rose-100";
     gradeText = "Grade BS";
   }
@@ -39,7 +39,7 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
               <ClipboardCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-800">Detail Hasil QC Inspeksi</h3>
+              <h3 className="text-lg font-bold text-slate-800">Detail Hasil Mending</h3>
               <p className="text-xs text-slate-500 font-medium mt-0.5">ID: {d.id}</p>
             </div>
           </div>
@@ -53,7 +53,7 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
           {/* Info Utama */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasil Akhir QC</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasil Mending</p>
               <div className={`inline-flex px-2 py-1 rounded font-bold text-xs ${gradeColor}`}>
                 {gradeText}
               </div>
@@ -103,78 +103,35 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
             {/* Info Inspeksi */}
             <div>
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <User className="w-4 h-4" /> Informasi Inspeksi
+                <User className="w-4 h-4" /> Informasi Mending
               </h4>
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm">
                 <div className="flex justify-between p-3 border-b border-slate-100">
-                  <span className="text-slate-500">Petugas Inspeksi 1</span>
-                  <span className="font-bold text-slate-800">{d.petugas_inspeksi || "-"}</span>
+                  <span className="text-slate-500">Petugas Mending</span>
+                  <span className="font-bold text-slate-800">{d.petugas_mending || "-"}</span>
                 </div>
                 <div className="flex justify-between p-3 border-b border-slate-100">
-                  <span className="text-slate-500">Petugas Inspeksi 2</span>
-                  <span className="font-bold text-slate-800">{d.petugas_inspeksi_2 || "-"}</span>
-                </div>
-                <div className="flex justify-between p-3 border-b border-slate-100">
-                  <span className="text-slate-500">Tanggal Inspeksi</span>
-                  <span className="font-bold text-slate-800">{d.tanggal_inspeksi || "-"}</span>
-                </div>
-                <div className="flex justify-between p-3 border-b border-slate-100">
-                  <span className="text-slate-500">Waktu Inspeksi</span>
-                  <span className="font-bold text-slate-800">
-                    {d.start_inspect} s/d {d.finish_inspect}
-                  </span>
+                  <span className="text-slate-500">Tanggal Mending</span>
+                  <span className="font-bold text-slate-800">{d.tanggal_mending || "-"}</span>
                 </div>
                 <div className="flex justify-between p-3">
-                  <span className="text-slate-500">Hasil Matching</span>
-                  <span className="font-bold text-slate-800">{d.header?.status_matching || "-"}</span>
+                  <span className="text-slate-500">Waktu Mending</span>
+                  <span className="font-bold text-slate-800">
+                    {d.start_mending} s/d {d.finish_mending}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Info Mending & Berat */}
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Scale className="w-4 h-4" /> Informasi Berat (Kg)
-                </h4>
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm">
-                  <div className="flex justify-between p-3 border-b border-slate-100">
-                    <span className="text-slate-500">Berat Produksi</span>
-                    <span className="font-bold text-slate-800">{d.berat_produksi}</span>
-                  </div>
-                  <div className="flex justify-between p-3">
-                    <span className="text-slate-500">Berat Inspecting</span>
-                    <span className="font-bold text-slate-800">{d.berat_inspecting}</span>
-                  </div>
-                </div>
-              </div>
-              </div>
-          </div>
-
-          {/* Keterangan & Total Grade */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            {/* Keterangan */}
+            <div>
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <FileText className="w-4 h-4" /> Keterangan / Catatan QC
+                <FileText className="w-4 h-4" /> Keterangan Mending
               </h4>
-              <p className="text-sm text-slate-700 italic">
-                {detail.keterangan_qc || "Tidak ada catatan."}
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Package className="w-4 h-4" /> Total Inspeksi Batch
-              </h4>
-              <div className="grid grid-cols-2 gap-2 text-center text-sm">
-                <div className="bg-slate-50 rounded-lg p-2">
-                  <div className="text-[10px] text-slate-400 font-bold mb-1">CEKLIS</div>
-                  <div className="font-bold text-slate-800">{d.inspeksi_ceklis}</div>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-2">
-                  <div className="text-[10px] text-slate-400 font-bold mb-1">SILANG</div>
-                  <div className="font-bold text-slate-800">{d.inspeksi_silang}</div>
-                </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm h-full p-4">
+                <p className="text-sm text-slate-700 italic">
+                  {d.hasil_mending || "Tidak ada catatan."}
+                </p>
               </div>
             </div>
           </div>

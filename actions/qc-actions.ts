@@ -1,15 +1,15 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export async function searchPendingQCHeaders(designId: string, potonganKe: string) {
   try {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
     // We want to find production_headers matching designId and potonganKe
     // that have pending details.
     const { data, error } = await supabase
-      .from("production_headers" as any)
+      .from("production_headers")
       .select(`
         id,
         panel_no,
@@ -19,7 +19,7 @@ export async function searchPendingQCHeaders(designId: string, potonganKe: strin
         operators ( nama_operator )
       `)
       .eq("design_id", designId)
-      .eq("potongan_ke", potonganKe);
+      .eq("potongan_ke", parseInt(potonganKe));
 
     if (error) {
       return { success: false, error: error.message };
@@ -34,10 +34,10 @@ export async function searchPendingQCHeaders(designId: string, potonganKe: strin
     const headerIds = data.map((h: any) => h.id);
 
     const { data: detailsData, error: detailsError } = await supabase
-      .from("production_details" as any)
+      .from("production_details")
       .select("header_id")
       .in("header_id", headerIds)
-      .is("final_inspection_id", null);
+      .is("status_inspeksi", null);
 
     if (detailsError) {
       return { success: false, error: detailsError.message };
@@ -55,10 +55,10 @@ export async function searchPendingQCHeaders(designId: string, potonganKe: strin
 
 export async function getPendingQCDetails(headerId: string) {
   try {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
     const { data, error } = await supabase
-      .from("production_details" as any)
+      .from("production_details")
       .select(`
         id,
         pcs_index,
@@ -73,7 +73,7 @@ export async function getPendingQCDetails(headerId: string) {
         keterangan_qc
       `)
       .eq("header_id", headerId)
-      .is("final_inspection_id", null)
+      .is("status_inspeksi", null)
       .order("pcs_index", { ascending: true });
 
     if (error) {
@@ -93,24 +93,17 @@ export async function submitQCInspection(params: {
   tanggal_inspeksi: string;
   start_inspect: string;
   finish_inspect: string;
-  berat_produksi: number;
-  berat_inspecting: number;
-  hasil_matching: string;
-  petugas_mending?: string;
-  tanggal_mending?: string;
-  start_mending?: string;
-  finish_mending?: string;
-  prod_grade_a: number;
-  prod_grade_b: number;
-  prod_bs: number;
-  qc_grade_a: number;
-  qc_grade_b: number;
-  qc_bs: number;
+  berat_produksi?: number | null;
+  berat_inspecting?: number | null;
+  prod_ceklis: number;
+  prod_silang: number;
+  qc_ceklis: number;
+  qc_silang: number;
   notes?: string;
   tanggal_potong?: string;
 }) {
   try {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
     // We do this in a loop or bulk.
     // Insert into qc_inspections for EACH detail
@@ -123,21 +116,14 @@ export async function submitQCInspection(params: {
       finish_inspect: params.finish_inspect,
       berat_produksi: params.berat_produksi,
       berat_inspecting: params.berat_inspecting,
-      hasil_matching: params.hasil_matching,
-      petugas_mending: params.petugas_mending || null,
-      tanggal_mending: params.tanggal_mending || null,
-      start_mending: params.start_mending || null,
-      finish_mending: params.finish_mending || null,
-      prod_grade_a: params.prod_grade_a,
-      prod_grade_b: params.prod_grade_b,
-      prod_bs: params.prod_bs,
-      qc_grade_a: params.qc_grade_a,
-      qc_grade_b: params.qc_grade_b,
-      qc_bs: params.qc_bs
+      prod_ceklis: params.prod_ceklis,
+      prod_silang: params.prod_silang,
+      inspeksi_ceklis: params.qc_ceklis,
+      inspeksi_silang: params.qc_silang
     }));
 
     const { error: insertError } = await supabase
-      .from("qc_inspections" as any)
+      .from("qc_inspections")
       .insert(qcInspectionsData);
 
     if (insertError) {
@@ -149,9 +135,10 @@ export async function submitQCInspection(params: {
     // so we iterate (it's safe enough for a few dozen rows)
     for (const d of params.details) {
       const { error: updateError } = await supabase
-        .from("production_details" as any)
+        .from("production_details")
         .update({
           final_inspection_id: d.finalInspectionId,
+          status_inspeksi: d.finalInspectionId === 1 ? 'Ceklis' : 'Silang',
           keterangan_qc: params.notes || null
         })
         .eq("id", d.detailId);
@@ -165,7 +152,7 @@ export async function submitQCInspection(params: {
     try {
       const detailIds = params.details.map(d => d.detailId);
       const { data: detailRecordsRaw } = await supabase
-        .from("production_details" as any)
+        .from("production_details")
         .select("id, header_id, pcs_index")
         .in("id", detailIds);
       
@@ -176,7 +163,7 @@ export async function submitQCInspection(params: {
         const uniqueHeaderIds = Array.from(new Set(detailRecords.map(r => r.header_id))).filter(Boolean);
         if (uniqueHeaderIds.length > 0) {
           const { error: updateHeaderError } = await supabase
-            .from("production_headers" as any)
+            .from("production_headers")
             .update({ tanggal_potong: params.tanggal_potong })
             .in("id", uniqueHeaderIds);
             
@@ -191,9 +178,8 @@ export async function submitQCInspection(params: {
         const payloadData = params.details.map(d => {
           const dbRecord = detailRecords.find((r: any) => r.id === d.detailId);
           let gradeStr = "";
-          if (d.finalInspectionId === 1) gradeStr = "A";
-          else if (d.finalInspectionId === 2) gradeStr = "B";
-          else if (d.finalInspectionId === 3) gradeStr = "BS";
+          if (d.finalInspectionId === 1) gradeStr = "Ceklis";
+          else if (d.finalInspectionId === 3) gradeStr = "Silang";
 
           return {
             id_header: dbRecord?.header_id || "",
@@ -205,10 +191,11 @@ export async function submitQCInspection(params: {
             hasil_qc: gradeStr,
             berat_produksi: params.berat_produksi,
             berat_qc: params.berat_inspecting,
-            hasil_matching: params.hasil_matching || "",
             keterangan_qc: params.notes || "",
-            petugas_mending: params.petugas_mending || "",
-            waktu_mending: (params.start_mending && params.finish_mending) ? `${params.start_mending} - ${params.finish_mending}` : "",
+            prod_ceklis: params.prod_ceklis,
+            prod_silang: params.prod_silang,
+            qc_ceklis: params.qc_ceklis,
+            qc_silang: params.qc_silang,
             tanggal_potong: params.tanggal_potong || "",
           };
         });
@@ -218,11 +205,17 @@ export async function submitQCInspection(params: {
           data: payloadData
         };
 
+        console.log("[QC Sheet Sync] Sending payload:", JSON.stringify(payload));
+        
         fetch(sheetUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }).catch(err => console.error("Gagal sinkron QC ke Google Sheets:", err));
+          body: JSON.stringify(payload),
+          redirect: "follow"
+        }).then(async (res) => {
+          const text = await res.text();
+          console.log("[QC Sheet Sync] Response status:", res.status, "body:", text);
+        }).catch(err => console.error("[QC Sheet Sync] Fetch error:", err));
       }
     } catch (sheetErr) {
       console.error("Error preparing Google Sheets sync:", sheetErr);
@@ -237,12 +230,14 @@ export async function submitQCInspection(params: {
 
 export async function getAvailableQCFilters() {
   try {
-    const supabase = await createAdminClient();
-    const { data, error } = await supabase.from("production_details" as any).select(`
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("production_details").select(`
       header_id,
       production_headers!inner (
+        nomor_mc,
         design_id,
-        potongan_ke
+        potongan_ke,
+        tgl
       )
     `).is("final_inspection_id", null);
 
@@ -252,9 +247,9 @@ export async function getAvailableQCFilters() {
     for (const row of data || []) {
       const h = (row as any).production_headers;
       if (h) {
-        const key = `${h.design_id}__${h.potongan_ke}`;
+        const key = `${h.tgl}__${h.nomor_mc}__${h.design_id}__${h.potongan_ke}`;
         if (!uniquePairs.has(key)) {
-          uniquePairs.set(key, { design_id: h.design_id, potongan_ke: h.potongan_ke });
+          uniquePairs.set(key, { tgl: h.tgl, nomor_mc: h.nomor_mc, design_id: h.design_id, potongan_ke: h.potongan_ke });
         }
       }
     }
@@ -265,15 +260,22 @@ export async function getAvailableQCFilters() {
   }
 }
 
-export async function getPendingQCDetailsByBatch(designId: string, potonganKe: string) {
+export async function getPendingQCDetailsByBatch(mesin: string, designId: string, potonganKe: string, tanggal?: string) {
   try {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
-    const { data: headers, error: headerError } = await supabase
-      .from("production_headers" as any)
+    let query = supabase
+      .from("production_headers")
       .select("id, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, operators(nama_operator)")
+      .eq("nomor_mc", mesin)
       .eq("design_id", designId)
-      .eq("potongan_ke", potonganKe);
+      .eq("potongan_ke", parseInt(potonganKe));
+      
+    if (tanggal) {
+      query = query.eq("tgl", tanggal);
+    }
+
+    const { data: headers, error: headerError } = await query;
 
     if (headerError) return { success: false, error: headerError.message };
     if (!headers || headers.length === 0) return { success: true, data: [] };
@@ -281,7 +283,7 @@ export async function getPendingQCDetailsByBatch(designId: string, potonganKe: s
     const headerIds = headers.map((h: any) => h.id);
 
     const { data: details, error: detailsError } = await supabase
-      .from("production_details" as any)
+      .from("production_details")
       .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id")
       .in("header_id", headerIds)
       .is("final_inspection_id", null);
@@ -301,16 +303,16 @@ export async function getPendingQCDetailsByBatch(designId: string, potonganKe: s
 
 export async function getQCHistory() {
   try {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
     const { data, error } = await supabase
-      .from("qc_inspections" as any)
+      .from("qc_inspections")
       .select(`
         *,
         production_details (
           id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
           production_headers (
-            id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang
+            id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, status_matching
           )
         )
       `)
@@ -339,14 +341,14 @@ export async function getQCHistory() {
 
 export async function getAvailableHistoryQCDesignPotongan() {
   try {
-    const supabase = await createAdminClient();
-    const { data: details, error } = await supabase.from("production_details" as any).select("header_id").not("final_inspection_id", "is", null);
+    const supabase = await createClient();
+    const { data: details, error } = await supabase.from("production_details").select("header_id").not("final_inspection_id", "is", null);
     if (error) return { success: false, error: error.message };
     if (!details || details.length === 0) return { success: true, data: [] };
     
     const headerIds = Array.from(new Set(details.map((d: any) => d.header_id)));
     
-    const { data: headers, error: headersError } = await supabase.from("production_headers" as any).select("id, design_id, potongan_ke").in("id", headerIds);
+    const { data: headers, error: headersError } = await supabase.from("production_headers").select("id, design_id, potongan_ke").in("id", headerIds);
     if (headersError) return { success: false, error: headersError.message };
     
     return { success: true, data: headers };
@@ -357,25 +359,25 @@ export async function getAvailableHistoryQCDesignPotongan() {
 
 export async function getQCHistoryByBatch(designId: string, potonganKe: string) {
   try {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
-    const { data: headers, error: hErr } = await supabase.from("production_headers" as any).select("id").eq("design_id", designId).eq("potongan_ke", potonganKe);
+    const { data: headers, error: hErr } = await supabase.from("production_headers").select("id").eq("design_id", designId).eq("potongan_ke", parseInt(potonganKe));
     if (hErr) return { success: false, error: hErr.message };
     if (!headers || headers.length === 0) return { success: true, data: [] };
     
     const headerIds = headers.map((h: any) => h.id);
     
-    const { data: details, error: dErr } = await supabase.from("production_details" as any).select("id").in("header_id", headerIds).not("final_inspection_id", "is", null);
+    const { data: details, error: dErr } = await supabase.from("production_details").select("id").in("header_id", headerIds).not("final_inspection_id", "is", null);
     if (dErr) return { success: false, error: dErr.message };
     if (!details || details.length === 0) return { success: true, data: [] };
     
     const detailIds = details.map((d: any) => d.id);
     
-    const { data: qcData, error: qcErr } = await supabase.from("qc_inspections" as any).select(`
+    const { data: qcData, error: qcErr } = await supabase.from("qc_inspections").select(`
       *,
       production_details (
         id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc, 
-        production_headers (id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang)
+        production_headers (id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, status_matching)
       )
     `).in("production_detail_id", detailIds).order("created_at", { ascending: false });
     
@@ -392,3 +394,78 @@ export async function getQCHistoryByBatch(designId: string, potonganKe: string) 
     return { success: false, error: err.message }; 
   }
 }
+
+export async function searchQCHistory(filters: {
+  date?: string;
+  nomor_mc?: string;
+  petugas_ids?: string[];
+  design_id?: string;
+  potongan_ke?: string;
+  no_customer?: string;
+}) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey || supabaseAnonKey === "your_supabase_anon_key_here") {
+      return { success: true, data: [] };
+    }
+
+    const supabase = await createClient();
+    
+    let query = supabase
+      .from("qc_inspections")
+      .select(`
+        *,
+        production_details!inner (
+          id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
+          production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, status_matching)
+        )
+      `)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (filters.date) {
+      query = query.eq("tanggal_inspeksi", filters.date);
+    }
+    
+    if (filters.nomor_mc) {
+      query = query.ilike("production_details.production_headers.nomor_mc", `%${filters.nomor_mc}%`);
+    }
+
+    if (filters.design_id) {
+      query = query.ilike("production_details.production_headers.design_id", `%${filters.design_id}%`);
+    }
+    
+    if (filters.potongan_ke) {
+      query = query.eq("production_details.production_headers.potongan_ke", parseInt(filters.potongan_ke));
+    }
+    
+    if (filters.no_customer) {
+      query = query.ilike("production_details.production_headers.no_order_barang", `%${filters.no_customer}%`);
+    }
+    
+    if (filters.petugas_ids && filters.petugas_ids.length > 0) {
+      const orConds = filters.petugas_ids.map(p => `petugas_inspeksi.eq."${p}",petugas_inspeksi_2.eq."${p}"`).join(",");
+      query = query.or(orConds);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Error searching QC history:", error);
+      return { success: false, error: error.message };
+    }
+
+    const formattedData = (data || []).map((row: any) => ({
+      ...row,
+      detail: row.production_details || {},
+      header: row.production_details?.production_headers || {}
+    }));
+
+    return { success: true, data: formattedData };
+  } catch (err: any) {
+    console.error("Server action error in searchQCHistory:", err);
+    return { success: false, error: err.message };
+  }
+}
+

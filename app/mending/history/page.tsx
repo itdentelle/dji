@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { searchQCHistory } from "@/actions/qc-actions";
-import { Search, Loader2, RefreshCw, Calendar, Package, Filter, X, Eye, Clock, User, Hash, Box, ClipboardList, AlertCircle, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
-import QCDetailModal from "@/components/QCDetailModal";
+import { searchMendingHistory } from "@/actions/mending-actions";
+import { Search, Loader2, RefreshCw, Calendar, Package, Filter, X, Eye, Clock, User, Hash, Box, ClipboardList, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import MendingDetailModal from "@/components/MendingDetailModal";
 
-const QC_OPERATORS = [
-  { id: "Nurdin", name: "Nurdin" },
-  { id: "Hendra", name: "Hendra" },
-  { id: "Taufik", name: "Taufik" }
+const MENDING_OPERATORS = [
+  { id: "Dede Oting", name: "Dede Oting" },
+  { id: "Andri", name: "Andri" },
+  { id: "Yudi", name: "Yudi" }
 ];
 
-export default function QCHistoryPage() {
+export default function MendingHistoryPage() {
   const [filters, setFilters] = useState<{
     date: string;
     nomor_mc: string;
@@ -42,7 +42,7 @@ export default function QCHistoryPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const today = new Date().toISOString().split("T")[0];
-      const cachedFilters = sessionStorage.getItem("dji_qc_history_filters");
+      const cachedFilters = sessionStorage.getItem("dji_mending_history_filters");
 
       if (cachedFilters) {
         try {
@@ -54,8 +54,8 @@ export default function QCHistoryPage() {
         setFilters(prev => ({ ...prev, date: today }));
       }
 
-      const cachedData = sessionStorage.getItem("dji_qc_history_data");
-      const cachedSearched = sessionStorage.getItem("dji_qc_history_searched");
+      const cachedData = sessionStorage.getItem("dji_mending_history_data");
+      const cachedSearched = sessionStorage.getItem("dji_mending_history_searched");
       if (cachedData && cachedSearched === "true") {
         try {
           setData(JSON.parse(cachedData));
@@ -73,14 +73,14 @@ export default function QCHistoryPage() {
     setErrorMsg(null);
 
     try {
-      sessionStorage.setItem("dji_qc_history_filters", JSON.stringify(filters));
+      sessionStorage.setItem("dji_mending_history_filters", JSON.stringify(filters));
 
-      const res = await searchQCHistory(filters);
+      const res = await searchMendingHistory(filters);
       if (res.success && res.data) {
         setData(res.data);
         setHasSearched(true);
-        sessionStorage.setItem("dji_qc_history_data", JSON.stringify(res.data));
-        sessionStorage.setItem("dji_qc_history_searched", "true");
+        sessionStorage.setItem("dji_mending_history_data", JSON.stringify(res.data));
+        sessionStorage.setItem("dji_mending_history_searched", "true");
       } else {
         setErrorMsg(res.error || "Gagal mengambil data riwayat.");
       }
@@ -101,10 +101,10 @@ export default function QCHistoryPage() {
       <div className="mb-6 flex flex-col gap-2">
         <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
           <RefreshCw className="w-6 h-6 text-[#0070bc]" />
-          Riwayat Inspeksi QC
+          Riwayat Mending
         </h1>
         <p className="text-sm text-slate-500">
-          Cari dan tinjau riwayat inspeksi QC per panel yang telah dikirim ke sistem.
+          Cari dan tinjau riwayat mending per panel yang telah dikirim ke sistem.
         </p>
       </div>
 
@@ -122,7 +122,7 @@ export default function QCHistoryPage() {
             <div className="flex flex-col gap-1 w-full sm:w-1/3">
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" />
-                Tanggal Inspeksi
+                Tanggal Mending
               </label>
               <input
                 type="date"
@@ -184,10 +184,10 @@ export default function QCHistoryPage() {
               <div className="flex flex-col sm:flex-row gap-6">
                 <div className="w-full">
                   <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mb-3">
-                    <User className="w-3.5 h-3.5" /> Petugas QC
+                    <User className="w-3.5 h-3.5" /> Petugas Mending
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {QC_OPERATORS.map(op => (
+                    {MENDING_OPERATORS.map(op => (
                       <label key={op.id} className="flex items-center gap-2 cursor-pointer group">
                         <div className="relative flex items-center justify-center">
                           <input 
@@ -275,9 +275,9 @@ export default function QCHistoryPage() {
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
                       <th className="px-6 py-4">Tanggal & Waktu</th>
                       <th className="px-6 py-4">Mesin & Desain</th>
-                      <th className="px-6 py-4">Petugas QC</th>
+                      <th className="px-6 py-4">Petugas Mending</th>
                       <th className="px-6 py-4">Panel / PCS</th>
-                      <th className="px-6 py-4 text-center">Hasil Inspeksi</th>
+                      <th className="px-6 py-4 text-center">Hasil Mending</th>
                       <th className="px-6 py-4 text-center">Aksi</th>
                     </tr>
                   </thead>
@@ -287,33 +287,30 @@ export default function QCHistoryPage() {
                       const detail = d.detail || {};
                       
                       let gradeColor = "bg-slate-100 text-slate-700";
-                      let GradeIcon = null;
                       let gradeText = "-";
-                      if (detail.final_inspection_id === 1) {
-                        gradeColor = "bg-emerald-100 text-emerald-700 border border-emerald-200";
-                        GradeIcon = <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />;
-                        gradeText = "OK";
-                      } else if (detail.final_inspection_id === 2 || detail.final_inspection_id === 3) {
-                        gradeColor = "bg-rose-100 text-rose-700 border border-rose-200";
-                        GradeIcon = <XCircle className="w-3.5 h-3.5 mr-1.5" />;
-                        gradeText = "Silang";
+                      if (detail.status_mending === 'A') {
+                        gradeColor = "bg-emerald-100 text-emerald-700";
+                        gradeText = "Grade A";
+                      } else if (detail.status_mending === 'B') {
+                        gradeColor = "bg-amber-100 text-amber-700";
+                        gradeText = "Grade B";
+                      } else if (detail.status_mending === 'BS') {
+                        gradeColor = "bg-rose-100 text-rose-700";
+                        gradeText = "Grade BS";
                       }
 
                       return (
                         <tr key={d.id || idx} className="hover:bg-slate-50/80 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="text-sm font-bold text-slate-800">{d.tanggal_inspeksi}</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">{d.start_inspect} - {d.finish_inspect}</div>
+                            <div className="text-sm font-bold text-slate-800">{d.tanggal_mending}</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">{d.start_mending} - {d.finish_mending}</div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-xs font-bold text-slate-800">{header.nomor_mc || "-"}</div>
                             <div className="text-[10px] text-slate-500 mt-0.5">{header.design_id || "-"}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-xs font-bold text-slate-700">{d.petugas_inspeksi}</div>
-                            {d.petugas_inspeksi_2 && (
-                              <div className="text-[10px] text-slate-400 mt-0.5">& {d.petugas_inspeksi_2}</div>
-                            )}
+                            <div className="text-xs font-bold text-slate-700">{d.petugas_mending}</div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="inline-flex items-center justify-center h-6 px-2 rounded-md bg-slate-100 text-slate-700 font-bold text-xs">
@@ -324,8 +321,7 @@ export default function QCHistoryPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <div className={`inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider shadow-sm ${gradeColor}`}>
-                              {GradeIcon}
+                            <div className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${gradeColor}`}>
                               {gradeText}
                             </div>
                           </td>
@@ -333,7 +329,7 @@ export default function QCHistoryPage() {
                             <button
                               onClick={() => handleOpenDetail(d)}
                               className="p-2 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm group mx-auto"
-                              title="Lihat Detail Inspeksi"
+                              title="Lihat Detail Mending"
                             >
                               <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
                             </button>
@@ -352,7 +348,7 @@ export default function QCHistoryPage() {
               </div>
               <h3 className="text-lg font-bold text-slate-700 mb-1">Data Tidak Ditemukan</h3>
               <p className="text-slate-500 text-sm max-w-sm">
-                Tidak ada data riwayat QC yang sesuai dengan kriteria filter Anda. Silakan coba sesuaikan filter pencarian.
+                Tidak ada data riwayat mending yang sesuai dengan kriteria filter Anda. Silakan coba sesuaikan filter pencarian.
               </p>
             </div>
           )}
@@ -360,10 +356,10 @@ export default function QCHistoryPage() {
       )}
 
       {/* Detail Modal */}
-      <QCDetailModal 
+      <MendingDetailModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        qcData={selectedData}
+        mendingData={selectedData}
       />
     </div>
   );

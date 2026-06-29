@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { productionFormSchema, ProductionFormInput } from "@/lib/schemas";
 import { crypto } from "next/dist/compiled/@edge-runtime/primitives/crypto";
 import { revalidatePath } from "next/cache";
@@ -45,7 +45,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     // Format tanggal ke YYYY-MM-DD
     const tgl = tanggalJam.split(" ")[0];
 
-    const operatorIdNum = validated.operatorId && validated.operatorId.length > 0 ? parseInt(validated.operatorId[0]) : null;
+    const operatorIdNum = validated.operatorId ? parseInt(validated.operatorId) : null;
     const groupIdNum = validated.groupId ? parseInt(validated.groupId) : null;
     const designIdNum = validated.designId ? parseInt(validated.designId) : null;
 
@@ -69,7 +69,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
       tgl,
       tanggal_jam: tanggalJam,
       operator_id: operatorIdNum,
-      group_id: validated.groupId,
+      group_id: parseInt(validated.groupId),
       design_id: validated.designId,
       nomor_mc: validated.nomorMc || null,
       status_matching: validated.statusMatching,
@@ -90,7 +90,8 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
       pinggiran: validated.pinggiran || null,
       foto_before: photoUrls.before,
       foto_after: photoUrls.after,
-      total_downtime_menit: totalDowntimeNum,
+      total_downtime_detik: totalDowntimeNum,
+      idempotency_key: validated.idempotencyKey || null,
     };
 
     // 2. Siapkan Data Details
@@ -114,7 +115,6 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         detail_masalah: pcsItem.detailMasalah || null,
         keterangan_cacat: pcsItem.keteranganCacat || null,
         meter_kain: pcsItem.meterKain || null,
-        roll_no: pcsItem.rollNo || null,
       };
     });
 
@@ -124,12 +124,12 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
 
     if (supabaseUrl && supabaseAnonKey && supabaseAnonKey !== "your_supabase_anon_key_here") {
       try {
-        const supabase = await createAdminClient();
+        const supabase = await createClient();
 
         // Cek duplikasi potongan_ke dan panel_no
         if (potonganKeNum && validated.panelNo) {
           const { data: existingPanel } = await supabase
-            .from("production_headers" as any)
+            .from("production_headers")
             .select("id")
             .eq("potongan_ke", potonganKeNum)
             .eq("panel_no", validated.panelNo)
@@ -141,15 +141,21 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         }
 
         // A. Insert ke Tabel Header
-        const { error: headerError } = await supabase
-          .from("production_headers" as any)
-          .insert(headerData as any);
+        const { error: insertHeaderError } = await supabase
+          .from("production_headers")
+          .insert(headerData);
 
-        if (headerError) throw new Error(`Gagal menyimpan header: ${headerError.message}`);
+        if (insertHeaderError) {
+          if (insertHeaderError.code === "23505") {
+            console.warn("Idempotency key duplicate detected. Returning success.");
+            return { success: true };
+          }
+          throw new Error("Gagal menyimpan header: " + insertHeaderError.message);
+        }
 
         // B. Insert ke Tabel Detail
         const { error: detailError } = await supabase
-          .from("production_details" as any)
+          .from("production_details")
           .insert(detailData as any);
 
         if (detailError) throw new Error(`Gagal menyimpan detail PCS: ${detailError.message}`);
@@ -158,14 +164,14 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         if (validated.tanggalPotong && validated.nomorMc && potonganKeNum) {
           // Ambil ID laporan sebelumnya yang terkait
           const { data: previousHeaders } = await supabase
-            .from("production_headers" as any)
+            .from("production_headers")
             .select("*, production_details(*)")
             .eq("nomor_mc", validated.nomorMc)
             .eq("potongan_ke", potonganKeNum)
             .neq("id", headerId);
 
           await supabase
-            .from("production_headers" as any)
+            .from("production_headers")
             .update({ tanggal_potong: validated.tanggalPotong })
             .eq("nomor_mc", validated.nomorMc)
             .eq("potongan_ke", potonganKeNum);
@@ -211,6 +217,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             "Operator": validated.pic || validated.operatorId?.[0] || "",
             "Grup": validated.grupName || validated.groupId || "",
             "Design": validated.designName || validated.designId || "",
+            "Status Matching": validated.statusMatching || "",
             "Panel": validated.panelNo || "",
             "Potongan Ke": validated.potonganKe || "",
             "No Order": validated.noOrderBarang || "",
@@ -233,6 +240,11 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
+          }).then(async (res) => {
+            if (res.ok) {
+              const client = await createClient();
+              await client.from("production_headers").update({ is_synced_to_sheet: true }).eq("id", headerId);
+            }
           }).catch(err => console.error("Gagal sinkron Google Sheets:", err));
         }
 
@@ -307,7 +319,7 @@ export async function uploadProductionPhoto(
   fileName: string
 ): Promise<{ success: boolean; publicUrl?: string; error?: string }> {
   try {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
 
     // Hapus base64 header (contoh: data:image/jpeg;base64,)
     const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, "");
@@ -346,9 +358,9 @@ export async function getLastPanelNoByPotongan(potonganKe: number): Promise<{ su
       return { success: true, nextPanelNo: 1 };
     }
 
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     const { data, error } = await supabase
-      .from("production_headers" as any)
+      .from("production_headers")
       .select("panel_no")
       .eq("potongan_ke", potonganKe)
       .not("panel_no", "is", null)
@@ -398,10 +410,10 @@ export async function searchEmployeeHistory(filters: {
       return { success: true, data: [] };
     }
 
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     let query = supabase
-      .from("production_headers" as any)
-      .select("id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, panel_no, nomor_mc, total_downtime_menit, operators(nama_operator), groups(nama_grup), design_id, production_details(kategori_masalah)")
+      .from("production_headers")
+      .select("id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, panel_no, nomor_mc, total_downtime_detik, operators(nama_operator), groups(nama_grup), design_id, production_details(kategori_masalah)")
       .order("tanggal_jam", { ascending: false })
       .limit(100);
 
@@ -455,11 +467,11 @@ export async function getEmployeeHistoryDetail(headerId: string): Promise<{ succ
       return { success: false, error: "Database not configured." };
     }
 
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
     // Fetch Header with relations
     const { data: header, error: headerError } = await supabase
-      .from("production_headers" as any)
+      .from("production_headers")
       .select("*, operators(nama_operator), groups(nama_grup)")
       .eq("id", headerId)
       .single();
@@ -468,7 +480,7 @@ export async function getEmployeeHistoryDetail(headerId: string): Promise<{ succ
 
     // Fetch Details
     const { data: details, error: detailsError } = await supabase
-      .from("production_details" as any)
+      .from("production_details")
       .select("*")
       .eq("header_id", headerId)
       .order("pcs_index", { ascending: true });
@@ -491,7 +503,7 @@ export async function getEmployeeHistoryDetail(headerId: string): Promise<{ succ
 export async function updateProductionReport(headerId: string, data: any): Promise<{ success: boolean; error?: string }> {
   try {
     console.log("UPDATE PRODUCTION REPORT DATA:", JSON.stringify(data, null, 2));
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
     
     // Parse values
     const rpmNum = data.rpm ? parseInt(data.rpm) : null;
@@ -501,7 +513,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
     // Cek duplikasi potongan_ke dan panel_no
     if (potonganKeNum && data.panelNo) {
       const { data: existingPanel } = await supabase
-        .from("production_headers" as any)
+        .from("production_headers")
         .select("id")
         .eq("potongan_ke", potonganKeNum)
         .eq("panel_no", data.panelNo)
@@ -515,7 +527,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
 
     // 1. Update Header
     const { error: headerError } = await supabase
-      .from("production_headers" as any)
+      .from("production_headers")
       .update({
         operator_id: data.operatorId && data.operatorId.length > 0 ? parseInt(data.operatorId[0]) : null,
         group_id: data.groupId,
@@ -536,7 +548,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
         heavy: data.heavy || null,
         shadow: data.shadow || null,
         pinggiran: data.pinggiran || null,
-        total_downtime_menit: totalDowntimeNum,
+        total_downtime_detik: totalDowntimeNum,
       })
       .eq("id", headerId);
 
@@ -544,7 +556,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
 
     // 2. Delete old details
     const { error: delError } = await supabase
-      .from("production_details" as any)
+      .from("production_details")
       .delete()
       .eq("header_id", headerId);
 
@@ -576,7 +588,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
       });
 
       const { error: insertError } = await supabase
-        .from("production_details" as any)
+        .from("production_details")
         .insert(detailData);
 
       if (insertError) throw new Error(insertError.message);
@@ -585,14 +597,14 @@ export async function updateProductionReport(headerId: string, data: any): Promi
       if (data.tanggalPotong && data.nomorMc && potonganKeNum) {
         // Ambil ID laporan sebelumnya yang terkait
         const { data: previousHeaders } = await supabase
-          .from("production_headers" as any)
+          .from("production_headers")
           .select("*, production_details(*)")
           .eq("nomor_mc", data.nomorMc)
           .eq("potongan_ke", potonganKeNum)
           .neq("id", headerId);
 
         await supabase
-          .from("production_headers" as any)
+          .from("production_headers")
           .update({ tanggal_potong: data.tanggalPotong })
           .eq("nomor_mc", data.nomorMc)
           .eq("potongan_ke", potonganKeNum);
@@ -658,6 +670,11 @@ export async function updateProductionReport(headerId: string, data: any): Promi
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update", id_header: headerId, data: payload })
+        }).then(async (res) => {
+          if (res.ok) {
+            const client = await createClient();
+            await client.from("production_headers").update({ is_synced_to_sheet: true }).eq("id", headerId);
+          }
         }).catch(err => console.error("Gagal sinkron Google Sheets:", err));
       }
     }

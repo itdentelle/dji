@@ -9,6 +9,8 @@ import { createProductionReport, uploadProductionPhoto, getLastPanelNoByPotongan
 import { createClient } from "@/lib/supabase/client";
 import { AlertCircle, RefreshCw, UploadCloud, X, Camera, Database, FileText, Settings2, Trash2, ChevronUp, ChevronDown, CheckCircle2, Save, Plus, Box, ClipboardList, Play, Square, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
+import HeaderSummaryCard from "./HeaderSummaryCard";
+import ProductionHeaderModal from "./ProductionHeaderModal";
 
 // DATA FALLBACK DARI EXCEL
 const FALLBACK_OPERATORS = [
@@ -176,7 +178,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   const [isDbConnected, setIsDbConnected] = useState(false);
 
   // Accordion UI State
-  const [isHeaderOpen, setIsHeaderOpen] = useState(true);
+  const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
 
   // States untuk upload foto
   const [isUploading, setIsUploading] = useState<{ before: boolean; after: boolean }>({ before: false, after: false });
@@ -208,14 +210,14 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     if (!isTimerRunning) return;
     setIsTimerRunning(false);
     
-    // Calculate elapsed minutes (round up to nearest minute)
+    // Calculate elapsed seconds
     const elapsedMs = Date.now() - (timerStartRef || Date.now());
-    const elapsedMins = Math.ceil(elapsedMs / 60000);
+    const elapsedSecs = Math.ceil(elapsedMs / 1000);
     
     const currentTotalStr = watch("totalDowntime");
     const currentTotal = parseInt(currentTotalStr || "0") || 0;
     
-    const newTotal = currentTotal + elapsedMins;
+    const newTotal = currentTotal + elapsedSecs;
     setValue("totalDowntime", String(newTotal), { shouldValidate: true, shouldDirty: true });
     
     setTimerStartRef(null);
@@ -271,7 +273,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   } = useForm<ProductionFormInput>({
     resolver: zodResolver(productionFormSchema),
     defaultValues: {
-      operatorId: ["3"], 
+      operatorId: "3", 
       groupId: "2",
       designId: "1",
       nomorMc: "",
@@ -300,7 +302,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
           kategoriMasalah: [],
           detailMasalah: "",
           keteranganCacat: "",
-          rollNo: "",
         }
       ]
     },
@@ -310,7 +311,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   useEffect(() => {
     if (initialData && isEdit) {
       reset({
-        operatorId: initialData.operator_id ? [String(initialData.operator_id)] : [],
+        operatorId: String(initialData.operator_id || ""),
         groupId: String(initialData.group_id || ""),
         designId: String(initialData.design_id || ""),
         nomorMc: initialData.nomor_mc || "",
@@ -328,7 +329,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
         course: initialData.course || "",
         pic: initialData.pic || "",
         panelNo: String(initialData.panel_no || "1"),
-        totalDowntime: String(initialData.total_downtime_menit || ""),
+        totalDowntime: String(initialData.total_downtime_detik || ""),
         pcsData: initialData.details && initialData.details.length > 0 ? initialData.details.map((d: any) => ({
           pcsIndex: String(d.pcs_index || "1"),
           jmlHasilProduksi: String(d.jml_hasil_produksi || "1"),
@@ -336,7 +337,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
           kategoriMasalah: d.kategori_masalah ? d.kategori_masalah.split(', ') : [],
           detailMasalah: d.detail_masalah || "",
           keteranganCacat: d.keterangan_cacat || "",
-          rollNo: d.roll_no || "",
         })) : [
           {
             pcsIndex: "1",
@@ -345,7 +345,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
             kategoriMasalah: [],
             detailMasalah: "",
             keteranganCacat: "",
-            rollNo: "",
           }
         ]
       });
@@ -375,7 +374,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       try {
         const parsed = JSON.parse(savedDraft);
         reset(parsed);
-        setIsHeaderOpen(false);
+        setIsHeaderModalOpen(false);
         return;
       } catch (e) {
         console.error("Gagal load draft dari storage", e);
@@ -397,7 +396,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                 kategoriMasalah: [],
                 detailMasalah: "",
                 keteranganCacat: "",
-                rollNo: rollVal,
               }];
               setValue("pcsData", currentPcs);
             }
@@ -405,8 +403,8 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
             setValue(key as keyof ProductionFormInput, parsed[key]);
           }
         });
-        // Jika ada header yang di-load, tutup accordion header agar fokus ke input panel
-        setIsHeaderOpen(false);
+        // Jika ada header yang di-load, tutup modal header
+        setIsHeaderModalOpen(false);
       } catch (e) {
         console.error("Gagal load header dari storage", e);
       }
@@ -444,19 +442,19 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    // Filter operatorId to only include those in activeOperators
-    const validOperatorIds = data.operatorId.filter(id => activeOperators.some((op: any) => op.id.toString() === id));
-    if (validOperatorIds.length === 0) {
-      setErrorMsg("Silakan pilih minimal 1 operator yang sesuai dengan shift.");
+    // Generate idempotency key
+    data.idempotencyKey = crypto.randomUUID();
+
+    // Check if operatorId is in activeOperators
+    const isValidOperator = activeOperators.some((op: any) => op.id.toString() === data.operatorId);
+    if (!isValidOperator) {
+      setErrorMsg("Silakan pilih operator yang sesuai dengan shift.");
       setIsSubmitting(false);
       return;
     }
     
-    data.operatorId = validOperatorIds;
-
-    // Gabungkan nama-nama operator yang dipilih dan simpan ke PIC
-    const operatorNames = data.operatorId.map(id => getOperatorName(id)).filter(Boolean).join(", ");
-    data.pic = operatorNames;
+    // Ambil nama operator dan simpan ke PIC
+    data.pic = getOperatorName(data.operatorId) || "";
     data.grupName = getGroupName(data.groupId);
     data.designName = getDesignName(data.designId);
 
@@ -473,8 +471,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
         nextPanelNo = currentPanelNo + " 1";
       }
     }
-
-    const lastRollNo = data.pcsData && data.pcsData.length > 0 ? data.pcsData[0].rollNo : "";
 
     const headerDataToSave = {
       operatorId: data.operatorId,
@@ -496,7 +492,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       pic: data.pic,
       potonganKe: data.potonganKe,
       nextPanelNo, // we store the next available panel no
-      lastRollNo: lastRollNo,
     };
     localStorage.setItem('dji_form_header', JSON.stringify(headerDataToSave));
 
@@ -567,7 +562,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
         }]
       });
       setIsLastPanel(false);
-      setIsHeaderOpen(true);
+      setIsHeaderModalOpen(true);
     }
   };
 
@@ -591,7 +586,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     const newPcsData = currentPcsData.map((pcs, index) => ({
       pcsIndex: (index + 1).toString(),
       jmlHasilProduksi: "1",
-      rollNo: pcs.rollNo || "",
       indikatorStop: false,
       kategoriMasalah: [],
       detailMasalah: "",
@@ -604,7 +598,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       pcsData: newPcsData.length > 0 ? newPcsData : [{
         pcsIndex: "1",
         jmlHasilProduksi: "1",
-        rollNo: "",
         indikatorStop: false,
         kategoriMasalah: [],
         detailMasalah: "",
@@ -717,127 +710,28 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-5 sm:p-6">
           
-          <div className="flex justify-between items-center mb-5">
-            <h4 className="text-sm font-bold text-slate-700">Identitas Operator & Desain</h4>
-            <button type="button" onClick={handleClearHeader} className="flex items-center gap-1.5 text-[10px] font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors">
-              <Trash2 className="w-3 h-3" />
-              Reset Header
-            </button>
-          </div>
+          <HeaderSummaryCard
+            operatorName={activeOperators.find(op => op.id.toString() === watch("operatorId"))?.name || ""}
+            shiftName={activeShiftName}
+            nomorMc={watch("nomorMc") || ""}
+            design={watch("designId") || ""}
+            statusMatching={watch("statusMatching") || ""}
+            onEdit={() => setIsHeaderModalOpen(true)}
+          />
 
-          {/* Bagian Teratas: Operator & Grup */}
-          <div className="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase">Nama Operator (Shift {activeShiftName})</label>
-              <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white custom-scrollbar">
-                <div className="grid grid-cols-1 gap-1 px-1">
-                  {activeOperators.length > 0 ? (
-                    activeOperators.map((op: any) => (
-                      <label key={op.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 p-1.5 rounded transition-colors">
-                        <input type="checkbox" value={op.id.toString()} {...register("operatorId")} className="w-3.5 h-3.5 text-sky-500 border-slate-300 rounded focus:ring-sky-400" />
-                        <span className="truncate">{op.name}</span>
-                      </label>
-                    ))
-                  ) : (
-                    <div className="col-span-full text-xs text-slate-400 italic py-2 text-center">Tidak ada operator di shift ini</div>
-                  )}
-                </div>
-              </div>
-              {errors.operatorId && <span className="text-red-500 text-[10px] font-bold">{errors.operatorId.message}</span>}
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase">Grup Shift</label>
-              <select {...register("groupId")} className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-sm focus:border-sky-400 outline-none">
-                {groups.map(g => <option key={g.id} value={g.id.toString()}>Grup {g.name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Form Utama sesuai layout referensi gambar */}
-          <div className="grid grid-cols-2 gap-x-6 sm:gap-x-12 gap-y-4 border-t border-slate-100 pt-5">
-            
-            {/* Kolom Kiri */}
-            <div className="space-y-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Design</label>
-                <input type="text" {...register("designId")} placeholder="Ketik nama design..." className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-sky-600 uppercase">Status Matching *</label>
-                <select {...register("statusMatching")} className="h-10 px-3 rounded-lg bg-sky-50 border border-sky-200 text-sm focus:border-sky-400 outline-none font-semibold">
-                  <option value="">-- Wajib Pilih --</option>
-                  <option value="OK">OK</option>
-                  <option value="Tidak OK">Tidak OK</option>
-                </select>
-                {errors.statusMatching && <span className="text-red-500 text-[10px] font-bold">{errors.statusMatching.message as string}</span>}
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Nomo Mc</label>
-                <select {...register("nomorMc")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none">
-                  <option value="">-- Pilih --</option>
-                  {["R1", "R2", "R3B", "R1C", "R2C", "R11", "R12", "R16", "T1C", "T2A", "Warping D6", "Winding"].map(mc => (
-                    <option key={mc} value={mc}>{mc}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Tanggal Produksi</label>
-                <input type="date" {...register("tanggalProduksi")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Pick</label>
-                <input type="text" {...register("pick")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Course</label>
-                <input type="text" {...register("course")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Rpm</label>
-                <input type="text" {...register("rpm")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">No. Order Barang</label>
-                <input type="text" {...register("noOrderBarang")} placeholder="EXT/..." className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-            </div>
-
-            {/* Kolom Kanan */}
-            <div className="space-y-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-sky-600 uppercase">Potongan Ke</label>
-                <input type="text" {...register("potonganKe")} className="h-10 px-3 rounded-lg bg-sky-50/50 border border-sky-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none" placeholder="Misal: 288 (Wajib diisi)" />
-                {errors.potonganKe && <span className="text-red-500 text-[10px] font-bold">{errors.potonganKe.message}</span>}
-              </div>
+          <ProductionHeaderModal
+            isOpen={isHeaderModalOpen}
+            onClose={() => setIsHeaderModalOpen(false)}
+            register={register}
+            errors={errors}
+            watch={watch}
+            groups={groups}
+            operators={activeOperators}
+            activeShiftName={activeShiftName}
+            onClearHeader={handleClearHeader}
+          />
 
 
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Jenis benang dasar</label>
-                <input type="text" {...register("jenisBenangDasar")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Liner</label>
-                <input type="text" {...register("liner")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Heavy</label>
-                <input type="text" {...register("heavy")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Shadow</label>
-                <input type="text" {...register("shadow")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">Pinggiran</label>
-                <input type="text" {...register("pinggiran")} className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase">No. Customer</label>
-                <input type="text" {...register("noCustomer")} placeholder="Customer..." className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:border-sky-400 outline-none" />
-              </div>
-            </div>
-
-          </div>
 
           {/* Data Panel Umum */}
           <div className="mt-8 p-6 bg-sky-50 border-2 border-sky-300 rounded-2xl relative shadow-md">
@@ -889,11 +783,6 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                     <div className="grid grid-cols-1 sm:grid-cols-1 gap-5 mt-4">
                       {/* Hidden Jml Hasil Produksi */}
                       <input type="hidden" {...register(`pcsData.${index}.jmlHasilProduksi` as const)} />
-                      
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-semibold text-slate-500 uppercase">Roll no</label>
-                        <input type="text" {...register(`pcsData.${index}.rollNo` as const)} className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm focus:border-sky-400 outline-none transition-all shadow-sm" placeholder="Masukkan Roll no" />
-                      </div>
                     </div>
 
                     <div className={`mt-4 border rounded-xl overflow-hidden transition-all duration-300 ${watchIndikator ? 'border-red-200 bg-red-50/20' : 'border-slate-200 bg-slate-50/50'}`}>
@@ -965,7 +854,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                 Total Estimasi Waktu Mesin Berhenti (Downtime)
               </label>
               <p className="text-[10px] text-orange-600">
-                Isi total keseluruhan waktu dalam menit jika mesin sempat berhenti selama produksi panel ini.
+                Isi total keseluruhan waktu dalam detik jika mesin sempat berhenti selama produksi panel ini.
               </p>
               <div className="relative flex items-center gap-3">
                 <div className="relative flex-1">
@@ -976,7 +865,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                     placeholder="Misal: 45" 
                     disabled={isTimerRunning}
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-600 text-xs font-bold">Menit</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-600 text-xs font-bold">Detik</span>
                 </div>
                 
                 {/* Timer Controls */}

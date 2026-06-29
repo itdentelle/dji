@@ -1,26 +1,25 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Loader2, ClipboardCheck, AlertTriangle, CheckCircle, Package, Eye, X } from "lucide-react";
-import QCInspectionModal from "@/components/forms/QCInspectionModal";
+import { Search, Loader2, ClipboardCheck, AlertTriangle, CheckCircle, Eye, Scissors } from "lucide-react";
+import MendingModal from "@/components/forms/MendingModal";
 import ProductionDetailModal from "@/components/ProductionDetailModal";
-import { getPendingQCDetailsByBatch, getAvailableQCFilters } from "@/actions/qc-actions";
+import { getPendingMendingDetailsByBatch, getAvailableMendingFilters } from "@/actions/mending-actions";
 import { getEmployeeHistoryDetail } from "@/actions/employee-actions";
 
-export default function QCPage() {
+export default function MendingPage() {
   const [searchMesin, setSearchMesin] = useState("");
   const [searchDesain, setSearchDesain] = useState("");
   const [searchPotongan, setSearchPotongan] = useState("");
-  const [searchTanggal, setSearchTanggal] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [availableFilters, setAvailableFilters] = useState<{ nomor_mc: string; design_id: string; potongan_ke: string; tgl: string }[]>([]);
+  const [availableFilters, setAvailableFilters] = useState<{ nomor_mc: string; design_id: string; potongan_ke: string }[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(true);
 
   useEffect(() => {
     const loadFilters = async () => {
-      const res = await getAvailableQCFilters();
+      const res = await getAvailableMendingFilters();
       if (res.success && res.data) {
         setAvailableFilters(res.data);
       }
@@ -36,16 +35,13 @@ export default function QCPage() {
   const availablePotongans = searchDesain 
     ? Array.from(new Set(availableFilters.filter(f => f.nomor_mc === searchMesin && f.design_id === searchDesain).map(f => f.potongan_ke))) 
     : [];
-  const availableTanggals = searchPotongan 
-    ? Array.from(new Set(availableFilters.filter(f => f.nomor_mc === searchMesin && f.design_id === searchDesain && String(f.potongan_ke) === searchPotongan).map(f => f.tgl))) 
-    : [];
 
   // All pending details for the selected Design & Potongan
   const [allDetails, setAllDetails] = useState<any[]>([]);
   const [selectedPcsIndex, setSelectedPcsIndex] = useState<string>("");
   
-  // Map of detailId -> finalInspectionId (1, 2, or 3)
-  const [selections, setSelections] = useState<Record<string, number>>({});
+  // Map of detailId -> grade string (A, B, BS)
+  const [selections, setSelections] = useState<Record<string, string>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Detail Modal State
@@ -66,10 +62,10 @@ export default function QCPage() {
     setSelectedPcsIndex("");
     setSelections({});
 
-    const res = await getPendingQCDetailsByBatch(searchMesin, searchDesain, searchPotongan, searchTanggal);
+    const res = await getPendingMendingDetailsByBatch(searchMesin, searchDesain, searchPotongan);
     if (res.success && res.data) {
       if (res.data.length === 0) {
-        setErrorMsg("Tidak ada antrean QC untuk Desain & Potongan tersebut.");
+        setErrorMsg("Tidak ada antrean Mending untuk Desain & Potongan tersebut.");
       } else {
         setAllDetails(res.data);
       }
@@ -85,35 +81,22 @@ export default function QCPage() {
   // Filter details by selected PCS
   const detailsToDisplay = allDetails.filter(d => String(d.pcs_index) === selectedPcsIndex);
 
-  const handleSelectGrade = (detailId: string, grade: number) => {
+  const handleSelectGrade = (detailId: string, grade: string) => {
     setSelections(prev => ({ ...prev, [detailId]: grade }));
   };
 
-  // Auto-select Grade A if there are no problems
+  // Auto-assign Grade A for Ceklis items when PCS changes
   useEffect(() => {
-    if (detailsToDisplay.length > 0) {
-      setSelections(prev => {
-        const newSelections = { ...prev };
-        let hasChanges = false;
-        
-        detailsToDisplay.forEach(d => {
-          const hasProblem = !!d.kategori_masalah || !!d.detail_masalah || !!d.keterangan_cacat;
-          // If no problem and not already selected, auto-select Ceklis (1)
-          if (!hasProblem && !newSelections[d.id]) {
-            newSelections[d.id] = 1; 
-            hasChanges = true;
-          }
-          // If has problem and not already selected, auto-select Silang (3)
-          if (hasProblem && !newSelections[d.id]) {
-            newSelections[d.id] = 3;
-            hasChanges = true;
-          }
-        });
-        
-        return hasChanges ? newSelections : prev;
-      });
+    if (!selectedPcsIndex) return;
+    const itemsForPcs = allDetails.filter(d => String(d.pcs_index) === selectedPcsIndex);
+    const autoSelections: Record<string, string> = {};
+    for (const d of itemsForPcs) {
+      if (d.final_inspection_id === 1) {
+        autoSelections[d.id] = 'A'; // Ceklis → auto Grade A
+      }
     }
-  }, [detailsToDisplay]);
+    setSelections(autoSelections);
+  }, [selectedPcsIndex, allDetails]);
 
   const handleOpenDetail = async (headerId: string) => {
     setDetailModalOpen(true);
@@ -150,11 +133,11 @@ export default function QCPage() {
     <div className="w-full max-w-6xl mx-auto pb-10">
       <div className="mb-6 flex flex-col gap-2">
         <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
-          <ClipboardCheck className="w-6 h-6 text-[#0070bc]" />
-          Inspeksi QC (Batch)
+          <Scissors className="w-6 h-6 text-rose-500" />
+          Proses Mending
         </h1>
         <p className="text-sm text-slate-500">
-          Pilih Desain & Potongan yang tersedia, lalu pilih Nomor PCS untuk menilai Panel-Panel sekaligus.
+          Pilih Desain & Potongan yang tersedia, lalu berikan Grade (A, B, BS) untuk panel yang bermasalah.
         </p>
       </div>
 
@@ -168,7 +151,7 @@ export default function QCPage() {
       {/* Filter Card */}
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
         <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4 items-end">
-          <div className="flex flex-col gap-1 w-full sm:flex-1">
+          <div className="flex flex-col gap-1 w-full sm:w-1/4">
             <label className="text-xs font-bold text-slate-500 uppercase">Nomor Mesin</label>
             <select
               value={searchMesin}
@@ -176,7 +159,6 @@ export default function QCPage() {
                 setSearchMesin(e.target.value);
                 setSearchDesain("");
                 setSearchPotongan("");
-                setSearchTanggal("");
               }}
               disabled={isLoadingFilters}
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full"
@@ -187,14 +169,13 @@ export default function QCPage() {
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1 w-full sm:flex-1">
+          <div className="flex flex-col gap-1 w-full sm:w-1/4">
             <label className="text-xs font-bold text-slate-500 uppercase">Desain ID</label>
             <select
               value={searchDesain}
               onChange={(e) => {
                 setSearchDesain(e.target.value);
-                setSearchPotongan("");
-                setSearchTanggal("");
+                setSearchPotongan(""); // reset potongan when design changes
               }}
               disabled={!searchMesin}
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full"
@@ -205,34 +186,17 @@ export default function QCPage() {
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1 w-full sm:flex-1">
+          <div className="flex flex-col gap-1 w-full sm:w-1/4">
             <label className="text-xs font-bold text-slate-500 uppercase">Potongan Ke</label>
             <select
               value={searchPotongan}
-              onChange={(e) => {
-                setSearchPotongan(e.target.value);
-                setSearchTanggal("");
-              }}
+              onChange={(e) => setSearchPotongan(e.target.value)}
               disabled={!searchDesain}
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full"
             >
               <option value="">-- Pilih Potongan --</option>
               {availablePotongans.map(p => (
                 <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1 w-full sm:flex-1">
-            <label className="text-xs font-bold text-slate-500 uppercase">Tanggal</label>
-            <select
-              value={searchTanggal}
-              onChange={(e) => setSearchTanggal(e.target.value)}
-              disabled={!searchPotongan}
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full"
-            >
-              <option value="">-- Semua Tanggal --</option>
-              {availableTanggals.map(t => (
-                <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </div>
@@ -253,7 +217,6 @@ export default function QCPage() {
               value={selectedPcsIndex}
               onChange={(e) => {
                 setSelectedPcsIndex(e.target.value);
-                setSelections({});
               }}
               className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm font-semibold focus:border-sky-500 outline-none w-full cursor-pointer text-slate-700"
             >
@@ -285,14 +248,15 @@ export default function QCPage() {
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
                       <th className="px-6 py-4">Nomor Panel/Roll</th>
+                      <th className="px-6 py-4">Hasil Inspeksi</th>
                       <th className="px-6 py-4">Status / Masalah</th>
                       <th className="px-6 py-4 text-center">Detail</th>
-                      <th className="px-6 py-4 text-center">Hasil Inspeksi (Ceklis/Silang)</th>
+                      <th className="px-6 py-4 text-center">Hasil Mending</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                     {detailsToDisplay.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                      <tr key={item.id} className={`hover:bg-slate-50/50 transition-colors ${item.final_inspection_id === 1 ? 'bg-emerald-50/30' : ''}`}>
                         <td className="px-6 py-4">
                           <div className="inline-flex items-center justify-center min-w-[2rem] h-8 px-3 rounded-lg bg-slate-100 text-slate-700 font-bold">
                             {item.production_headers?.panel_no === "METERAN" ? `Mesin ${item.production_headers?.nomor_mc}` : `Panel ${item.production_headers?.panel_no}`}
@@ -300,6 +264,17 @@ export default function QCPage() {
                           <div className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-wider">
                             {item.production_headers?.pic || item.production_headers?.operators?.nama_operator || "Anonim"}
                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {item.final_inspection_id === 1 ? (
+                            <div className="inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                              ✓ Ceklis
+                            </div>
+                          ) : (
+                            <div className="inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700">
+                              ✕ Silang
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <div className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
@@ -325,18 +300,22 @@ export default function QCPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
                             <button
-                              onClick={() => handleSelectGrade(item.id, 1)}
-                              className={`p-2 flex items-center justify-center rounded-xl transition-all border-2 ${selections[item.id] === 1 ? 'border-emerald-500 bg-emerald-50 text-emerald-700 scale-105' : 'border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500'}`}
-                              title="Ceklis"
+                              onClick={() => handleSelectGrade(item.id, 'A')}
+                              className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === 'A' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 scale-105' : 'border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500'}`}
                             >
-                              <CheckCircle className="w-5 h-5"/>
+                              Grade A
                             </button>
                             <button
-                              onClick={() => handleSelectGrade(item.id, 3)}
-                              className={`p-2 flex items-center justify-center rounded-xl transition-all border-2 ${selections[item.id] === 3 ? 'border-rose-500 bg-rose-50 text-rose-700 scale-105' : 'border-slate-200 text-slate-400 hover:border-rose-300 hover:text-rose-500'}`}
-                              title="Silang"
+                              onClick={() => handleSelectGrade(item.id, 'B')}
+                              className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === 'B' ? 'border-amber-500 bg-amber-50 text-amber-700 scale-105' : 'border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-500'}`}
                             >
-                              <X className="w-5 h-5"/>
+                              Grade B
+                            </button>
+                            <button
+                              onClick={() => handleSelectGrade(item.id, 'BS')}
+                              className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === 'BS' ? 'border-rose-500 bg-rose-50 text-rose-700 scale-105' : 'border-slate-200 text-slate-400 hover:border-rose-300 hover:text-rose-500'}`}
+                            >
+                              Grade BS
                             </button>
                           </div>
                         </td>
@@ -365,15 +344,16 @@ export default function QCPage() {
       )}
 
       {isModalOpen && (
-        <QCInspectionModal
+        <MendingModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           headerData={dummyHeaderData}
           selections={selections}
+          detailData={detailsToDisplay}
           onSuccess={async () => {
             setIsModalOpen(false);
-            // Refresh logic: refetch details, reset selected pcs
-            const res = await getPendingQCDetailsByBatch(searchMesin, searchDesain, searchPotongan);
+            // Refresh logic
+            const res = await getPendingMendingDetailsByBatch(searchMesin, searchDesain, searchPotongan);
             if (res.success && res.data) {
                setAllDetails(res.data);
                if (res.data.filter((d: any) => String(d.pcs_index) === selectedPcsIndex).length === 0) {
@@ -385,7 +365,7 @@ export default function QCPage() {
             setSelections({});
             
             // Also refresh available filters to update dropdowns
-            const filterRes = await getAvailableQCFilters();
+            const filterRes = await getAvailableMendingFilters();
             if (filterRes.success && filterRes.data) {
               setAvailableFilters(filterRes.data);
             }
