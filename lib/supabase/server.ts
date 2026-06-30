@@ -15,9 +15,10 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
+            cookiesToSet.forEach(({ name, value, options }) => {
+              const sessionOptions = { ...options, maxAge: undefined, expires: undefined };
+              cookieStore.set(name, value, sessionOptions);
+            });
           } catch {
             // Metode `setAll` dipanggil dari Server Component.
             // Ini bisa diabaikan jika middleware menangani refresh session token.
@@ -41,9 +42,10 @@ export async function createAdminClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
+            cookiesToSet.forEach(({ name, value, options }) => {
+              const sessionOptions = { ...options, maxAge: undefined, expires: undefined };
+              cookieStore.set(name, value, sessionOptions);
+            });
           } catch {
             // Metode `setAll` dipanggil dari Server Component.
           }

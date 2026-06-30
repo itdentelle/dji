@@ -32,10 +32,12 @@ export async function getAvailableMendingFilters() {
       .from("production_details")
       .select(`
         pcs_index,
+        kategori_masalah,
         production_headers!inner (
           nomor_mc,
           design_id,
-          potongan_ke
+          potongan_ke,
+          panel_no
         )
       `)
       .is("final_inspection_id", null);
@@ -46,7 +48,18 @@ export async function getAvailableMendingFilters() {
     const pendingInspGroups = new Set<string>();
     for (const row of pendingInspection || []) {
       const h = (row as any).production_headers;
-      if (h) pendingInspGroups.add(`${h.nomor_mc}__${h.design_id}__${h.potongan_ke}__${(row as any).pcs_index}`);
+      if (h) {
+        const isMeteran = h.panel_no === "METERAN";
+        if (isMeteran) {
+          // Untuk meteran, hanya dianggap pending inspeksi jika ada cacat/masalah
+          const kat = (row as any).kategori_masalah;
+          if (kat && kat.trim() !== "") {
+            pendingInspGroups.add(`${h.nomor_mc}__${h.design_id}__${h.potongan_ke}__${(row as any).pcs_index}`);
+          }
+        } else {
+          pendingInspGroups.add(`${h.nomor_mc}__${h.design_id}__${h.potongan_ke}__${(row as any).pcs_index}`);
+        }
+      }
     }
 
     // Build mending filters: include batch if it has at least one PCS that is FULLY inspected and pending mending
@@ -78,7 +91,7 @@ export async function getPendingMendingDetailsByBatch(mesin: string, designId: s
     
     const { data: headers, error: headerError } = await supabase
       .from("production_headers")
-      .select("id, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, operators(nama_operator)")
+      .select("id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, operators(nama_operator)")
       .eq("nomor_mc", mesin)
       .eq("design_id", designId)
       .eq("potongan_ke", parseInt(potonganKe));
@@ -91,7 +104,7 @@ export async function getPendingMendingDetailsByBatch(mesin: string, designId: s
     // Get ALL items in this batch to determine which PCS are fully inspected
     const { data: allItems, error: allError } = await supabase
       .from("production_details")
-      .select("id, pcs_index, final_inspection_id, status_mending, header_id")
+      .select("id, pcs_index, final_inspection_id, status_mending, header_id, kategori_masalah")
       .in("header_id", headerIds);
 
     if (allError) return { success: false, error: allError.message };
@@ -99,8 +112,18 @@ export async function getPendingMendingDetailsByBatch(mesin: string, designId: s
     // Find PCS indexes that still have uninspected items (final_inspection_id IS NULL)
     const pcsWithPendingInspection = new Set<number>();
     for (const item of (allItems || []) as any[]) {
+      const h = headers.find((h: any) => h.id === item.header_id);
+      const isMeteran = h && h.panel_no === "METERAN";
+      
       if (item.final_inspection_id === null) {
-        pcsWithPendingInspection.add(item.pcs_index);
+        if (isMeteran) {
+          // Jika tipe meteran, hanya dianggap pending inspeksi jika baris tersebut memang memiliki cacat/masalah
+          if (item.kategori_masalah && item.kategori_masalah.trim() !== "") {
+            pcsWithPendingInspection.add(item.pcs_index);
+          }
+        } else {
+          pcsWithPendingInspection.add(item.pcs_index);
+        }
       }
     }
 
@@ -114,15 +137,30 @@ export async function getPendingMendingDetailsByBatch(mesin: string, designId: s
 
     if (detailsError) return { success: false, error: detailsError.message };
 
-    // Filter out items from PCS indexes that are not fully inspected yet
-    const filteredDetails = (details || []).filter((d: any) => !pcsWithPendingInspection.has(d.pcs_index));
+    // Filter out items from PCS indexes that are not fully inspected yet (lewati pengecekan ini untuk tipe METERAN)
+    const filteredDetails = (details || []).filter((d: any) => {
+      const h = headers.find((h: any) => h.id === d.header_id);
+      if (h && h.panel_no === "METERAN") {
+        return true; // Tipe meteran tidak diblokir oleh pengecekan indeks PCS
+      }
+      return !pcsWithPendingInspection.has(d.pcs_index);
+    });
 
     const detailsWithHeader = filteredDetails.map((d: any) => {
       const h = headers.find((h: any) => h.id === d.header_id);
       return { ...d, production_headers: h };
     });
 
-    return { success: true, data: detailsWithHeader };
+    // Untuk jenis METERAN, hanya baris detail yang memiliki cacat/masalah (kategori_masalah tidak kosong) yang perlu diproses mending.
+    const finalFiltered = detailsWithHeader.filter((d: any) => {
+      const h = d.production_headers;
+      if (h && h.panel_no === "METERAN") {
+        return d.kategori_masalah !== null && d.kategori_masalah !== undefined && d.kategori_masalah.trim() !== "";
+      }
+      return true;
+    });
+
+    return { success: true, data: finalFiltered };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -282,7 +320,7 @@ export async function getMendingHistoryByBatch(designId: string, potonganKe: str
       *,
       production_details (
         id, pcs_index, final_inspection_id, status_mending, header_id, roll_no, keterangan_qc,
-        production_headers (id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang)
+        production_headers (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang)
       )
     `).in("production_detail_id", detailIds).order("created_at", { ascending: false });
     
@@ -323,7 +361,7 @@ export async function searchMendingHistory(filters: {
         *,
         production_details!inner (
           id, pcs_index, final_inspection_id, status_mending, header_id, roll_no, keterangan_qc,
-          production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang)
+          production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang)
         )
       `)
       .order("created_at", { ascending: false })

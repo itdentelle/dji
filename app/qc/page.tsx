@@ -1,11 +1,34 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Loader2, ClipboardCheck, AlertTriangle, CheckCircle, Package, Eye, X } from "lucide-react";
+import { Search, Loader2, ClipboardCheck, AlertTriangle, CheckCircle, Package, Eye, X, Plus } from "lucide-react";
 import QCInspectionModal from "@/components/forms/QCInspectionModal";
 import ProductionDetailModal from "@/components/ProductionDetailModal";
-import { getPendingQCDetailsByBatch, getAvailableQCFilters } from "@/actions/qc-actions";
+import { getPendingQCDetailsByBatch, getAvailableQCFilters, addQCDefectDetail } from "@/actions/qc-actions";
 import { getEmployeeHistoryDetail } from "@/actions/employee-actions";
+
+// Problem categories matching ContinuousForm
+const PROBLEM_CATEGORIES = [
+  { id: "A", name: "Kode A: Masalah dan Perbaikan Benang" },
+  { id: "B", name: "Kode B: Perbaikan Jarum dan Element Rajutan" },
+  { id: "C", name: "Kode C: Pengaturan dan Design stup" },
+  { id: "D", name: "Kode D: Bahan Baku dan penggantian Benang" },
+  { id: "E", name: "Kode E: Masalah Kelistrikan" },
+  { id: "F", name: "Kode F: Perbaikan Mekanik (Pneumatic dan Mechanical)" },
+  { id: "G", name: "Kode G: Perawatan mesin (Maintenance/Overhaul)" },
+  { id: "H", name: "Kode H: Faktor Eksternal dan Non-Teknis" },
+];
+
+const PROBLEM_DETAILS: Record<string, string[]> = {
+  "A": ["Perbaikan L1,L2,L3 Benang timbul putus", "Perbaikan Benang lolos", "Perbaikan Bolong corak", "Perbaikan Benang narik/Kendor", "Perbaikan Benang Nyilang", "Perbaikan/Beset benang Dasar", "Perbaikan Benang Kejepit/Jebol/kusut"],
+  "B": ["Perbaikan jarum pattern patah/bengkok", "Perbaikan/Ganti Jacquard", "Perbaikan ganti jarum Compoun Nedle, pattern", "Perbaikan ngampul", "Ganti dari scaloop ke non scaloop atau sebaliknya", "Perbaikan Ngegaris/Stopline", "Perbaikan Keluar Jarum"],
+  "C": ["Loading design/Ganti Design", "Perbaikan corak/revisi", "Salah ganti design", "Error design", "Proofing/PCB", "Ganti Pattern Disk", "Ganti pick"],
+  "D": ["Ganti benang dasar L1/L2", "Salah ganti benang dasar", "Ganti benang Pattern Linner", "Ganti benang Pattern Heavy", "Ganti benang Pattern Shadow", "Ganti benang pattern keseluruhan (L,H,S)", "salah ganti benang pattern", "Ngelancarin", "Over Cone/Rewind", "Tunggu benang dasar dari warping", "Tunggu benang (benang belum datang)"],
+  "E": ["Mati Listrik", "Perbaikan Error Servo Drive", "Perbaikan/ganti motor servo", "Sensor Benang/Laser Stop", "Perbaikan Eletrik lainnya", "Konsleting"],
+  "F": ["Perbaikan cilynder Angin", "Perbaikan/ganti String bar", "Perbaikan /ganti PBO", "Perbaikan pressan As beam kendor", "Perbaikan tensi tensioner", "Perbaikan gear/Take Up Roll"],
+  "G": ["Ganti Oli", "Ganti Bellow", "Ganti Vanbelt", "Ganti Black grip roll", "Pelumasan/greace pada mesin", "Perawatan Panel Listrik", "Ganti rantai/pertensi", "Servis Overhaul"],
+  "H": ["Hari Libur", "Tidak ada order", "Tunggu info", "Demo", "Bencana/gempa/banjir", "Istirahat selama buka puasa", "Tunggu Sparepart"],
+};
 
 export default function QCPage() {
   const [searchMesin, setSearchMesin] = useState("");
@@ -52,6 +75,69 @@ export default function QCPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailData, setDetailData] = useState<any | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+
+  // Add Defect Modal State (METERAN only)
+  const [isDefectModalOpen, setIsDefectModalOpen] = useState(false);
+  const [defectMeterKain, setDefectMeterKain] = useState("");
+  const [defectKategori, setDefectKategori] = useState<string[]>([]);
+  const [defectDetail, setDefectDetail] = useState("");
+  const [defectKeterangan, setDefectKeterangan] = useState("");
+  const [isSubmittingDefect, setIsSubmittingDefect] = useState(false);
+  const [defectError, setDefectError] = useState<string | null>(null);
+
+  // Detect if current batch is METERAN type
+  const isMeteranBatch = allDetails.length > 0 && allDetails[0]?.production_headers?.panel_no === "METERAN";
+  // Get the first header_id to attach new defects to
+  const meteranHeaderId = allDetails.length > 0 ? allDetails[0]?.header_id : null;
+
+  const handleDefectToggleKategori = (catId: string) => {
+    setDefectKategori(prev => prev.includes(catId) ? prev.filter(c => c !== catId) : [...prev, catId]);
+  };
+
+  const handleSubmitDefect = async () => {
+    if (!defectMeterKain) {
+      setDefectError("Posisi Meter Kain wajib diisi.");
+      return;
+    }
+    if (defectKategori.length === 0) {
+      setDefectError("Pilih minimal 1 Kategori Masalah.");
+      return;
+    }
+    if (!meteranHeaderId) {
+      setDefectError("Tidak ditemukan header ID untuk batch ini.");
+      return;
+    }
+    setIsSubmittingDefect(true);
+    setDefectError(null);
+    try {
+      const res = await addQCDefectDetail({
+        headerId: meteranHeaderId,
+        meterKain: defectMeterKain,
+        kategoriMasalah: defectKategori,
+        detailMasalah: defectDetail || undefined,
+        keteranganCacat: defectKeterangan || undefined,
+      });
+      if (res.success) {
+        // Reset form
+        setDefectMeterKain("");
+        setDefectKategori([]);
+        setDefectDetail("");
+        setDefectKeterangan("");
+        setIsDefectModalOpen(false);
+        // Refresh data
+        const refreshRes = await getPendingQCDetailsByBatch(searchMesin, searchDesain, searchPotongan, searchTanggal);
+        if (refreshRes.success && refreshRes.data) {
+          setAllDetails(refreshRes.data);
+        }
+      } else {
+        setDefectError(res.error || "Gagal menyimpan temuan cacat.");
+      }
+    } catch (err: any) {
+      setDefectError(err.message || "Terjadi kesalahan.");
+    } finally {
+      setIsSubmittingDefect(false);
+    }
+  };
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -268,6 +354,19 @@ export default function QCPage() {
         )}
       </div>
 
+      {/* Add Defect Button for METERAN */}
+      {isMeteranBatch && allDetails.length > 0 && (
+        <div className="mb-4 flex justify-end animate-fadeIn">
+          <button
+            onClick={() => setIsDefectModalOpen(true)}
+            className="h-11 px-5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-sm font-bold transition-all duration-200 flex items-center gap-2 shadow-lg shadow-rose-600/20"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Temuan Cacat Baru
+          </button>
+        </div>
+      )}
+
       {/* Details Table */}
       {selectedPcsIndex && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fadeIn">
@@ -401,6 +500,119 @@ export default function QCPage() {
         isLoading={isDetailLoading}
         hideEdit={true}
       />
+
+      {/* Add Defect Modal (METERAN) */}
+      {isDefectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-rose-500" />
+                  Tambah Temuan Cacat Baru
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">Catat temuan cacat baru yang ditemukan saat inspeksi kain meteran.</p>
+              </div>
+              <button onClick={() => { setIsDefectModalOpen(false); setDefectError(null); }} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 flex flex-col gap-5">
+              {defectError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  {defectError}
+                </div>
+              )}
+
+              {/* Posisi Meter */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-600 uppercase">Posisi Meter Kain <span className="text-rose-500">*</span></label>
+                <input
+                  type="number"
+                  step="any"
+                  value={defectMeterKain}
+                  onChange={(e) => setDefectMeterKain(e.target.value)}
+                  className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-rose-400 focus:ring-2 focus:ring-rose-100 outline-none transition-all"
+                  placeholder="Contoh: 75"
+                />
+              </div>
+
+              {/* Kategori Masalah */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-rose-600 uppercase">Kategori Masalah <span className="text-rose-500">*</span> (Pilih 1 atau lebih)</label>
+                <div className="grid grid-cols-1 gap-2 mt-1">
+                  {PROBLEM_CATEGORIES.map(c => (
+                    <label key={c.id} className={`flex items-center gap-2 p-2.5 border rounded-xl cursor-pointer transition-all ${
+                      defectKategori.includes(c.id) 
+                        ? 'border-rose-400 bg-rose-50 ring-1 ring-rose-200' 
+                        : 'border-slate-200 bg-white hover:border-rose-300'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={defectKategori.includes(c.id)}
+                        onChange={() => handleDefectToggleKategori(c.id)}
+                        className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500"
+                      />
+                      <span className="text-[11px] font-bold text-slate-700">{c.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Detail Masalah Dropdown */}
+              {defectKategori.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-600 uppercase">Detail Masalah</label>
+                  <select
+                    value={defectDetail}
+                    onChange={(e) => setDefectDetail(e.target.value)}
+                    className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-rose-400 focus:bg-white outline-none transition-all"
+                  >
+                    <option value="">-- Pilih Detail --</option>
+                    {defectKategori.flatMap(catId => (PROBLEM_DETAILS[catId] || []).map(p => (
+                      <option key={`${catId}-${p}`} value={p}>{p}</option>
+                    )))}
+                  </select>
+                </div>
+              )}
+
+              {/* Keterangan Tambahan */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-600 uppercase">Keterangan Tambahan</label>
+                <textarea
+                  value={defectKeterangan}
+                  onChange={(e) => setDefectKeterangan(e.target.value)}
+                  rows={3}
+                  className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium focus:bg-white focus:border-rose-400 focus:ring-2 focus:ring-rose-100 outline-none transition-all resize-none"
+                  placeholder="Tuliskan keterangan tambahan jika ada..."
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+              <button
+                onClick={() => { setIsDefectModalOpen(false); setDefectError(null); }}
+                className="h-11 px-5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 transition-all"
+              >
+                Batal
+              </button>
+              <button
+                disabled={isSubmittingDefect}
+                onClick={handleSubmitDefect}
+                className="h-11 px-6 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center gap-2 shadow-lg shadow-rose-600/20"
+              >
+                {isSubmittingDefect ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Simpan Temuan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

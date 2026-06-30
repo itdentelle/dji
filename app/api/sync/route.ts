@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
         "Total Downtime (Detik)": header.total_downtime_detik || 0,
         "Meter Awal": header.meter_awal || "",
         "Meter Akhir": header.meter_akhir || "",
-        "Total Produksi Meter": header.total_produksi_meter || ""
+        "Total Produksi Meter": header.total_produksi_meter || "",
+        "Penanggung Jawab": header.created_by_name || ""
       });
     } else {
       for (const detail of details) {
@@ -83,7 +84,8 @@ export async function POST(req: NextRequest) {
           "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
           "Kategori Masalah": detail.kategori_masalah || "",
           "Detail Masalah": detail.detail_masalah || "",
-          "Keterangan Cacat": detail.keterangan_cacat || ""
+          "Keterangan Cacat": detail.keterangan_cacat || "",
+          "Penanggung Jawab": header.created_by_name || ""
         });
       }
     }

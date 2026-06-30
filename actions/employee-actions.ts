@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { productionFormSchema, ProductionFormInput } from "@/lib/schemas";
 import { crypto } from "next/dist/compiled/@edge-runtime/primitives/crypto";
 import { revalidatePath } from "next/cache";
@@ -78,7 +78,6 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
       potongan_ke: validated.potonganKe ? parseInt(validated.potonganKe) : null,
       panel_no: validated.panelNo,
       pcs: pcsTarget,
-      pic: validated.pic || null,
       tanggal_potong: validated.tanggalPotong || null,
       pick: validated.pick || null,
       no_order_barang: validated.noOrderBarang || null,
@@ -92,6 +91,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
       foto_after: photoUrls.after,
       total_downtime_detik: totalDowntimeNum,
       idempotency_key: validated.idempotencyKey || null,
+      created_by_name: null as string | null,
     };
 
     // 2. Siapkan Data Details
@@ -125,6 +125,28 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     if (supabaseUrl && supabaseAnonKey && supabaseAnonKey !== "your_supabase_anon_key_here") {
       try {
         const supabase = await createClient();
+
+        // Ambil nama penanggung jawab berdasarkan akun login
+        try {
+          if (validated.created_by_name) {
+            headerData.created_by_name = validated.created_by_name;
+          } else {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              const adminSupabase = await createAdminClient();
+              const { data: profile } = await adminSupabase
+                .from("user_profiles")
+                .select("full_name")
+                .eq("id", user.id)
+                .single();
+              if (profile) {
+                headerData.created_by_name = profile.full_name;
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Gagal mendapatkan PIC nama:", err);
+        }
 
         // Cek duplikasi potongan_ke dan panel_no
         if (potonganKeNum && validated.panelNo) {
@@ -222,7 +244,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             "Potongan Ke": validated.potonganKe || "",
             "No Order": validated.noOrderBarang || "",
             "No Customer": validated.noCustomer || "",
-            "Total Downtime (Menit)": totalDowntimeNum || 0,
+            "Total Downtime (Detik)": totalDowntimeNum || 0,
             "Meter Awal": "",
             "Meter Akhir": "",
             "Total Produksi Meter": "",
@@ -233,7 +255,8 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
             "Kategori Masalah": detail.kategori_masalah || "",
             "Detail Masalah": detail.detail_masalah || "",
-            "Keterangan Cacat": detail.keterangan_cacat || ""
+            "Keterangan Cacat": detail.keterangan_cacat || "",
+            "Penanggung Jawab": headerData.created_by_name || ""
           }));
 
           fetch(sheetUrl, {
@@ -282,7 +305,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         "Potongan Ke": validated.potonganKe || "",
         "No Order": validated.noOrderBarang || "",
         "No Customer": validated.noCustomer || "",
-        "Total Downtime (Menit)": totalDowntimeNum || 0,
+        "Total Downtime (Detik)": totalDowntimeNum || 0,
         "Meter Awal": "",
         "Meter Akhir": "",
         "Total Produksi Meter": "",
@@ -538,7 +561,6 @@ export async function updateProductionReport(headerId: string, data: any): Promi
         potongan_ke: potonganKeNum,
         panel_no: data.panelNo || "1",
         pcs: data.pcsData?.length || 0,
-        pic: data.pic || null,
         tanggal_potong: data.tanggalPotong || null,
         pick: data.pick || null,
         no_order_barang: data.noOrderBarang || null,

@@ -463,6 +463,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
     data.pic = getOperatorName(data.operatorId) || "";
     data.grupName = getGroupName(data.groupId);
     data.designName = getDesignName(data.designId);
+    data.created_by_name = user?.fullName || null;
 
     // Save Header Data to LocalStorage automatically on submit
     const lastRollNo = data.pcsData && data.pcsData.length > 0 ? data.pcsData[0].rollNo : "";
@@ -607,6 +608,9 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
         keteranganCacat: "",
       }],
       totalDowntime: "",
+      meterAwal: "",
+      meterAkhir: "",
+      hasilProduksiMeter: "",
     });
     setPreviews({ before: null, after: null });
   };
@@ -706,17 +710,6 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
         </div>
       </div>
 
-      <div className="mb-6 p-4 bg-sky-50/50 border border-sky-100 text-sky-800 rounded-xl flex items-start gap-2.5 text-xs font-medium animate-fadeIn shadow-sm">
-        <AlertCircle className="w-5 h-5 shrink-0 text-sky-500" strokeWidth={2} />
-        <div className="flex flex-col gap-1">
-          <strong className="text-sky-900 font-bold">Panduan Pengisian:</strong>
-          <span>Anda dapat menggunakan form ini untuk dua tujuan berbeda secara fleksibel:</span>
-          <ul className="list-disc pl-4 mt-0.5 space-y-0.5 text-sky-700">
-            <li><strong>Lapor Masalah Tengah Jalan:</strong> Kosongkan Start/Finish Meter, langsung catat <i>Titik Cacat</i>, lalu kirim.</li>
-            <li><strong>Lapor Akhir Shift/Roll:</strong> Isi Start & Finish Meter, hapus semua <i>Titik Cacat</i> jika tidak ada masalah, lalu kirim.</li>
-          </ul>
-        </div>
-      </div>
 
       {errorMsg && (
         <div className="mb-6 p-4 bg-red-50/50 border border-red-100 text-red-700 rounded-xl flex items-start gap-2.5 text-xs font-semibold animate-fadeIn">

@@ -156,14 +156,14 @@ export default function DashboardPage() {
 
     if (dateRangeMode !== "ALL") {
       const now = new Date();
-      const todayStr = now.toISOString().split("T")[0];
+      const todayStr = now.toLocaleDateString("en-CA");
 
       result = result.filter(item => {
         const itemDate = new Date(item.tanggal);
         if (isNaN(itemDate.getTime())) return true;
 
         if (dateRangeMode === "TODAY") {
-          return item.tanggal === todayStr;
+          return itemDate.toLocaleDateString("en-CA") === todayStr;
         }
 
         if (dateRangeMode === "7DAYS") {
@@ -248,7 +248,7 @@ export default function DashboardPage() {
     // Perhitungan Efisiensi Waktu Kerja Akumulatif
     // Menghitung jumlah kombinasi Tanggal + Operator_ID (Jumlah Sesi Shift)
     const shiftSessions = new Set(gradeScoped.map(item => item.tanggal + "_" + item.nama_operator)).size;
-    const totalDetikTersedia = shiftSessions * 420 * 60;
+    const totalDetikTersedia = shiftSessions * 480 * 60;
     const totalDowntimeDetik = gradeScoped.reduce((acc, curr) => acc + (curr.total_downtime_detik || 0), 0);
     const totalDetikKerjaEfektif = Math.max(0, totalDetikTersedia - totalDowntimeDetik);
     const efisiensi = totalDetikTersedia > 0 ? (totalDetikKerjaEfektif / totalDetikTersedia) * 100 : 0;
@@ -316,7 +316,14 @@ export default function DashboardPage() {
     let groups: string[] = [];
 
     if (chartGroupBy === "HARI") {
-      groups = ["SEN", "SEL", "RAB", "KAM", "JUM", "SAB", "MIN"];
+      // Get unique dates from the filtered data and sort them chronologically
+      const dates = Array.from(new Set(filteredData.map(item => item.tanggal)));
+      groups = dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+      
+      // If no data, show at least today's date
+      if (groups.length === 0) {
+         groups = [new Date().toISOString().split("T")[0]];
+      }
     } else if (chartGroupBy === "DESIGN") {
       // Get unique designs, sorted
       const designs = Array.from(new Set(filteredData.map(item => item.design || "Tanpa Design")));
@@ -337,7 +344,7 @@ export default function DashboardPage() {
     return groups.map(groupName => {
       let items: Transaction[] = [];
       if (chartGroupBy === "HARI") {
-        items = filteredData.filter(item => item.hari === groupName);
+        items = filteredData.filter(item => item.tanggal === groupName);
       } else if (chartGroupBy === "DESIGN") {
         items = filteredData.filter(item => (item.design || "Tanpa Design") === groupName);
       } else if (chartGroupBy === "PEGAWAI") {
@@ -346,25 +353,46 @@ export default function DashboardPage() {
         items = filteredData.filter(item => (item.group || "Tanpa Group") === groupName);
       }
 
-      const gradeA_sum = items
-        .filter(item => item.grade === "GRADE A")
-        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
+      let gradeA_sum = 0;
+      let gradeB_sum = 0;
+      let bs_sum = 0;
+      let ungraded_sum = 0;
 
-      const gradeB_sum = items
-        .filter(item => item.grade === "GRADE B")
-        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
+      if (metricMode === "PCS") {
+        gradeA_sum = new Set(items.filter(i => i.grade === "GRADE A").map(i => i.header_id)).size;
+        gradeB_sum = new Set(items.filter(i => i.grade === "GRADE B").map(i => i.header_id)).size;
+        bs_sum = new Set(items.filter(i => i.grade === "BS").map(i => i.header_id)).size;
+        ungraded_sum = new Set(items.filter(i => i.grade === "UNGRADED" || !["GRADE A", "GRADE B", "BS"].includes(i.grade)).map(i => i.header_id)).size;
+      } else {
+        const uniqueHeadersMap = new Map<string, typeof items[0]>();
+        items.forEach(item => {
+          if (item.header_id && !uniqueHeadersMap.has(item.header_id)) {
+            uniqueHeadersMap.set(item.header_id, item);
+          }
+        });
+        const uniqueItems = Array.from(uniqueHeadersMap.values());
+        gradeA_sum = uniqueItems.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+        gradeB_sum = uniqueItems.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+        bs_sum = uniqueItems.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+        ungraded_sum = uniqueItems.filter(i => i.grade === "UNGRADED" || !["GRADE A", "GRADE B", "BS"].includes(i.grade)).reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+      }
 
-      const bs_sum = items
-        .filter(item => item.grade === "BS")
-        .reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
+      const total = gradeA_sum + gradeB_sum + bs_sum + ungraded_sum;
 
-      const total = gradeA_sum + gradeB_sum + bs_sum;
+      let displayLabel = groupName;
+      if (chartGroupBy === "HARI") {
+         const d = new Date(groupName);
+         if (!isNaN(d.getTime())) {
+            displayLabel = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+         }
+      }
 
       return {
-        label: groupName,
+        label: displayLabel,
         gradeA_sum,
         gradeB_sum,
         bs_sum,
+        ungraded_sum,
         total
       };
     });
@@ -373,7 +401,8 @@ export default function DashboardPage() {
   const maxChartValue = useMemo(() => {
     let groups: string[] = [];
     if (chartGroupBy === "HARI") {
-      groups = ["SEN", "SEL", "RAB", "KAM", "JUM", "SAB", "MIN"];
+      groups = Array.from(new Set(dateFilteredTransactions.map(item => item.tanggal)));
+      if (groups.length === 0) groups = [new Date().toISOString().split("T")[0]];
     } else if (chartGroupBy === "DESIGN") {
       groups = Array.from(new Set(dateFilteredTransactions.map(item => item.design || "Tanpa Design")));
     } else if (chartGroupBy === "PEGAWAI") {
@@ -385,7 +414,7 @@ export default function DashboardPage() {
     const maxValues = groups.map(groupName => {
       let items: Transaction[] = [];
       if (chartGroupBy === "HARI") {
-        items = dateFilteredTransactions.filter(item => item.hari === groupName);
+        items = dateFilteredTransactions.filter(item => item.tanggal === groupName);
       } else if (chartGroupBy === "DESIGN") {
         items = dateFilteredTransactions.filter(item => (item.design || "Tanpa Design") === groupName);
       } else if (chartGroupBy === "PEGAWAI") {
@@ -393,17 +422,35 @@ export default function DashboardPage() {
       } else if (chartGroupBy === "GROUP") {
         items = dateFilteredTransactions.filter(item => (item.group || "Tanpa Group") === groupName);
       }
+      
+      let gA = 0, gB = 0, bs = 0, un = 0;
+      if (metricMode === "PCS") {
+        gA = new Set(items.filter(i => i.grade === "GRADE A").map(i => i.header_id)).size;
+        gB = new Set(items.filter(i => i.grade === "GRADE B").map(i => i.header_id)).size;
+        bs = new Set(items.filter(i => i.grade === "BS").map(i => i.header_id)).size;
+        un = new Set(items.filter(i => i.grade === "UNGRADED" || !["GRADE A", "GRADE B", "BS"].includes(i.grade)).map(i => i.header_id)).size;
+      } else {
+        const uniqueHeadersMap = new Map<string, typeof items[0]>();
+        items.forEach(item => {
+          if (item.header_id && !uniqueHeadersMap.has(item.header_id)) {
+            uniqueHeadersMap.set(item.header_id, item);
+          }
+        });
+        const uniqueItems = Array.from(uniqueHeadersMap.values());
+        gA = uniqueItems.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+        gB = uniqueItems.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+        bs = uniqueItems.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+        un = uniqueItems.filter(i => i.grade === "UNGRADED" || !["GRADE A", "GRADE B", "BS"].includes(i.grade)).reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+      }
+
       if (chartGradeFilter === "ALL") {
-        const gA = items.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
-        const gB = items.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
-        const bs = items.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
-        return Math.max(gA, gB, bs);
+        return Math.max(gA, gB, bs, un);
       } else if (chartGradeFilter === "GRADE_A") {
-        return items.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
+        return gA;
       } else if (chartGradeFilter === "GRADE_B") {
-        return items.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
+        return gB;
       } else if (chartGradeFilter === "BS") {
-        return items.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : (curr.hasil_meter || 0)), 0);
+        return bs;
       }
       return 0;
     });
@@ -878,7 +925,7 @@ export default function DashboardPage() {
             
             <div className="flex items-center gap-1 mt-2 text-[11px] text-purple-600 font-bold">
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Shift 7 Jam (420 dtk)</span>
+              <span>Shift 8 Jam (480 mnt)</span>
             </div>
           </div>
         </div>
@@ -1090,22 +1137,26 @@ export default function DashboardPage() {
 
                         // Grouped Rendering Logic
                         if (chartGradeFilter === "ALL") {
-                          const hA = maxChartValue > 0 ? (d.gradeA_sum / maxChartValue) * 165 : 0;
-                          const hB = maxChartValue > 0 ? (d.gradeB_sum / maxChartValue) * 165 : 0;
-                          const hBS = maxChartValue > 0 ? (d.bs_sum / maxChartValue) * 165 : 0;
+                          const hA = maxChartValue > 0 ? (d.gradeA_sum / maxChartValue) * 175 : 0;
+                          const hB = maxChartValue > 0 ? (d.gradeB_sum / maxChartValue) * 175 : 0;
+                          const hBS = maxChartValue > 0 ? (d.bs_sum / maxChartValue) * 175 : 0;
+                          const hUN = maxChartValue > 0 ? (d.ungraded_sum / maxChartValue) * 175 : 0;
 
                           const displayHA = Math.max(hA, 1.5);
                           const displayHB = Math.max(hB, 1.5);
                           const displayHBS = Math.max(hBS, 1.5);
+                          const displayHUN = Math.max(hUN, 1.5);
 
                           const yA = 195 - displayHA;
                           const yB = 195 - displayHB;
                           const yBS = 195 - displayHBS;
+                          const yUN = 195 - displayHUN;
 
-                          const barW = 16;
-                          const xA = groupCenter - 26;
-                          const xB = groupCenter - 8;
-                          const xBS = groupCenter + 10;
+                          const barW = 10;
+                          const xA = groupCenter - 24;
+                          const xB = groupCenter - 12;
+                          const xBS = groupCenter;
+                          const xUN = groupCenter + 12;
 
                           return (
                             <g key={d.label} className="group/bar cursor-pointer" onClick={() => setActiveChartBar(isActive ? null : index)}>
@@ -1120,25 +1171,30 @@ export default function DashboardPage() {
                               {chartType === "BAR" && (
                                 <>
                                   {/* Grade A Section */}
-                                  <rect x={xA} y={yA} width={barW} height={displayHA} rx="4" fill="#0070bc" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
+                                  <rect x={xA} y={yA} width={barW} height={displayHA} rx="3" fill="#0070bc" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
                                   {/* Grade B Section */}
-                                  <rect x={xB} y={yB} width={barW} height={displayHB} rx="4" fill="#f59e0b" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
+                                  <rect x={xB} y={yB} width={barW} height={displayHB} rx="3" fill="#f59e0b" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
                                   {/* BS Section */}
-                                  <rect x={xBS} y={yBS} width={barW} height={displayHBS} rx="4" fill="#ef4444" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
+                                  <rect x={xBS} y={yBS} width={barW} height={displayHBS} rx="3" fill="#ef4444" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
+                                  {/* Ungraded Section */}
+                                  <rect x={xUN} y={yUN} width={barW} height={displayHUN} rx="3" fill="#94a3b8" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
                                 </>
                               )}
 
                               {/* Labels on top of bars */}
                               {chartType === "BAR" && (
                                 <>
-                                  <text x={xA + barW / 2} y={yA - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                  <text x={xA + barW / 2} y={yA - 4} fill="#475569" fontSize="8" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                     {d.gradeA_sum}
                                   </text>
-                                  <text x={xB + barW / 2} y={yB - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                  <text x={xB + barW / 2} y={yB - 4} fill="#475569" fontSize="8" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                     {d.gradeB_sum}
                                   </text>
-                                  <text x={xBS + barW / 2} y={yBS - 4} fill="#475569" fontSize="9" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                  <text x={xBS + barW / 2} y={yBS - 4} fill="#475569" fontSize="8" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                     {d.bs_sum}
+                                  </text>
+                                  <text x={xUN + barW / 2} y={yUN - 4} fill="#64748b" fontSize="8" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                    {d.ungraded_sum}
                                   </text>
 
                                   {/* Total summary below tooltip */}
@@ -1153,15 +1209,16 @@ export default function DashboardPage() {
                                 <g className={`transition-opacity duration-200 pointer-events-none ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
                                   {/* Crosshair Line */}
                                   <line x1={groupCenter} y1={20} x2={groupCenter} y2={195} stroke="#94a3b8" strokeDasharray="3 3" strokeWidth="1" />
-                                  
+
                                   {/* Tooltip Box */}
-                                  <rect x={index === 0 ? groupCenter + 5 : (index === chartData.length - 1 ? groupCenter - 85 : groupCenter - 40)} y={5} width={80} height={55} rx="6" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" className="shadow-sm" />
-                                  
+                                  <rect x={index === 0 ? groupCenter + 5 : (index === chartData.length - 1 ? groupCenter - 95 : groupCenter - 45)} y={5} width={90} height={68} rx="6" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" className="shadow-sm" />
+
                                   {/* Tooltip Text Data */}
-                                  <text x={index === 0 ? groupCenter + 45 : (index === chartData.length - 1 ? groupCenter - 45 : groupCenter)} y={20} fill="#0070bc" fontSize="9" fontWeight="extrabold" textAnchor="middle">Grade A: <tspan fill="#334155">{d.gradeA_sum}</tspan></text>
-                                  <text x={index === 0 ? groupCenter + 45 : (index === chartData.length - 1 ? groupCenter - 45 : groupCenter)} y={33} fill="#f59e0b" fontSize="9" fontWeight="extrabold" textAnchor="middle">Grade B: <tspan fill="#334155">{d.gradeB_sum}</tspan></text>
-                                  <text x={index === 0 ? groupCenter + 45 : (index === chartData.length - 1 ? groupCenter - 45 : groupCenter)} y={46} fill="#ef4444" fontSize="9" fontWeight="extrabold" textAnchor="middle">BS: <tspan fill="#334155">{d.bs_sum}</tspan></text>
-                                  <text x={index === 0 ? groupCenter + 45 : (index === chartData.length - 1 ? groupCenter - 45 : groupCenter)} y={56} fill="#1e293b" fontSize="9" fontWeight="extrabold" textAnchor="middle">{d.total > 0 ? `Total: ${d.total}` : ""}</text>
+                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={17} fill="#0070bc" fontSize="9" fontWeight="extrabold" textAnchor="middle">Grade A: <tspan fill="#334155">{d.gradeA_sum}</tspan></text>
+                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={29} fill="#f59e0b" fontSize="9" fontWeight="extrabold" textAnchor="middle">Grade B: <tspan fill="#334155">{d.gradeB_sum}</tspan></text>
+                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={41} fill="#ef4444" fontSize="9" fontWeight="extrabold" textAnchor="middle">BS: <tspan fill="#334155">{d.bs_sum}</tspan></text>
+                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={53} fill="#64748b" fontSize="9" fontWeight="extrabold" textAnchor="middle">Ungraded: <tspan fill="#334155">{d.ungraded_sum}</tspan></text>
+                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={65} fill="#1e293b" fontSize="9" fontWeight="extrabold" textAnchor="middle">{d.total > 0 ? `Total: ${d.total}` : ""}</text>
                                 </g>
                               )}
 
@@ -1250,6 +1307,10 @@ export default function DashboardPage() {
               <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-600 uppercase tracking-wider">
                 <span className="w-2 h-2 rounded-full bg-[#ef4444]" />
                 <span>BS (Recheck)</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-600 uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-[#94a3b8]" />
+                <span>Ungraded</span>
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 "use server";
 
 import { continuousFormSchema, ContinuousFormInput } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 function generateExcelStyleId(): string {
@@ -56,7 +56,6 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       potongan_ke: potonganKeNum,
       panel_no: "METERAN", // Keep panel_no since it's back
       pcs: validated.pcsData.length,
-      pic: validated.pic || null,
       tanggal_potong: validated.tanggalPotong || null,
       pick: validated.pick || null,
       no_order_barang: validated.noOrderBarang || null,
@@ -73,6 +72,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       meter_akhir: validated.meterAkhir ? parseFloat(validated.meterAkhir) : null,
       total_produksi_meter: validated.hasilProduksiMeter ? parseFloat(validated.hasilProduksiMeter) : null,
       idempotency_key: validated.idempotencyKey || null,
+      created_by_name: null as string | null,
     };
 
     const detailData = validated.pcsData.map((pcsItem) => {
@@ -99,6 +99,28 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
 
     if (supabaseUrl && supabaseAnonKey && supabaseAnonKey !== "your_supabase_anon_key_here") {
       const supabase = await createClient();
+
+      // Ambil nama penanggung jawab berdasarkan akun login
+      try {
+        if (validated.created_by_name) {
+          headerData.created_by_name = validated.created_by_name;
+        } else {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const adminSupabase = await createAdminClient();
+            const { data: profile } = await adminSupabase
+              .from("user_profiles")
+              .select("full_name")
+              .eq("id", user.id)
+              .single();
+            if (profile) {
+              headerData.created_by_name = profile.full_name;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Gagal mendapatkan PIC nama:", err);
+      }
 
       const { error: insertHeaderError } = await supabase
         .from("production_headers")
@@ -139,7 +161,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
           "Potongan Ke": validated.potonganKe || "",
           "No Order": validated.noOrderBarang || "",
           "No Customer": validated.noCustomer || "",
-          "Total Downtime (Menit)": totalDowntimeMenit || 0,
+          "Total Downtime (Detik)": totalDowntimeMenit || 0,
           "Meter Awal": validated.meterAwal || "",
           "Meter Akhir": validated.meterAkhir || "",
           "Total Produksi Meter": validated.hasilProduksiMeter || "",
@@ -150,7 +172,8 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
           "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
           "Kategori Masalah": detail.kategori_masalah || "",
           "Detail Masalah": detail.detail_masalah || "",
-          "Keterangan Cacat": detail.keterangan_cacat || ""
+          "Keterangan Cacat": detail.keterangan_cacat || "",
+          "Penanggung Jawab": headerData.created_by_name || ""
         }));
 
         fetch(sheetUrl, {
@@ -188,7 +211,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
         "Potongan Ke": validated.potonganKe || "",
         "No Order": validated.noOrderBarang || "",
         "No Customer": validated.noCustomer || "",
-        "Total Downtime (Menit)": totalDowntimeMenit || 0,
+        "Total Downtime (Detik)": totalDowntimeMenit || 0,
         "Meter Awal": validated.meterAwal || "",
         "Meter Akhir": validated.meterAkhir || "",
         "Total Produksi Meter": validated.hasilProduksiMeter || "",
@@ -239,7 +262,6 @@ export async function updateContinuousReport(headerId: string, data: any): Promi
         potongan_ke: potonganKeNum,
         panel_no: "METERAN",
         pcs: data.pcsData?.length || 0,
-        pic: data.pic || null,
         tanggal_potong: data.tanggalPotong || null,
         pick: data.pick || null,
         no_order_barang: data.noOrderBarang || null,
@@ -316,7 +338,7 @@ export async function updateContinuousReport(headerId: string, data: any): Promi
           "Potongan Ke": data.potonganKe || "",
           "No Order": data.noOrderBarang || "",
           "No Customer": data.noCustomer || "",
-          "Total Downtime (Menit)": data.totalDowntime || 0,
+          "Total Downtime (Detik)": data.totalDowntime || 0,
           "Meter Awal": data.meterAwal || "",
           "Meter Akhir": data.meterAkhir || "",
           "Total Produksi Meter": data.hasilProduksiMeter || "",

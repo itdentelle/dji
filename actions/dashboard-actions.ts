@@ -61,34 +61,12 @@ export async function getRealProductionsData(): Promise<{
       throw error;
     }
 
-    // Query 2: Get the actual operator name (pic) from production_headers
-    // The view's nama_operator comes from JOIN on operator_id which can be stale
-    const headerIds = [...new Set((data || []).map((item: any) => item.header_id).filter(Boolean))];
-    const picMap = new Map<string, string>();
-
-    if (headerIds.length > 0) {
-      // Supabase .in() has a limit, batch if needed
-      const batchSize = 100;
-      for (let i = 0; i < headerIds.length; i += batchSize) {
-        const batch = headerIds.slice(i, i + batchSize);
-        const { data: headerData } = await supabase
-          .from("production_headers")
-          .select("id, pic")
-          .in("id", batch);
-        
-        (headerData || []).forEach((h: any) => {
-          if (h.pic) picMap.set(h.id, h.pic);
-        });
-      }
-    }
-
     const mappedData: RealProductionItem[] = (data || []).map((item: any) => {
       const isProduction = (item.hasil_pcs || 0) > 0 || (item.posisi_meter || 0) > 0 || (item.hasil_meter || 0) > 0;
       
       const mesinId = item.mesin_id || `KNIT-001`;
       
-      // Use pic from production_headers if available, else fall back to view's nama_operator
-      const actualOperator = picMap.get(item.header_id) || item.nama_operator || "Operator Unknown";
+      const actualOperator = item.nama_operator || "Operator Unknown";
       
       return {
         id: item.id || `header_${item.header_id}_${Math.random().toString().slice(2, 8)}`,
@@ -138,11 +116,10 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const dateLimit = thirtyDaysAgo.toISOString().split("T")[0];
 
-    // Query production_headers directly to use the `pic` field (actual operator name at input time)
-    // instead of the view which joins on operator_id (which can be stale/incorrect)
+    // Query production_headers and join operators to get the operator's name
     const { data, error } = await supabase
       .from("production_headers")
-      .select("nomor_mc, tgl, pic, design_id, tanggal_jam")
+      .select("nomor_mc, tgl, design_id, tanggal_jam, operators(nama_operator)")
       .gte("tgl", dateLimit)
       .order("tanggal_jam", { ascending: false });
 
@@ -182,7 +159,7 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
       results.push({
         mesin_id,
         status: isBeroperasi ? "Beroperasi" : "Idle",
-        nama_operator: row.pic || "-",
+        nama_operator: (row.operators as any)?.nama_operator || "-",
         design: row.design_id || "-",
         last_input_date: row.tgl,
         last_input_time: lastTime

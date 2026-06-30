@@ -58,7 +58,15 @@ export default function ProductionHeaderModal({
         {/* Body Modal (Form) */}
         <div className="p-6 overflow-y-auto custom-scrollbar">
           {/* Operator & Grup */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
+          <div className="flex flex-col gap-4 mb-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Grup Shift *</label>
+              <select {...register("groupId")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all">
+                {groups.map(g => <option key={g.id} value={g.id.toString()}>Grup {g.name}</option>)}
+              </select>
+              {errors.groupId && <span className="text-red-500 text-[10px] font-bold">{errors.groupId.message as string}</span>}
+            </div>
+            
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nama Operator (Shift {activeShiftName}) *</label>
               <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white custom-scrollbar shadow-sm">
@@ -77,16 +85,9 @@ export default function ProductionHeaderModal({
               </div>
               {errors.operatorId && <span className="text-red-500 text-[10px] font-bold">{errors.operatorId.message as string}</span>}
             </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Grup Shift *</label>
-              <select {...register("groupId")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all">
-                {groups.map(g => <option key={g.id} value={g.id.toString()}>Grup {g.name}</option>)}
-              </select>
-              {errors.groupId && <span className="text-red-500 text-[10px] font-bold">{errors.groupId.message as string}</span>}
-            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
             {/* Kolom Kiri */}
             <div className="space-y-5">
               <div className="flex flex-col gap-1.5">
@@ -132,9 +133,15 @@ export default function ProductionHeaderModal({
                   <input type="text" {...register("course")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">No. Order Barang</label>
-                <input type="text" {...register("noOrderBarang")} placeholder="EXT/..." className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">No. Order Barang</label>
+                  <input type="text" {...register("noOrderBarang")} placeholder="EXT/..." className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">No. Customer</label>
+                  <input type="text" {...register("noCustomer")} placeholder="Customer..." className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
+                </div>
               </div>
             </div>
 
@@ -165,10 +172,6 @@ export default function ProductionHeaderModal({
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Pinggiran</label>
                 <input type="text" {...register("pinggiran")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">No. Customer</label>
-                <input type="text" {...register("noCustomer")} placeholder="Customer..." className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
               </div>
             </div>
           </div>

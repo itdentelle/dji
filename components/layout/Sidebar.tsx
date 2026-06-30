@@ -39,34 +39,33 @@ export default function Sidebar() {
       items: [
         { name: "Dashboard Umum", href: "/", icon: LayoutDashboard, roles: ["admin", "manager"] },
         { name: "Monitoring Mesin", href: "/machines", icon: Factory, roles: ["admin", "manager"] },
-        { name: "Dashboard Pegawai", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "employee"] },
+        { name: "Dashboard Pegawai", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "operator"] },
       ],
     },
     {
       label: "Produksi",
       groupIcon: Factory,
       items: [
-        { name: "Input Kehadiran", href: "/attendance", icon: User, roles: ["employee"] },
-        { name: "Input Produksi", href: "/input", icon: ClipboardList, roles: ["admin", "employee"] },
-        { name: "Riwayat Input", href: "/history", icon: History, roles: ["admin", "employee"] },
+        { name: "Input Produksi", href: "/input", icon: ClipboardList, roles: ["admin", "operator"] },
+        { name: "Riwayat Input", href: "/history", icon: History, roles: ["admin", "operator"] },
       ],
     },
     {
       label: "QC Inspection",
       groupIcon: ClipboardCheck,
       items: [
-        { name: "QC Inspection", href: "/qc", icon: ClipboardCheck, roles: ["admin", "qc"] },
-        { name: "Riwayat QC", href: "/qc/history", icon: History, roles: ["admin", "qc"] },
-        { name: "Cetak Barcode", href: "/qc/barcode", icon: QrCode, roles: ["admin", "qc"] },
-        { name: "Surat Jalan", href: "/qc/surat-jalan", icon: ClipboardList, roles: ["admin", "qc"] },
+        { name: "QC Inspection", href: "/qc", icon: ClipboardCheck, roles: ["admin", "inspeksi"] },
+        { name: "Riwayat QC", href: "/qc/history", icon: History, roles: ["admin", "inspeksi"] },
+        { name: "Cetak Barcode", href: "/qc/barcode", icon: QrCode, roles: ["admin", "inspeksi"] },
+        { name: "Surat Jalan", href: "/qc/surat-jalan", icon: ClipboardList, roles: ["admin", "inspeksi"] },
       ],
     },
     {
       label: "Mending",
       groupIcon: Wrench,
       items: [
-        { name: "Proses Mending", href: "/mending", icon: Scissors, roles: ["admin", "qc"] },
-        { name: "Riwayat Mending", href: "/mending/history", icon: History, roles: ["admin", "qc"] },
+        { name: "Proses Mending", href: "/mending", icon: Scissors, roles: ["admin", "mending"] },
+        { name: "Riwayat Mending", href: "/mending/history", icon: History, roles: ["admin", "mending"] },
       ],
     },
     {
@@ -75,13 +74,14 @@ export default function Sidebar() {
       items: [
         { name: "Chatbot AI", href: "/chatbot", icon: MessageSquare, roles: ["admin", "manager"] },
         { name: "Sync Status", href: "/sync", icon: RefreshCw, roles: ["admin"] },
+        { name: "Manajemen Akun", href: "/users", icon: User, roles: ["admin"] },
       ],
     },
   ];
 
   const generalItems = [
     { name: "Settings", href: "#", icon: Settings, roles: ["admin"] },
-    { name: "Help", href: "#", icon: HelpCircle, roles: ["admin", "employee"] },
+    { name: "Help", href: "#", icon: HelpCircle, roles: ["admin", "operator"] },
   ];
 
   const filteredGeneralItems = generalItems.filter((item) => item.roles.includes(user.role));

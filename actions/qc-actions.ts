@@ -266,7 +266,7 @@ export async function getPendingQCDetailsByBatch(mesin: string, designId: string
     
     let query = supabase
       .from("production_headers")
-      .select("id, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, operators(nama_operator)")
+      .select("id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, operators(nama_operator)")
       .eq("nomor_mc", mesin)
       .eq("design_id", designId)
       .eq("potongan_ke", parseInt(potonganKe));
@@ -295,7 +295,17 @@ export async function getPendingQCDetailsByBatch(mesin: string, designId: string
       return { ...d, production_headers: h };
     });
 
-    return { success: true, data: detailsWithHeader };
+    // Untuk jenis METERAN, hanya baris detail yang memiliki cacat/masalah (kategori_masalah tidak kosong) yang perlu diinspeksi.
+    // Baris rangkuman start/finish tidak akan diinspeksi.
+    const filteredDetails = detailsWithHeader.filter((d: any) => {
+      const h = d.production_headers;
+      if (h && h.panel_no === "METERAN") {
+        return d.kategori_masalah !== null && d.kategori_masalah !== undefined && d.kategori_masalah.trim() !== "";
+      }
+      return true;
+    });
+
+    return { success: true, data: filteredDetails };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -312,7 +322,7 @@ export async function getQCHistory() {
         production_details (
           id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
           production_headers (
-            id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, status_matching
+            id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching
           )
         )
       `)
@@ -377,7 +387,7 @@ export async function getQCHistoryByBatch(designId: string, potonganKe: string) 
       *,
       production_details (
         id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc, 
-        production_headers (id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, status_matching)
+        production_headers (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching)
       )
     `).in("production_detail_id", detailIds).order("created_at", { ascending: false });
     
@@ -418,7 +428,7 @@ export async function searchQCHistory(filters: {
         *,
         production_details!inner (
           id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
-          production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic, tgl, tanggal_potong, pick, no_order_barang, status_matching)
+          production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching)
         )
       `)
       .order("created_at", { ascending: false })
@@ -465,6 +475,115 @@ export async function searchQCHistory(filters: {
     return { success: true, data: formattedData };
   } catch (err: any) {
     console.error("Server action error in searchQCHistory:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function addQCDefectDetail(params: {
+  headerId: string;
+  meterKain: string;
+  rollNo?: string;
+  kategoriMasalah: string[];
+  detailMasalah?: string;
+  keteranganCacat?: string;
+}) {
+  try {
+    const supabase = await createClient();
+    
+    // Generate a unique detail id
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let randId = "";
+    for (let i = 0; i < 8; i++) {
+      randId += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    const detailId = randId.toLowerCase();
+
+    // Map kategoriMasalah array to comma-separated string
+    const kategoriStr = params.kategoriMasalah && params.kategoriMasalah.length > 0 
+      ? params.kategoriMasalah.join(', ') 
+      : null;
+
+    const { data, error } = await supabase
+      .from("production_details")
+      .insert({
+        id: detailId,
+        header_id: params.headerId,
+        pcs_index: 1, // default index for meteran
+        meter_kain: parseFloat(params.meterKain) || null,
+        roll_no: params.rollNo || null,
+        kategori_masalah: kategoriStr,
+        detail_masalah: params.detailMasalah || null,
+        keterangan_cacat: params.keteranganCacat || null,
+        indikator_stop: true,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Sync new defect finding to Google Sheets
+    try {
+      const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+      if (sheetUrl) {
+        // Fetch header info for the payload
+        const { data: headerData } = await supabase
+          .from("production_headers")
+          .select("*")
+          .eq("id", params.headerId)
+          .single();
+
+        if (headerData) {
+          const payload = [{
+            "ID Laporan": headerData.id,
+            "Tanggal Produksi": headerData.tgl || "",
+            "Tanggal & Jam": new Date().toISOString(),
+            "Tanggal Potong": headerData.tanggal_potong || "",
+            "Mesin": headerData.nomor_mc || "",
+            "Pick": headerData.pick || "",
+            "Course": headerData.course || "",
+            "RPM": headerData.rpm || "",
+            "Operator": headerData.pic || headerData.created_by_name || "",
+            "Grup": headerData.group_id || "",
+            "Design": headerData.design_id || "",
+            "Panel": headerData.panel_no || "METERAN",
+            "Potongan Ke": headerData.potongan_ke || "",
+            "No Order": headerData.no_order_barang || "",
+            "No Customer": headerData.no_customer || "",
+            "Total Downtime (Detik)": headerData.total_downtime_menit || 0,
+            "Meter Awal": headerData.meter_awal || "",
+            "Meter Akhir": headerData.meter_akhir || "",
+            "Total Produksi Meter": headerData.hasil_produksi_meter || "",
+            "PCS Ke": 1,
+            "Hasil PCS": 0,
+            "Meter Kain": params.meterKain || "",
+            "Roll No": params.rollNo || "",
+            "Mesin Stop?": "Ya",
+            "Kategori Masalah": kategoriStr || "",
+            "Detail Masalah": params.detailMasalah || "",
+            "Keterangan Cacat": params.keteranganCacat ? `[QC INSPEKSI] ${params.keteranganCacat}` : "[QC INSPEKSI]",
+            "Penanggung Jawab": headerData.created_by_name || ""
+          }];
+
+          console.log("[QC Defect Sync] Sending payload:", JSON.stringify(payload));
+          
+          fetch(sheetUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "insert_production", data: payload }),
+            redirect: "follow"
+          }).then(async (res) => {
+            console.log("[QC Defect Sync] Sheet response status:", res.status);
+          }).catch(err => console.error("[QC Defect Sync] Fetch error:", err));
+        }
+      }
+    } catch (sheetErr) {
+      console.error("Error syncing new QC defect to sheet:", sheetErr);
+    }
+
+    return { success: true, data };
+  } catch (err: any) {
     return { success: false, error: err.message };
   }
 }

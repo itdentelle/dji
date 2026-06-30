@@ -457,6 +457,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     data.pic = getOperatorName(data.operatorId) || "";
     data.grupName = getGroupName(data.groupId);
     data.designName = getDesignName(data.designId);
+    data.created_by_name = user?.fullName || null;
 
     // Save Header Data to LocalStorage automatically on submit
     // Save Header Data to LocalStorage automatically on submit

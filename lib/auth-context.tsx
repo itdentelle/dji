@@ -78,16 +78,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const currentPath = window.location.pathname;
             if (currentPath === "/login") {
               // We need to fetch role again quickly to determine redirect if not available yet
-              let role = "employee";
+              let role = "operator";
               if (session?.user) {
                 const result = await getUserProfile(session.user.id);
                 if (result.success && result.data) role = result.data.role;
               }
               
-              if (role === "employee") {
+              if (role === "operator") {
                 router.push("/input");
-              } else if (role === "qc") {
+              } else if (role === "inspeksi") {
                 router.push("/qc");
+              } else if (role === "mending") {
+                router.push("/mending");
               } else {
                 router.push("/");
               }

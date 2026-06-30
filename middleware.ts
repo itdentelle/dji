@@ -21,7 +21,8 @@ export async function middleware(request: NextRequest) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
             request.cookies.set(name, value);
-            response.cookies.set(name, value, options);
+            const sessionOptions = { ...options, maxAge: undefined, expires: undefined };
+            response.cookies.set(name, value, sessionOptions);
           });
         },
       },
@@ -81,23 +82,29 @@ export async function middleware(request: NextRequest) {
   if (user) {
     // Cegah masuk kembali ke halaman /login
     if (pathname === "/login") {
-      if (role === "employee") {
+      if (role === "operator") {
         return NextResponse.redirect(new URL("/dashboard", request.url));
-      } else if (role === "qc") {
+      } else if (role === "inspeksi") {
         return NextResponse.redirect(new URL("/qc", request.url));
+      } else if (role === "mending") {
+        return NextResponse.redirect(new URL("/mending", request.url));
       }
       return NextResponse.redirect(new URL("/", request.url));
     }
 
     // Role-Based Access Control (RBAC)
-    if (role === "employee") {
-      // Employee hanya boleh mengakses halaman /input dan /dashboard
-      if (pathname !== "/input" && pathname !== "/dashboard") {
+    if (role === "operator") {
+      // Operator hanya boleh mengakses halaman /input, /input-meter, dan /dashboard
+      if (pathname !== "/input" && pathname !== "/input-meter" && pathname !== "/dashboard") {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
-    } else if (role === "qc") {
+    } else if (role === "inspeksi") {
       if (!pathname.startsWith("/qc")) {
         return NextResponse.redirect(new URL("/qc", request.url));
+      }
+    } else if (role === "mending") {
+      if (!pathname.startsWith("/mending")) {
+        return NextResponse.redirect(new URL("/mending", request.url));
       }
     }
 

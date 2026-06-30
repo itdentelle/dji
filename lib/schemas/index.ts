@@ -17,6 +17,7 @@ export const productionFormSchemaBase = z.object({
   grupName: z.string().optional(),
   designId: z.string().min(1, "Design harus dipilih"),
   designName: z.string().optional(),
+  created_by_name: z.string().optional().nullable(),
 // Header Data
   nomorMc: z.string().optional().nullable(),
   statusMatching: z.string().min(1, "Status Matching harus dipilih"),
