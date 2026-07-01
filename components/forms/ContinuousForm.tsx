@@ -743,6 +743,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
             nomorMc={watch("nomorMc") || ""}
             design={watch("designId") || ""}
             statusMatching={watch("statusMatching") || ""}
+            potonganKe={watch("potonganKe")}
             onEdit={() => setIsHeaderModalOpen(true)}
           />
 

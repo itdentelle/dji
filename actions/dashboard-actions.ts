@@ -101,7 +101,7 @@ export async function getRealProductionsData(): Promise<{
 
 export interface MachineStatus {
   mesin_id: string;
-  status: "Beroperasi" | "Idle";
+  status: "Beroperasi" | "Idle" | "Tidak Aktif";
   nama_operator: string;
   design: string;
   last_input_date: string;
@@ -129,41 +129,66 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
     }
 
     const today = new Date().toISOString().split("T")[0];
+    const now = new Date();
     
-    // Create a map to store the latest record for each machine
+    // Create a map to store the latest record for each machine from DB
     const latestPerMachine = new Map<string, any>();
-    
-    // Since it's ordered by tanggal_jam desc, the first time we see a nomor_mc, it is its latest record
     (data || []).forEach((row: any) => {
       if (row.nomor_mc && !latestPerMachine.has(row.nomor_mc)) {
         latestPerMachine.set(row.nomor_mc, row);
       }
     });
 
-    const results: MachineStatus[] = [];
-    latestPerMachine.forEach((row, mesin_id) => {
-      const isBeroperasi = row.tgl === today;
+    const ALL_MACHINES = ["R1", "R2", "R3B", "R1C", "R2C", "R11", "R12", "R16", "T1C", "T2A", "Warping D6", "Winding"];
+    
+    const results: MachineStatus[] = ALL_MACHINES.map((mesin_id) => {
+      const row = latestPerMachine.get(mesin_id);
       
+      if (!row) {
+        return {
+          mesin_id,
+          status: "Tidak Aktif",
+          nama_operator: "-",
+          design: "-",
+          last_input_date: "-",
+          last_input_time: "-"
+        };
+      }
+
       let lastTime = "-";
+      let status: "Beroperasi" | "Idle" | "Tidak Aktif" = "Tidak Aktif";
+
       if (row.tanggal_jam) {
-        // Supposing tanggal_jam is stored as UTC or Local ISO String
         const dateObj = new Date(row.tanggal_jam);
         if (!isNaN(dateObj.getTime())) {
-          // Format as HH.MM or HH:MM
           lastTime = dateObj.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(/:/g, ".");
+          
+          const diffMs = now.getTime() - dateObj.getTime();
+          const diffMinutes = Math.floor(diffMs / 60000);
+          
+          if (row.tgl === today) {
+            if (diffMinutes <= 10) {
+              status = "Beroperasi";
+            } else {
+              status = "Idle";
+            }
+          } else {
+            status = "Tidak Aktif";
+          }
         } else {
           lastTime = row.tanggal_jam.split(/[ T]/)[1]?.slice(0, 5) || "-";
+          status = row.tgl === today ? "Idle" : "Tidak Aktif";
         }
       }
       
-      results.push({
+      return {
         mesin_id,
-        status: isBeroperasi ? "Beroperasi" : "Idle",
+        status,
         nama_operator: (row.operators as any)?.nama_operator || "-",
         design: row.design_id || "-",
         last_input_date: row.tgl,
         last_input_time: lastTime
-      });
+      };
     });
 
     // Sort machines alphabetically

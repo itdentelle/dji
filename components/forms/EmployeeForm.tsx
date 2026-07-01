@@ -717,6 +717,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
             nomorMc={watch("nomorMc") || ""}
             design={watch("designId") || ""}
             statusMatching={watch("statusMatching") || ""}
+            potonganKe={watch("potonganKe")}
             onEdit={() => setIsHeaderModalOpen(true)}
           />
 

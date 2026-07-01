@@ -8,6 +8,7 @@ interface HeaderSummaryCardProps {
   design: string;
   onEdit: () => void;
   statusMatching: string;
+  potonganKe?: string | number;
 }
 
 export default function HeaderSummaryCard({
@@ -17,6 +18,7 @@ export default function HeaderSummaryCard({
   design,
   onEdit,
   statusMatching,
+  potonganKe,
 }: HeaderSummaryCardProps) {
   return (
     <div className="bg-gradient-to-r from-sky-50 to-white border border-sky-100 rounded-2xl p-4 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -59,6 +61,21 @@ export default function HeaderSummaryCard({
             </span>
           </div>
         </div>
+
+        {/* Potongan Ke */}
+        {potonganKe && (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+              <Box className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Potongan Ke</span>
+              <span className="text-sm font-black text-slate-800 leading-tight">
+                {potonganKe}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Edit Button */}
