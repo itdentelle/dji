@@ -59,7 +59,7 @@ export default function MendingDetailModal({ isOpen, onClose, mendingData }: Men
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{itemLabel}</p>
               <p className="text-sm font-bold text-slate-800">
-                {isMeteran ? "Titik Meter " + (detail.meter_kain || "-") : "Panel " + header.panel_no} / PCS {detail.pcs_index}
+                {isMeteran ? "Titik Meter " + (detail.meter_kain ?? "-") : "Panel " + header.panel_no} / PCS {detail.pcs_index}
               </p>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
@@ -170,7 +170,7 @@ export default function MendingDetailModal({ isOpen, onClose, mendingData }: Men
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-bold text-slate-800">
-                            {itemHeader.panel_no === "METERAN" ? "Titik Meter " + (itemDetail.meter_kain || "-") : "Panel " + itemHeader.panel_no}
+                            {itemHeader.panel_no === "METERAN" ? "Titik Meter " + (itemDetail.meter_kain ?? "-") : "Panel " + itemHeader.panel_no}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="text-sm font-bold text-slate-800 flex items-center justify-center gap-1.5">

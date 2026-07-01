@@ -162,7 +162,7 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-bold text-slate-800">
-                            {itemHeader.panel_no === "METERAN" ? "Titik Meter " + (detail.meter_kain || "-") : "Panel " + itemHeader.panel_no}
+                            {itemHeader.panel_no === "METERAN" ? "Titik Meter " + (detail.meter_kain ?? "-") : "Panel " + itemHeader.panel_no}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="text-sm font-bold text-slate-800 flex items-center justify-center gap-1.5">
