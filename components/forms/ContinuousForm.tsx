@@ -268,6 +268,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
     watch,
     reset,
     control,
+    getValues,
     formState: { errors },
   } = useForm<ContinuousFormInput>({
     resolver: zodResolver(continuousFormSchema),
@@ -799,7 +800,29 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
                     <div className={`mt-4 border rounded-xl overflow-hidden transition-all duration-300 ${watchIndikator ? 'border-red-200 bg-red-50/20' : 'border-slate-200 bg-slate-50/50'}`}>
                       <label className="flex items-center justify-between p-4 cursor-pointer select-none">
                         <div className="flex items-center gap-3">
-                          <input type="checkbox" {...register(`pcsData.${index}.indikatorStop` as const)} className="w-5 h-5 rounded text-red-600 focus:ring-red-500 border-slate-300 cursor-pointer" />
+                          <input 
+                            type="checkbox" 
+                            {...register(`pcsData.${index}.indikatorStop` as const)} 
+                            onChange={(e) => {
+                              register(`pcsData.${index}.indikatorStop` as const).onChange(e);
+                              if (e.target.checked) {
+                                if (!isTimerRunning) handleStartTimer();
+                              } else {
+                                setTimeout(() => {
+                                  const currentPcsData = getValues("pcsData") || [];
+                                  if (!currentPcsData.some(p => p.indikatorStop)) {
+                                    if (isTimerRunning) {
+                                      setIsTimerRunning(false);
+                                      setTimerStartRef(null);
+                                      setLiveTimerSeconds(0);
+                                    }
+                                    setValue("totalDowntime", "");
+                                  }
+                                }, 10);
+                              }
+                            }}
+                            className="w-5 h-5 rounded text-red-600 focus:ring-red-500 border-slate-300 cursor-pointer" 
+                          />
                           <div>
                             <h5 className={`text-sm font-bold ${watchIndikator ? 'text-red-650' : 'text-slate-600'}`}>Terdapat Cacat / Kendala pada PCS ini?</h5>
                           </div>
@@ -871,39 +894,39 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
                 Total Estimasi Waktu Mesin Berhenti (Downtime)
               </label>
               <p className="text-[10px] text-orange-600">
-                Isi total keseluruhan waktu dalam detik jika mesin sempat berhenti selama produksi panel ini.
+                Waktu henti mesin akan tercatat otomatis saat timer berjalan.
               </p>
-              <div className="relative flex items-center gap-3">
-                <div className="relative flex-1">
+              <div className="relative flex items-center gap-4 mt-2">
+                <div className="relative w-32 shrink-0">
                   <input 
                     type="number" 
                     {...register("totalDowntime")} 
-                    className="w-full h-12 pl-4 pr-16 rounded-xl bg-white border border-orange-300 text-sm font-bold text-slate-800 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all shadow-sm" 
-                    placeholder="Misal: 45" 
-                    disabled={isTimerRunning}
+                    className="w-full h-14 pl-4 pr-12 rounded-2xl bg-white/50 border-2 border-orange-200 text-xl font-black text-orange-700 focus:outline-none transition-all shadow-inner cursor-not-allowed" 
+                    placeholder="0" 
+                    readOnly
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-600 text-xs font-bold">Detik</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-500 text-[10px] font-bold uppercase">Detik</span>
                 </div>
                 
                 {/* Timer Controls */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex-1">
                   {!isTimerRunning ? (
                     <button
                       type="button"
                       onClick={handleStartTimer}
-                      className="flex items-center gap-2 px-4 h-12 bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold text-xs rounded-xl transition-all shadow-sm border border-orange-300"
+                      className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
                     >
-                      <Play className="w-4 h-4" />
+                      <Play className="w-5 h-5 fill-current" />
                       Mulai Timer
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={handleStopTimer}
-                      className="flex items-center gap-2 px-4 h-12 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm shadow-red-500/20"
+                      className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-red-500/20 animate-pulse active:scale-[0.98]"
                     >
-                      <Square className="w-4 h-4 fill-current" />
-                      Selesai ({formatTimer(liveTimerSeconds)})
+                      <Square className="w-5 h-5 fill-current" />
+                      Stop ({formatTimer(liveTimerSeconds)})
                     </button>
                   )}
                 </div>

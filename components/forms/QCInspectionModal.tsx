@@ -31,10 +31,18 @@ interface QCInspectionModalProps {
   onClose: () => void;
   headerData: any;
   selections: Record<string, number>;
-  onSuccess: () => void;
+  onSuccess?: () => void;
+  startInspectTime?: string;
 }
 
-export default function QCInspectionModal({ isOpen, onClose, headerData, selections, onSuccess }: QCInspectionModalProps) {
+export default function QCInspectionModal({
+  isOpen,
+  onClose,
+  headerData,
+  selections,
+  onSuccess,
+  startInspectTime
+}: QCInspectionModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -68,14 +76,14 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
       if (storedPetugas2) setValue('petugas_inspeksi_2', storedPetugas2);
       
       const storedStart = localStorage.getItem('qc_start');
-      const storedFinish = localStorage.getItem('qc_finish');
       
-      // Calculate start time automatically as current time if no stored value
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
       const mins = String(now.getMinutes()).padStart(2, '0');
-      setValue('start_inspect', storedStart || `${hours}:${mins}`);
-      if (storedFinish) setValue('finish_inspect', storedFinish);
+      const currentTime = `${hours}:${mins}`;
+      
+      setValue('start_inspect', startInspectTime || storedStart || currentTime);
+      setValue('finish_inspect', currentTime);
 
       // Count selections to auto-fill QC grades
       let countCeklis = 0;
@@ -147,7 +155,7 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
         localStorage.setItem('qc_start', data.start_inspect || '');
         localStorage.setItem('qc_finish', data.finish_inspect || '');
         
-        onSuccess();
+        if (onSuccess) onSuccess();
         handleClose();
         return;
       }
@@ -161,7 +169,7 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
         localStorage.setItem('qc_tanggal', data.tanggal_inspeksi || '');
         localStorage.setItem('qc_start', data.start_inspect || '');
         localStorage.setItem('qc_finish', data.finish_inspect || '');
-        onSuccess();
+        if (onSuccess) onSuccess();
         handleClose();
       } else {
         setErrorMsg(result.error || "Gagal menyimpan hasil inspeksi.");
@@ -173,7 +181,7 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
             details: Object.keys(selections).map(detailId => ({ detailId, finalInspectionId: selections[detailId] })),
             ...data
          });
-         onSuccess();
+         if (onSuccess) onSuccess();
          handleClose();
       } else {
          setErrorMsg("Terjadi kesalahan jaringan atau server saat memproses laporan.");
@@ -274,17 +282,10 @@ export default function QCInspectionModal({ isOpen, onClose, headerData, selecti
             {/* Bagian 2: Hasil Fisik */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2"><Scale className="w-4 h-4 text-emerald-500"/> Data Fisik</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Berat Produksi (kg)</label>
-                  <input type="number" step="0.01" {...register("berat_produksi", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                  {errors.berat_produksi && <p className="text-red-500 text-[10px] mt-1">{errors.berat_produksi.message}</p>}
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Berat Inspecting (kg)</label>
-                  <input type="number" step="0.01" {...register("berat_inspecting", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                  {errors.berat_inspecting && <p className="text-red-500 text-[10px] mt-1">{errors.berat_inspecting.message}</p>}
-                </div>
+              <div className="w-full">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Berat Kain (kg)</label>
+                <input type="number" step="0.01" {...register("berat_produksi", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                {errors.berat_produksi && <p className="text-red-500 text-[10px] mt-1">{errors.berat_produksi.message}</p>}
               </div>
             </div>
 

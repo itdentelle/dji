@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { searchMendingHistory } from "@/actions/mending-actions";
-import { Search, Loader2, RefreshCw, Calendar, Package, Filter, X, Eye, Clock, User, Hash, Box, ClipboardList, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Search, Loader2, RefreshCw, Calendar, Package, Filter, X, Eye, Clock, User, Hash, Box, ClipboardList, AlertCircle, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import MendingDetailModal from "@/components/MendingDetailModal";
 
 const MENDING_OPERATORS = [
@@ -283,46 +283,40 @@ export default function MendingHistoryPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {data.map((d, idx) => {
-                      const header = d.header || {};
-                      const detail = d.detail || {};
-                      
-                      let gradeColor = "bg-slate-100 text-slate-700";
-                      let gradeText = "-";
-                      if (detail.status_mending === 'A') {
-                        gradeColor = "bg-emerald-100 text-emerald-700";
-                        gradeText = "Grade A";
-                      } else if (detail.status_mending === 'B') {
-                        gradeColor = "bg-amber-100 text-amber-700";
-                        gradeText = "Grade B";
-                      } else if (detail.status_mending === 'BS') {
-                        gradeColor = "bg-rose-100 text-rose-700";
-                        gradeText = "Grade BS";
-                      }
+                      let gradeA = 0, gradeB = 0, gradeBS = 0;
+                      (d.items || []).forEach((item: any) => {
+                         if (item.hasil_mending === 'A') gradeA++;
+                         if (item.hasil_mending === 'B') gradeB++;
+                         if (item.hasil_mending === 'BS') gradeBS++;
+                      });
 
                       return (
-                        <tr key={d.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={d.id || idx} className="hover:bg-slate-50/80 transition-colors group/row">
                           <td className="px-6 py-4">
-                            <div className="text-sm font-bold text-slate-800">{d.tanggal_mending}</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">{d.start_mending} - {d.finish_mending}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-xs font-bold text-slate-800">{header.nomor_mc || "-"}</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">{header.design_id || "-"}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-xs font-bold text-slate-700">{d.petugas_mending}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="inline-flex items-center justify-center h-6 px-2 rounded-md bg-slate-100 text-slate-700 font-bold text-xs">
-                              {header.panel_no === "METERAN" ? "Roll " + detail.roll_no : "Panel " + header.panel_no}
+                            <div className="font-bold text-slate-800">{d.tanggal_mending}</div>
+                            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+                              <Clock className="w-3 h-3" /> {d.start_mending || "-"} - {d.finish_mending || "-"}
                             </div>
-                            <div className="text-[10px] text-[#0070bc] font-bold mt-1 uppercase tracking-wider">
-                              PCS Ke-{detail.pcs_index}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-slate-800">{d.nomor_mc || "-"}</div>
+                            <div className="text-xs text-slate-500">{d.design_id || "-"}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-slate-800">{d.petugas_mending || "-"}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-slate-800 flex flex-col">
+                              <span>PCS Ke-{d.pcs_index || d.detail?.pcs_index}</span>
+                              <span className="text-xs text-slate-500 font-medium mt-0.5">{d.total_panel || d.items?.length || 0} Panel</span>
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <div className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${gradeColor}`}>
-                              {gradeText}
+                            <div className="text-sm font-bold text-slate-800 flex flex-wrap items-center justify-center gap-3">
+                               {gradeA > 0 && <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> A: {gradeA}</span>}
+                               {gradeB > 0 && <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> B: {gradeB}</span>}
+                               {gradeBS > 0 && <span className="flex items-center gap-1.5"><XCircle className="w-4 h-4 text-rose-500" /> BS: {gradeBS}</span>}
+                               {gradeA === 0 && gradeB === 0 && gradeBS === 0 && <span>-</span>}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">

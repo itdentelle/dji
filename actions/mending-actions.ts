@@ -130,7 +130,7 @@ export async function getPendingMendingDetailsByBatch(mesin: string, designId: s
     // Get inspected & unmended items, but only from fully-inspected PCS indexes
     const { data: details, error: detailsError } = await supabase
       .from("production_details")
-      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id, qc_inspections(berat_inspecting)")
+      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id, qc_inspection_items(qc_inspection_batches(berat_inspecting))")
       .in("header_id", headerIds)
       .not("final_inspection_id", "is", null)
       .is("status_mending", null);
@@ -193,38 +193,90 @@ export async function submitMending(params: {
       }
     }
 
-    // Update berat_inspecting in qc_inspections if berat_kain is provided
+    // Update berat_inspecting in qc_inspection_batches if berat_kain is provided
     if (params.berat_kain !== undefined) {
       const detailIds = params.details.map(d => d.detailId);
-      const { error: qcUpdateError } = await supabase
-        .from("qc_inspections")
-        .update({ berat_inspecting: params.berat_kain })
+      const { data: qcItems } = await supabase
+        .from("qc_inspection_items")
+        .select("batch_id")
         .in("production_detail_id", detailIds);
         
-      if (qcUpdateError) {
-        console.error("Gagal update berat_inspecting di qc_inspections:", qcUpdateError);
+      if (qcItems && qcItems.length > 0) {
+        const batchIds = Array.from(new Set(qcItems.map(i => i.batch_id)));
+        const { error: qcUpdateError } = await supabase
+          .from("qc_inspection_batches")
+          .update({ berat_inspecting: params.berat_kain })
+          .in("id", batchIds);
+          
+        if (qcUpdateError) {
+          console.error("Gagal update berat_inspecting di qc_inspection_batches:", qcUpdateError);
+        }
       }
     }
 
-    // Insert into mending_inspections for each panel
-    const mendingInspectionsData = params.details.map(d => ({
+    // Ambil info header dari item pertama (semua item dalam 1 form submit mending punya header yang sama)
+    let headerInfo = { nomor_mc: "", design_id: "", potongan_ke: 0, pcs_index: 0 };
+    if (params.details.length > 0) {
+      const { data: firstDetail } = await supabase
+        .from("production_details")
+        .select(`
+          pcs_index,
+          production_headers!inner (nomor_mc, design_id, potongan_ke)
+        `)
+        .eq("id", params.details[0].detailId)
+        .single();
+        
+      if (firstDetail) {
+        headerInfo = {
+          pcs_index: firstDetail.pcs_index || 0,
+          nomor_mc: (firstDetail.production_headers as any)?.nomor_mc || "",
+          design_id: (firstDetail.production_headers as any)?.design_id || "",
+          potongan_ke: (firstDetail.production_headers as any)?.potongan_ke || 0
+        };
+      }
+    }
+
+    // 1. Insert ke tabel mending_batches (Header)
+    const { data: batchData, error: batchError } = await supabase
+      .from("mending_batches")
+      .insert({
+        tanggal_mending: params.tanggal_mending,
+        petugas_mending: params.petugas_mending,
+        start_mending: params.start_mending,
+        finish_mending: params.finish_mending,
+        keterangan_mending: params.notes || "",
+        total_panel: params.details.length,
+        nomor_mc: headerInfo.nomor_mc,
+        design_id: headerInfo.design_id,
+        potongan_ke: headerInfo.potongan_ke,
+        pcs_index: headerInfo.pcs_index
+      })
+      .select("id")
+      .single();
+
+    if (batchError) {
+      console.error("Gagal insert mending_batches:", batchError);
+      return { success: false, error: batchError.message };
+    }
+
+    const batchId = batchData.id;
+
+    // 2. Insert ke tabel mending_items (Detail)
+    const itemInserts = params.details.map(d => ({
+      batch_id: batchId,
       production_detail_id: d.detailId,
-      petugas_mending: params.petugas_mending,
-      tanggal_mending: params.tanggal_mending,
-      start_mending: params.start_mending,
-      finish_mending: params.finish_mending,
-      mending_grade_a: d.grade === 'A' ? 1 : 0,
-      mending_grade_b: d.grade === 'B' ? 1 : 0,
-      mending_grade_bs: d.grade === 'BS' ? 1 : 0,
-      hasil_mending: params.notes || ""
+      hasil_mending: d.grade
     }));
 
-    const { error: insertError } = await supabase
-      .from("mending_inspections")
-      .insert(mendingInspectionsData);
+    const { error: itemsError } = await supabase
+      .from("mending_items")
+      .insert(itemInserts);
 
-    if (insertError) {
-       console.error("Warning: Gagal menyimpan data mending_inspections.", insertError);
+    if (itemsError) {
+      console.error("Gagal insert mending_items:", itemsError);
+      // Fallback: hapus batch jika items gagal
+      await supabase.from("mending_batches").delete().eq("id", batchId);
+      return { success: false, error: itemsError.message };
     }
 
     // Webhook logic
@@ -250,6 +302,8 @@ export async function submitMending(params: {
             hasil_mending: d.grade,
             keterangan_mending: params.notes || "",
             tanggal_mending: params.tanggal_mending,
+            berat_kain: params.berat_kain || 0,
+            berat_mending: params.berat_kain || 0,
           };
         });
 
@@ -356,12 +410,15 @@ export async function searchMendingHistory(filters: {
     const supabase = await createClient();
     
     let query = supabase
-      .from("mending_inspections")
+      .from("mending_batches")
       .select(`
         *,
-        production_details!inner (
-          id, pcs_index, final_inspection_id, status_mending, header_id, roll_no, keterangan_qc,
-          production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang)
+        items:mending_items!inner (
+          id, hasil_mending,
+          detail:production_details!inner (
+            id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
+            header:production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang)
+          )
         )
       `)
       .order("created_at", { ascending: false })
@@ -372,19 +429,19 @@ export async function searchMendingHistory(filters: {
     }
     
     if (filters.nomor_mc) {
-      query = query.ilike("production_details.production_headers.nomor_mc", `%${filters.nomor_mc}%`);
+      query = query.ilike("nomor_mc", `%${filters.nomor_mc}%`);
     }
 
     if (filters.design_id) {
-      query = query.ilike("production_details.production_headers.design_id", `%${filters.design_id}%`);
+      query = query.ilike("design_id", `%${filters.design_id}%`);
     }
     
     if (filters.potongan_ke) {
-      query = query.eq("production_details.production_headers.potongan_ke", parseInt(filters.potongan_ke));
+      query = query.eq("potongan_ke", parseInt(filters.potongan_ke));
     }
     
     if (filters.no_customer) {
-      query = query.ilike("production_details.production_headers.no_order_barang", `%${filters.no_customer}%`);
+      query = query.ilike("items.detail.header.no_order_barang", `%${filters.no_customer}%`);
     }
     
     if (filters.petugas_ids && filters.petugas_ids.length > 0) {
@@ -399,11 +456,24 @@ export async function searchMendingHistory(filters: {
       return { success: false, error: error.message };
     }
 
-    const formattedData = (data || []).map((row: any) => ({
-      ...row,
-      detail: row.production_details || {},
-      header: row.production_details?.production_headers || {}
-    }));
+    const formattedData = (data || []).map((batch: any) => {
+      const firstItem = batch.items && batch.items.length > 0 ? batch.items[0] : null;
+      const header = firstItem?.detail?.header || {};
+      
+      const formattedItems = (batch.items || []).map((item: any) => ({
+        id: item.id,
+        hasil_mending: item.hasil_mending,
+        detail: item.detail || {},
+        header: item.detail?.header || {}
+      }));
+
+      return {
+        ...batch,
+        header,
+        detail: { pcs_index: batch.pcs_index },
+        items: formattedItems
+      };
+    });
 
     return { success: true, data: formattedData };
   } catch (err: any) {

@@ -91,10 +91,12 @@ export default function QCHistoryPage() {
     }
   };
 
-  const handleOpenDetail = (d: any) => {
-    setSelectedData(d);
+  const handleOpenDetail = (group: any) => {
+    setSelectedData(group);
     setIsModalOpen(true);
   };
+
+  const groupedData = data;
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20 animate-fadeIn">
@@ -263,11 +265,11 @@ export default function QCHistoryPage() {
               Hasil Pencarian
             </h2>
             <div className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
-              {data.length} Data Ditemukan
+              {groupedData.length} Data Ditemukan
             </div>
           </div>
 
-          {data.length > 0 ? (
+          {groupedData.length > 0 ? (
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -282,60 +284,61 @@ export default function QCHistoryPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {data.map((d, idx) => {
-                      const header = d.header || {};
-                      const detail = d.detail || {};
+                    {groupedData.map((group: any, idx: number) => {
+                      const header = group.header || {};
                       
-                      let gradeColor = "bg-slate-100 text-slate-700";
-                      let GradeIcon = null;
-                      let gradeText = "-";
-                      if (detail.final_inspection_id === 1) {
-                        gradeColor = "bg-emerald-100 text-emerald-700 border border-emerald-200";
-                        GradeIcon = <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />;
-                        gradeText = "OK";
-                      } else if (detail.final_inspection_id === 2 || detail.final_inspection_id === 3) {
-                        gradeColor = "bg-rose-100 text-rose-700 border border-rose-200";
-                        GradeIcon = <XCircle className="w-3.5 h-3.5 mr-1.5" />;
-                        gradeText = "Silang";
-                      }
-
                       return (
-                        <tr key={d.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={idx} className="hover:bg-sky-50/50 transition-colors group/row">
                           <td className="px-6 py-4">
-                            <div className="text-sm font-bold text-slate-800">{d.tanggal_inspeksi}</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">{d.start_inspect} - {d.finish_inspect}</div>
+                            <div className="font-bold text-slate-800">{group.tanggal_inspeksi}</div>
+                            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+                              <Clock className="w-3 h-3" /> {group.start_inspect || "-"} - {group.finish_inspect || "-"}
+                            </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-xs font-bold text-slate-800">{header.nomor_mc || "-"}</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">{header.design_id || "-"}</div>
+                            <div className="font-bold text-slate-800">{group.nomor_mc || "-"}</div>
+                            <div className="text-xs text-slate-500">{group.design_id || "-"}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-xs font-bold text-slate-700">{d.petugas_inspeksi}</div>
-                            {d.petugas_inspeksi_2 && (
-                              <div className="text-[10px] text-slate-400 mt-0.5">& {d.petugas_inspeksi_2}</div>
+                            <div className="font-bold text-slate-800">{group.petugas_inspeksi || "-"}</div>
+                            {group.petugas_inspeksi_2 && (
+                              <div className="text-xs text-slate-500">& {group.petugas_inspeksi_2}</div>
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <div className="inline-flex items-center justify-center h-6 px-2 rounded-md bg-slate-100 text-slate-700 font-bold text-xs">
-                              {header.panel_no === "METERAN" ? "Roll " + detail.roll_no : "Panel " + header.panel_no}
-                            </div>
-                            <div className="text-[10px] text-[#0070bc] font-bold mt-1 uppercase tracking-wider">
-                              PCS Ke-{detail.pcs_index}
+                            <div className="font-bold text-slate-800 flex flex-col">
+                              <span>PCS Ke-{group.pcs_index || group.detail?.pcs_index}</span>
+                              <span className="text-xs text-slate-500 font-medium mt-0.5">{group.items?.length || 0} Panel</span>
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <div className={`inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider shadow-sm ${gradeColor}`}>
-                              {GradeIcon}
-                              {gradeText}
+                            <div className="text-sm font-bold text-slate-800 flex items-center justify-center gap-3">
+                              {group.inspeksi_silang === 0 ? (
+                                <span className="flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                  ALL OK
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                    {group.inspeksi_ceklis}
+                                  </span>
+                                  <span className="flex items-center gap-1.5">
+                                    <XCircle className="w-4 h-4 text-rose-500" />
+                                    {group.inspeksi_silang}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
                             <button
-                              onClick={() => handleOpenDetail(d)}
-                              className="p-2 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm group mx-auto"
-                              title="Lihat Detail Inspeksi"
+                              onClick={() => handleOpenDetail(group)}
+                              className="p-2 bg-white border border-slate-200 text-slate-600 hover:text-[#0070bc] hover:border-[#0070bc] hover:bg-sky-50 rounded-lg transition-all shadow-sm group-hover/row:shadow-md"
+                              title="Lihat Detail"
                             >
-                              <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                              <Eye className="w-4 h-4" />
                             </button>
                           </td>
                         </tr>

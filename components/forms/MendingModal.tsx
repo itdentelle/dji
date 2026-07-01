@@ -30,9 +30,10 @@ interface MendingModalProps {
   selections: Record<string, string>; // DetailId -> Grade ("A", "B", "BS")
   detailData?: any[]; // To get berat_inspecting
   onSuccess: () => void;
+  startMendingTime?: string;
 }
 
-export default function MendingModal({ isOpen, onClose, headerData, selections, detailData, onSuccess }: MendingModalProps) {
+export default function MendingModal({ isOpen, onClose, headerData, selections, detailData, onSuccess, startMendingTime }: MendingModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -60,13 +61,14 @@ export default function MendingModal({ isOpen, onClose, headerData, selections, 
       if (storedPetugas) setValue('petugas_mending', storedPetugas);
       
       const storedStart = localStorage.getItem('mending_start');
-      const storedFinish = localStorage.getItem('mending_finish');
       
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
       const mins = String(now.getMinutes()).padStart(2, '0');
-      setValue('start_mending', storedStart || `${hours}:${mins}`);
-      if (storedFinish) setValue('finish_mending', storedFinish);
+      const currentTime = `${hours}:${mins}`;
+      
+      setValue('start_mending', startMendingTime || storedStart || currentTime);
+      setValue('finish_mending', currentTime);
 
       let countA = 0;
       let countB = 0;
@@ -82,17 +84,14 @@ export default function MendingModal({ isOpen, onClose, headerData, selections, 
       setValue('mending_grade_b', countB);
       setValue('mending_grade_bs', countBS);
 
-      // Default berat kain dari total berat inspecting yang dipilih
-      let totalBerat = 0;
+      let initialBerat = 0;
       if (detailData && detailData.length > 0) {
-        Object.keys(selections).forEach(id => {
-          const detail = detailData.find(d => d.id === id);
-          if (detail && detail.qc_inspections && detail.qc_inspections.length > 0) {
-             totalBerat += Number(detail.qc_inspections[0].berat_inspecting) || 0;
-          }
-        });
+        const firstDetail = detailData[0];
+        if (firstDetail.qc_inspection_items && firstDetail.qc_inspection_items.length > 0) {
+          initialBerat = Number(firstDetail.qc_inspection_items[0].qc_inspection_batches?.berat_inspecting) || 0;
+        }
       }
-      setValue('berat_kain', totalBerat);
+      setValue('berat_kain', initialBerat);
     }
   }, [isOpen, setValue, selections, detailData]);
 

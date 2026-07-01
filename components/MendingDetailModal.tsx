@@ -1,5 +1,5 @@
 import React from "react";
-import { X, ClipboardCheck, User, Scale, Clock, AlertTriangle, FileText, Package, Box } from "lucide-react";
+import { X, ClipboardCheck, User, Scale, Clock, AlertTriangle, FileText, Package, Box, CheckCircle2, XCircle } from "lucide-react";
 
 interface MendingDetailModalProps {
   isOpen: boolean;
@@ -14,19 +14,12 @@ export default function MendingDetailModal({ isOpen, onClose, mendingData }: Men
   const detail = mendingData.detail || {};
   const header = mendingData.header || {};
 
-  let gradeColor = "text-slate-600 bg-slate-100";
-  let gradeText = "Tidak Diketahui";
-  
-  if (detail.status_mending === 'A') {
-    gradeColor = "text-emerald-700 bg-emerald-100";
-    gradeText = "Grade A";
-  } else if (detail.status_mending === 'B') {
-    gradeColor = "text-amber-700 bg-amber-100";
-    gradeText = "Grade B";
-  } else if (detail.status_mending === 'BS') {
-    gradeColor = "text-rose-700 bg-rose-100";
-    gradeText = "Grade BS";
-  }
+  let gradeA = 0, gradeB = 0, gradeBS = 0;
+  (d.items || []).forEach((item: any) => {
+    if (item.hasil_mending === 'A') gradeA++;
+    if (item.hasil_mending === 'B') gradeB++;
+    if (item.hasil_mending === 'BS') gradeBS++;
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn overflow-y-auto" onClick={onClose}>
@@ -54,8 +47,11 @@ export default function MendingDetailModal({ isOpen, onClose, mendingData }: Men
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasil Mending</p>
-              <div className={`inline-flex px-2 py-1 rounded font-bold text-xs ${gradeColor}`}>
-                {gradeText}
+              <div className="text-sm font-bold text-slate-800 flex flex-wrap items-center gap-3 mt-1">
+                 {gradeA > 0 && <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> A: {gradeA}</span>}
+                 {gradeB > 0 && <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> B: {gradeB}</span>}
+                 {gradeBS > 0 && <span className="flex items-center gap-1.5"><XCircle className="w-4 h-4 text-rose-500" /> BS: {gradeBS}</span>}
+                 {gradeA === 0 && gradeB === 0 && gradeBS === 0 && <span>-</span>}
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
@@ -130,8 +126,61 @@ export default function MendingDetailModal({ isOpen, onClose, mendingData }: Men
               </h4>
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm h-full p-4">
                 <p className="text-sm text-slate-700 italic">
-                  {d.hasil_mending || "Tidak ada catatan."}
+                  {d.keterangan_mending || "Tidak ada catatan."}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* List of Panels */}
+          <div>
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Box className="w-4 h-4" /> Rincian Panel di PCS Ini
+            </h4>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                      <th className="px-4 py-3">Panel / Roll</th>
+                      <th className="px-4 py-3 text-center">Hasil Mending</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(d.items || []).map((item: any, idx: number) => {
+                      const itemDetail = item.detail || {};
+                      const itemHeader = itemDetail.header || header;
+                      
+                      let itemText = "-";
+                      let Icon = null;
+                      let iconColor = "";
+
+                      if (item.hasil_mending === 'A' || item.hasil_mending === 'B') {
+                        itemText = `Grade ${item.hasil_mending}`;
+                        Icon = CheckCircle2;
+                        iconColor = "text-emerald-500";
+                      } else if (item.hasil_mending === 'BS') {
+                        itemText = "Grade BS";
+                        Icon = XCircle;
+                        iconColor = "text-rose-500";
+                      }
+
+                      return (
+                        <tr key={item.id || idx} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 font-bold text-slate-800">
+                            {itemHeader.panel_no === "METERAN" ? "Roll " + itemDetail.roll_no : "Panel " + itemHeader.panel_no}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="text-sm font-bold text-slate-800 flex items-center justify-center gap-1.5">
+                              {Icon && <Icon className={`w-4 h-4 ${iconColor}`} />}
+                              {itemText}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

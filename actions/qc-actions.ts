@@ -105,29 +105,63 @@ export async function submitQCInspection(params: {
   try {
     const supabase = await createClient();
     
-    // We do this in a loop or bulk.
-    // Insert into qc_inspections for EACH detail
-    const qcInspectionsData = params.details.map(d => ({
+    // 1. Dapatkan informasi mesin, dll dari production_details
+    const detailIds = params.details.map(d => d.detailId);
+    const { data: detailsInfo } = await supabase
+      .from("production_details")
+      .select("pcs_index, production_headers(nomor_mc, design_id, potongan_ke)")
+      .in("id", detailIds)
+      .limit(1)
+      .single();
+
+    let nomor_mc = null, design_id = null, potongan_ke = null, pcs_index = null;
+    if (detailsInfo) {
+      pcs_index = detailsInfo.pcs_index;
+      if (detailsInfo.production_headers) {
+        nomor_mc = (detailsInfo.production_headers as any).nomor_mc;
+        design_id = (detailsInfo.production_headers as any).design_id;
+        potongan_ke = (detailsInfo.production_headers as any).potongan_ke;
+      }
+    }
+
+    // 2. Insert ke qc_inspection_batches
+    const { data: batchData, error: batchError } = await supabase
+      .from("qc_inspection_batches")
+      .insert({
+        tanggal_inspeksi: params.tanggal_inspeksi,
+        start_inspect: params.start_inspect,
+        finish_inspect: params.finish_inspect,
+        petugas_inspeksi: params.petugas_inspeksi,
+        petugas_inspeksi_2: params.petugas_inspeksi_2 || null,
+        nomor_mc,
+        design_id,
+        potongan_ke,
+        pcs_index,
+        berat_produksi: params.berat_produksi,
+        berat_inspecting: params.berat_produksi, // Disamakan
+        inspeksi_ceklis: params.qc_ceklis,
+        inspeksi_silang: params.qc_silang
+      })
+      .select("id")
+      .single();
+
+    if (batchError || !batchData) {
+      throw new Error("Gagal menyimpan data induk batch inspeksi: " + (batchError?.message || "Unknown error"));
+    }
+
+    // 3. Insert ke qc_inspection_items
+    const qcItemsData = params.details.map(d => ({
+      batch_id: batchData.id,
       production_detail_id: d.detailId,
-      petugas_inspeksi: params.petugas_inspeksi,
-      petugas_inspeksi_2: params.petugas_inspeksi_2 || null,
-      tanggal_inspeksi: params.tanggal_inspeksi,
-      start_inspect: params.start_inspect,
-      finish_inspect: params.finish_inspect,
-      berat_produksi: params.berat_produksi,
-      berat_inspecting: params.berat_inspecting,
-      prod_ceklis: params.prod_ceklis,
-      prod_silang: params.prod_silang,
-      inspeksi_ceklis: params.qc_ceklis,
-      inspeksi_silang: params.qc_silang
+      final_inspection_id: d.finalInspectionId
     }));
 
     const { error: insertError } = await supabase
-      .from("qc_inspections")
-      .insert(qcInspectionsData);
+      .from("qc_inspection_items")
+      .insert(qcItemsData);
 
     if (insertError) {
-      throw new Error("Gagal menyimpan data inspeksi: " + insertError.message);
+      throw new Error("Gagal menyimpan data rincian inspeksi: " + insertError.message);
     }
 
     // Bulk update final_inspection_id in production_details
@@ -190,7 +224,7 @@ export async function submitQCInspection(params: {
             waktu_qc: `${params.start_inspect || ""} - ${params.finish_inspect || ""}`,
             hasil_qc: gradeStr,
             berat_produksi: params.berat_produksi,
-            berat_qc: params.berat_inspecting,
+            berat_qc: params.berat_produksi, // Disamakan dengan berat kain
             keterangan_qc: params.notes || "",
             prod_ceklis: params.prod_ceklis,
             prod_silang: params.prod_silang,
@@ -423,12 +457,15 @@ export async function searchQCHistory(filters: {
     const supabase = await createClient();
     
     let query = supabase
-      .from("qc_inspections")
+      .from("qc_inspection_batches")
       .select(`
         *,
-        production_details!inner (
-          id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
-          production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching)
+        items:qc_inspection_items!inner (
+          id, final_inspection_id,
+          detail:production_details!inner (
+            id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
+            header:production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching)
+          )
         )
       `)
       .order("created_at", { ascending: false })
@@ -439,19 +476,19 @@ export async function searchQCHistory(filters: {
     }
     
     if (filters.nomor_mc) {
-      query = query.ilike("production_details.production_headers.nomor_mc", `%${filters.nomor_mc}%`);
+      query = query.ilike("nomor_mc", `%${filters.nomor_mc}%`);
     }
 
     if (filters.design_id) {
-      query = query.ilike("production_details.production_headers.design_id", `%${filters.design_id}%`);
+      query = query.ilike("design_id", `%${filters.design_id}%`);
     }
     
     if (filters.potongan_ke) {
-      query = query.eq("production_details.production_headers.potongan_ke", parseInt(filters.potongan_ke));
+      query = query.eq("potongan_ke", parseInt(filters.potongan_ke));
     }
     
     if (filters.no_customer) {
-      query = query.ilike("production_details.production_headers.no_order_barang", `%${filters.no_customer}%`);
+      query = query.ilike("items.detail.header.no_order_barang", `%${filters.no_customer}%`);
     }
     
     if (filters.petugas_ids && filters.petugas_ids.length > 0) {
@@ -466,11 +503,27 @@ export async function searchQCHistory(filters: {
       return { success: false, error: error.message };
     }
 
-    const formattedData = (data || []).map((row: any) => ({
-      ...row,
-      detail: row.production_details || {},
-      header: row.production_details?.production_headers || {}
-    }));
+    // Format data to match the UI expectations
+    const formattedData = (data || []).map((batch: any) => {
+      // Extract the header from the first item, as all items in a batch share the same batch info
+      const firstItem = batch.items && batch.items.length > 0 ? batch.items[0] : null;
+      const header = firstItem?.detail?.header || {};
+      
+      // Map items to match the old detail structure slightly if needed, but UI will mostly use batch.items
+      const formattedItems = (batch.items || []).map((item: any) => ({
+        id: item.id,
+        final_inspection_id: item.final_inspection_id,
+        detail: item.detail || {},
+        header: item.detail?.header || {}
+      }));
+
+      return {
+        ...batch,
+        header,
+        detail: { pcs_index: batch.pcs_index }, // Mock detail.pcs_index for backward compatibility in some places
+        items: formattedItems
+      };
+    });
 
     return { success: true, data: formattedData };
   } catch (err: any) {

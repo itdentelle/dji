@@ -8,7 +8,7 @@ export default function MachineMonitoringPage() {
   const [machines, setMachines] = useState<MachineStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   
   const fetchStatuses = async () => {
     try {
@@ -54,7 +54,7 @@ export default function MachineMonitoringPage() {
         
         <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
           <div className="text-sm text-slate-500">
-            Terakhir update: <span className="font-semibold text-slate-700">{lastRefresh.toLocaleTimeString('id-ID')}</span>
+            Terakhir update: <span className="font-semibold text-slate-700">{lastRefresh ? lastRefresh.toLocaleTimeString('id-ID') : "Memuat..."}</span>
           </div>
           <button 
             onClick={fetchStatuses}

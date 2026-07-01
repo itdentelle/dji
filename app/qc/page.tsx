@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Loader2, ClipboardCheck, AlertTriangle, CheckCircle, Package, Eye, X, Plus } from "lucide-react";
+import { Search, Loader2, ClipboardCheck, AlertTriangle, CheckCircle, Package, Eye, X, Plus, Clock } from "lucide-react";
 import QCInspectionModal from "@/components/forms/QCInspectionModal";
 import ProductionDetailModal from "@/components/ProductionDetailModal";
 import { getPendingQCDetailsByBatch, getAvailableQCFilters, addQCDefectDetail } from "@/actions/qc-actions";
@@ -52,7 +52,8 @@ export default function QCPage() {
     loadFilters();
   }, []);
 
-  const uniqueMesin = Array.from(new Set(availableFilters.map(f => f.nomor_mc))).filter(Boolean).sort();
+  // Menampilkan semua mesin yang tersedia secara statis
+  const uniqueMesin = ["R1", "R2", "R3B", "R1C", "R2C", "R11", "R12", "R16", "T1C", "T2A", "Warping D6", "Winding"];
   const availableDesigns = searchMesin 
     ? Array.from(new Set(availableFilters.filter(f => f.nomor_mc === searchMesin).map(f => f.design_id))) 
     : [];
@@ -66,6 +67,7 @@ export default function QCPage() {
   // All pending details for the selected Design & Potongan
   const [allDetails, setAllDetails] = useState<any[]>([]);
   const [selectedPcsIndex, setSelectedPcsIndex] = useState<string>("");
+  const [startInspectTime, setStartInspectTime] = useState<string>("");
   
   // Map of detailId -> finalInspectionId (1, 2, or 3)
   const [selections, setSelections] = useState<Record<string, number>>({});
@@ -158,6 +160,10 @@ export default function QCPage() {
         setErrorMsg("Tidak ada antrean QC untuk Desain & Potongan tersebut.");
       } else {
         setAllDetails(res.data);
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        setStartInspectTime(`${hh}:${mm}`);
       }
     } else {
       setErrorMsg(res.error || "Gagal mencari data.");
@@ -333,23 +339,35 @@ export default function QCPage() {
         </form>
 
         {allDetails.length > 0 && (
-          <div className="mt-5 pt-5 border-t border-slate-100 flex flex-col gap-1 w-full sm:w-1/3 animate-fadeIn">
-            <label className="text-xs font-bold text-slate-500 uppercase">Pilih Nomor PCS</label>
-            <select
-              value={selectedPcsIndex}
-              onChange={(e) => {
-                setSelectedPcsIndex(e.target.value);
-                setSelections({});
-              }}
-              className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm font-semibold focus:border-sky-500 outline-none w-full cursor-pointer text-slate-700"
-            >
-              <option value="">-- Pilih PCS --</option>
-              {uniquePcsIndexes.map(pcs => (
-                <option key={pcs} value={String(pcs)}>
-                  PCS Ke-{pcs}
-                </option>
-              ))}
-            </select>
+          <div className="mt-5 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-end justify-between gap-4 animate-fadeIn">
+            <div className="flex flex-col gap-1 w-full sm:w-1/3">
+              <label className="text-xs font-bold text-slate-500 uppercase">Pilih Nomor PCS</label>
+              <select
+                value={selectedPcsIndex}
+                onChange={(e) => {
+                  setSelectedPcsIndex(e.target.value);
+                  setSelections({});
+                }}
+                className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm font-semibold focus:border-sky-500 outline-none w-full cursor-pointer text-slate-700"
+              >
+                <option value="">-- Pilih PCS --</option>
+                {uniquePcsIndexes.map(pcs => (
+                  <option key={pcs} value={String(pcs)}>
+                    PCS Ke-{pcs}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {startInspectTime && (
+              <div className="flex flex-col items-end w-full sm:w-auto">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Mulai Inspeksi</span>
+                <div className="h-11 px-6 rounded-xl bg-sky-50 border border-sky-100 text-sm font-black text-sky-700 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto">
+                  <Clock className="w-4 h-4 text-sky-500" />
+                  {startInspectTime}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -469,6 +487,7 @@ export default function QCPage() {
           onClose={() => setIsModalOpen(false)}
           headerData={dummyHeaderData}
           selections={selections}
+          startInspectTime={startInspectTime}
           onSuccess={async () => {
             setIsModalOpen(false);
             // Refresh logic: refetch details, reset selected pcs

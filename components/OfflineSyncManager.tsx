@@ -37,10 +37,18 @@ export default function OfflineSyncManager() {
       }
     }, 15000); // 15 detik
 
+    // Set interval to automatically sync failed sheet data
+    const sheetSyncInterval = setInterval(() => {
+      if (navigator.onLine) {
+        autoSyncSheets();
+      }
+    }, 60000); // 60 detik
+
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       clearInterval(interval);
+      clearInterval(sheetSyncInterval);
     };
   }, [isSyncing]);
 
@@ -53,6 +61,14 @@ export default function OfflineSyncManager() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const autoSyncSheets = async () => {
+    try {
+      await fetch("/api/sync/auto", { method: "POST" });
+    } catch (e) {
+      console.error("Auto sync sheets error", e);
     }
   };
 
