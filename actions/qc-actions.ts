@@ -463,7 +463,7 @@ export async function searchQCHistory(filters: {
         items:qc_inspection_items!inner (
           id, final_inspection_id,
           detail:production_details!inner (
-            id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
+            id, pcs_index, final_inspection_id, header_id, roll_no, meter_kain, keterangan_qc,
             header:production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching)
           )
         )

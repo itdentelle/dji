@@ -12,6 +12,8 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
 
   const group = qcData;
   const header = group.header || {};
+  const isMeteran = header.panel_no === "METERAN";
+  const itemLabel = isMeteran ? "Titik Meter" : "Panel";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn overflow-y-auto" onClick={onClose}>
@@ -64,8 +66,8 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
               <p className="text-sm font-bold text-slate-800">PCS Ke-{group.pcs_index}</p>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Panel</p>
-              <p className="text-sm font-bold text-slate-800">{group.items?.length || 0} Panel</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total {itemLabel}</p>
+              <p className="text-sm font-bold text-slate-800">{group.items?.length || 0} {itemLabel}</p>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mesin</p>
@@ -114,11 +116,11 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
                     <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-wider">OK / GRADE A</div>
-                    <div className="text-xl font-black text-emerald-600">{group.inspeksi_ceklis} Panel</div>
+                    <div className="text-xl font-black text-emerald-600">{group.inspeksi_ceklis} {itemLabel}</div>
                   </div>
                   <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
                     <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-wider">SILANG / REJECT</div>
-                    <div className="text-xl font-black text-rose-600">{group.inspeksi_silang} Panel</div>
+                    <div className="text-xl font-black text-rose-600">{group.inspeksi_silang} {itemLabel}</div>
                   </div>
                 </div>
               </div>
@@ -128,14 +130,14 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
           {/* List of Panels */}
           <div>
             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Box className="w-4 h-4" /> Rincian Panel di PCS Ini
+              <Box className="w-4 h-4" /> Rincian {itemLabel} di PCS Ini
             </h4>
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-                      <th className="px-4 py-3">Panel / Roll</th>
+                      <th className="px-4 py-3">{isMeteran ? "Titik Meter" : "Panel"}</th>
                       <th className="px-4 py-3 text-center">Hasil QC</th>
                     </tr>
                   </thead>
@@ -160,7 +162,7 @@ export default function QCDetailModal({ isOpen, onClose, qcData }: QCDetailModal
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-bold text-slate-800">
-                            {itemHeader.panel_no === "METERAN" ? "Roll " + detail.roll_no : "Panel " + itemHeader.panel_no}
+                            {itemHeader.panel_no === "METERAN" ? "Titik Meter " + (detail.meter_kain || "-") : "Panel " + itemHeader.panel_no}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="text-sm font-bold text-slate-800 flex items-center justify-center gap-1.5">
