@@ -436,9 +436,21 @@ export async function searchEmployeeHistory(filters: {
     const supabase = await createClient();
     let query = supabase
       .from("production_headers")
-      .select("id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, panel_no, nomor_mc, total_downtime_detik, operators(nama_operator), groups(nama_grup), design_id, production_details(kategori_masalah)")
+      .select("id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, panel_no, nomor_mc, total_downtime_detik, operators(nama_operator), groups(nama_grup), design_id, production_details(kategori_masalah), created_by_name")
       .order("tanggal_jam", { ascending: false })
       .limit(100);
+
+    // Filter by current user account (penanggung jawab) if not admin/manager
+    const { data: authData } = await supabase.auth.getUser();
+    if (authData?.user) {
+      const fullName = authData.user.user_metadata?.full_name;
+      const { data: profile } = await supabase.from('user_profiles').select('role').eq('id', authData.user.id).single();
+      const currentRole = profile?.role || 'operator';
+      
+      if (currentRole !== 'admin' && currentRole !== 'manager' && fullName) {
+         query = query.eq('created_by_name', fullName);
+      }
+    }
 
     if (filters.date) query = query.eq("tgl", filters.date);
     if (filters.nomor_mc) query = query.ilike("nomor_mc", `%${filters.nomor_mc}%`);
