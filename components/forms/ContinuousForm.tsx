@@ -178,6 +178,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
 
   // Pop-up Modal State
   const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
+  const [isLastRoll, setIsLastRoll] = useState(false);
 
   // States untuk upload foto
   const [isUploading, setIsUploading] = useState<{ before: boolean; after: boolean }>({ before: false, after: false });
@@ -563,8 +564,9 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
           keteranganCacat: "",
         }]
       });
-        setIsHeaderModalOpen(true);
-      }
+      setIsLastRoll(false);
+      setIsHeaderModalOpen(true);
+    }
     };
 
   const handleCloseSuccess = () => {
@@ -613,6 +615,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
       meterAkhir: "",
       hasilProduksiMeter: "",
     });
+    setIsLastRoll(false);
     setPreviews({ before: null, after: null });
   };
   
@@ -953,6 +956,45 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
             <p className="text-xs font-bold text-red-600">{(errors.pcsData as any)?.root?.message}</p>
           </div>
         )}
+
+        {/* Potong Kain Toggle */}
+        <div className={`p-5 border rounded-2xl transition-all duration-300 mb-6 ${isLastRoll ? 'bg-emerald-50 border-emerald-300 shadow-sm' : 'bg-slate-50 border-slate-200'}`}>
+          <label className="flex items-center justify-between cursor-pointer select-none">
+            <div className="flex items-center gap-3">
+              <input 
+                type="checkbox" 
+                checked={isLastRoll}
+                onChange={(e) => {
+                  setIsLastRoll(e.target.checked);
+                  if (e.target.checked) {
+                    setValue("tanggalPotong", new Date().toISOString().split('T')[0]);
+                  } else {
+                    setValue("tanggalPotong", "");
+                  }
+                }}
+                className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer" 
+              />
+              <div>
+                <h5 className={`text-sm font-bold ${isLastRoll ? 'text-emerald-700' : 'text-slate-600'}`}>
+                  Potong Kain (Ini Potongan Terakhir dalam Roll)
+                </h5>
+              </div>
+            </div>
+          </label>
+
+          {isLastRoll && (
+            <div className="mt-4 pt-4 border-t border-emerald-200/60 animate-fadeIn">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-emerald-600 uppercase">Tanggal Potong</label>
+                <input 
+                  type="date" 
+                  {...register("tanggalPotong")} 
+                  className="h-10 px-3 rounded-lg bg-white border border-emerald-200 text-sm font-semibold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none shadow-sm" 
+                />
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Kirim Button */}
         <button
