@@ -420,14 +420,15 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   }, [watch, isEdit]);
 
   const watchPotonganKe = watch("potonganKe");
-  // Fetch the next panelNo when potonganKe changes
+  const watchNomorMc = watch("nomorMc");
+  // Fetch the next panelNo when potonganKe or nomorMc changes
   useEffect(() => {
-    if (isEdit || !watchPotonganKe || isNaN(parseInt(watchPotonganKe))) {
+    if (isEdit || !watchPotonganKe || isNaN(parseInt(watchPotonganKe)) || !watchNomorMc) {
       return;
     }
     const timeoutId = setTimeout(async () => {
       try {
-        const res = await getLastPanelNoByPotongan(parseInt(watchPotonganKe));
+        const res = await getLastPanelNoByPotongan(parseInt(watchPotonganKe), watchNomorMc);
         if (res.success && res.nextPanelNo) {
           setValue("panelNo", res.nextPanelNo.toString());
         }
@@ -435,7 +436,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       }
     }, 600);
     return () => clearTimeout(timeoutId);
-  }, [watchPotonganKe, setValue, isEdit]);
+  }, [watchPotonganKe, watchNomorMc, setValue, isEdit]);
 
   const onSubmit = async (data: ProductionFormInput) => {
     setIsSubmitting(true);
@@ -613,8 +614,12 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       keteranganCacat: "",
     }));
 
+    const currentPotongan = parseInt(watch("potonganKe") || "0");
+    const nextPotongan = wasLastPanel && !isNaN(currentPotongan) ? String(currentPotongan + 1) : watch("potonganKe");
+
     reset({
       ...watch(),
+      potonganKe: nextPotongan,
       panelNo: nextPanelNo,
       pcsData: newPcsData.length > 0 ? newPcsData : [{
         pcsIndex: "1",

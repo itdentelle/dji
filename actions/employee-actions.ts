@@ -375,7 +375,7 @@ export async function uploadProductionPhoto(
   }
 }
 
-export async function getLastPanelNoByPotongan(potonganKe: number): Promise<{ success: boolean; nextPanelNo?: number; error?: string }> {
+export async function getLastPanelNoByPotongan(potonganKe: number, nomorMc: string): Promise<{ success: boolean; nextPanelNo?: number; error?: string }> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -389,6 +389,7 @@ export async function getLastPanelNoByPotongan(potonganKe: number): Promise<{ su
       .from("production_headers")
       .select("panel_no")
       .eq("potongan_ke", potonganKe)
+      .eq("nomor_mc", nomorMc)
       .not("panel_no", "is", null)
       .not("panel_no", "eq", "METERAN")
       .order("tanggal_jam", { ascending: false })
