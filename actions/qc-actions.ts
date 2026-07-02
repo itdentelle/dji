@@ -347,13 +347,15 @@ export async function getQCHistory() {
     const supabase = await createClient();
     
     const { data, error } = await supabase
-      .from("qc_inspections")
+      .from("qc_inspection_batches")
       .select(`
         *,
-        production_details (
-          id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
-          production_headers (
-            id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching
+        qc_inspection_items (
+          production_details (
+            id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc,
+            production_headers (
+              id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching
+            )
           )
         )
       `)
@@ -365,7 +367,9 @@ export async function getQCHistory() {
     }
 
     const formattedData = (data || []).map((row: any) => {
-      const detail = row.production_details || {};
+      // Just extract the first item's details since they belong to the same batch headers essentially
+      const firstItem = row.qc_inspection_items && row.qc_inspection_items.length > 0 ? row.qc_inspection_items[0] : null;
+      const detail = firstItem?.production_details || {};
       const header = detail.production_headers || {};
       return {
         ...row,
@@ -414,21 +418,27 @@ export async function getQCHistoryByBatch(designId: string, potonganKe: string) 
     
     const detailIds = details.map((d: any) => d.id);
     
-    const { data: qcData, error: qcErr } = await supabase.from("qc_inspections").select(`
+    const { data: qcData, error: qcErr } = await supabase.from("qc_inspection_batches").select(`
       *,
-      production_details (
-        id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc, 
-        production_headers (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching)
+      qc_inspection_items!inner (
+        production_detail_id,
+        production_details (
+          id, pcs_index, final_inspection_id, header_id, roll_no, keterangan_qc, 
+          production_headers (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching)
+        )
       )
-    `).in("production_detail_id", detailIds).order("created_at", { ascending: false });
+    `).in("qc_inspection_items.production_detail_id", detailIds).order("created_at", { ascending: false });
     
     if (qcErr) return { success: false, error: qcErr.message };
     
-    const formattedData = (qcData || []).map((row: any) => ({ 
-      ...row, 
-      detail: row.production_details || {}, 
-      header: row.production_details?.production_headers || {} 
-    }));
+    const formattedData = (qcData || []).map((row: any) => {
+      const firstItem = row.qc_inspection_items && row.qc_inspection_items.length > 0 ? row.qc_inspection_items[0] : null;
+      return { 
+        ...row, 
+        detail: firstItem?.production_details || {}, 
+        header: firstItem?.production_details?.production_headers || {} 
+      };
+    });
     
     return { success: true, data: formattedData };
   } catch (err: any) { 

@@ -1098,11 +1098,11 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
               <div className="space-y-4 relative z-10">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-600 uppercase">Start Meter</label>
-                  <input type="number" step="any" {...register("meterAwal")} className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none transition-all" placeholder="Contoh: 100" />
+                  <input type="number" step="any" onWheel={(e) => (e.target as HTMLElement).blur()} {...register("meterAwal")} className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none transition-all" placeholder="Contoh: 100" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-600 uppercase">Finish Meter</label>
-                  <input type="number" step="any" {...register("meterAkhir")} className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none transition-all" placeholder="Contoh: 250" />
+                  <input type="number" step="any" onWheel={(e) => (e.target as HTMLElement).blur()} {...register("meterAkhir")} className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none transition-all" placeholder="Contoh: 250" />
                   {errors.meterAkhir && <span className="text-red-500 text-[10px] font-bold mt-0.5">{errors.meterAkhir.message}</span>}
                 </div>
                 
@@ -1111,7 +1111,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
                     <span>Total Hasil Produksi</span>
                     <span className="text-[9px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded font-black uppercase">Auto Calculate</span>
                   </label>
-                  <input type="number" step="any" {...register("hasilProduksiMeter")} className="w-full h-12 px-4 rounded-xl bg-white border border-emerald-300 text-lg font-black text-emerald-700 focus:border-emerald-500 outline-none shadow-sm text-right" placeholder="0" />
+                  <input type="number" step="any" onWheel={(e) => (e.target as HTMLElement).blur()} {...register("hasilProduksiMeter")} className="w-full h-12 px-4 rounded-xl bg-white border border-emerald-300 text-lg font-black text-emerald-700 focus:border-emerald-500 outline-none shadow-sm text-right" placeholder="0" />
                 </div>
               </div>
 

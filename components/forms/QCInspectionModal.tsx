@@ -281,7 +281,7 @@ export default function QCInspectionModal({
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2"><Scale className="w-4 h-4 text-emerald-500"/> Data Fisik</h4>
               <div className="w-full">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Berat Kain (kg)</label>
-                <input type="number" step="0.01" {...register("berat_kain", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                <input type="number" step="0.01" {...register("berat_kain", { valueAsNumber: true })} onWheel={(e) => (e.target as HTMLElement).blur()} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
                 {errors.berat_kain && <p className="text-red-500 text-[10px] mt-1">{errors.berat_kain.message}</p>}
               </div>
             </div>
@@ -294,11 +294,11 @@ export default function QCInspectionModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500"/> Ceklis</label>
-                    <input type="number" {...register("prod_ceklis", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-emerald-500 outline-none" />
+                    <input type="number" {...register("prod_ceklis", { valueAsNumber: true })} onWheel={(e) => (e.target as HTMLElement).blur()} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-emerald-500 outline-none" />
                   </div>
                   <div>
                     <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1"><X className="w-3 h-3 text-red-500"/> Silang</label>
-                    <input type="number" {...register("prod_silang", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-red-500 outline-none" />
+                    <input type="number" {...register("prod_silang", { valueAsNumber: true })} onWheel={(e) => (e.target as HTMLElement).blur()} className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-red-500 outline-none" />
                   </div>
                 </div>
               </div>
@@ -309,11 +309,11 @@ export default function QCInspectionModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500"/> Ceklis</label>
-                    <input type="number" {...register("qc_ceklis", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-sky-200 text-sm focus:border-emerald-500 outline-none" />
+                    <input type="number" {...register("qc_ceklis", { valueAsNumber: true })} onWheel={(e) => (e.target as HTMLElement).blur()} className="w-full h-9 px-3 rounded-lg border border-sky-200 text-sm focus:border-emerald-500 outline-none" />
                   </div>
                   <div>
                     <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1"><X className="w-3 h-3 text-red-500"/> Silang</label>
-                    <input type="number" {...register("qc_silang", { valueAsNumber: true })} className="w-full h-9 px-3 rounded-lg border border-sky-200 text-sm focus:border-red-500 outline-none" />
+                    <input type="number" {...register("qc_silang", { valueAsNumber: true })} onWheel={(e) => (e.target as HTMLElement).blur()} className="w-full h-9 px-3 rounded-lg border border-sky-200 text-sm focus:border-red-500 outline-none" />
                   </div>
                 </div>
               </div>

@@ -229,6 +229,7 @@ export default function MendingModal({ isOpen, onClose, headerData, selections, 
                     type="number" 
                     step="0.01"
                     {...register("berat_kain", { valueAsNumber: true })} 
+                    onWheel={(e) => (e.target as HTMLElement).blur()}
                     className="w-full h-10 px-3 pr-10 rounded-xl border border-slate-200 text-sm font-semibold focus:border-sky-500 outline-none" 
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">KG</span>
