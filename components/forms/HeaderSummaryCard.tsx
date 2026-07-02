@@ -85,7 +85,7 @@ export default function HeaderSummaryCard({
         className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white hover:bg-sky-50 text-sky-600 border border-sky-200 hover:border-sky-300 rounded-xl font-bold text-xs transition-colors shrink-0 shadow-sm"
       >
         <Settings2 className="w-4 h-4" />
-        Ubah Konfigurasi
+        Ubah Header
       </button>
     </div>
   );

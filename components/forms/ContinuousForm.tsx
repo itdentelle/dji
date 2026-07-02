@@ -720,7 +720,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
           : "bg-amber-50 text-amber-700 border-amber-200"
           }`}>
           <Database className={`w-3 h-3 ${isDbConnected ? "text-slate-400" : "text-amber-500 animate-spin"}`} strokeWidth={2} />
-          {isDbConnected ? "Supabase Terhubung" : "Mode Offline"}
+          {isDbConnected ? "Database Terhubung" : "Mode Offline"}
         </div>
       </div>
 
