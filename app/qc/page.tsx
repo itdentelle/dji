@@ -608,18 +608,36 @@ export default function QCPage() {
                         </label>
 
                         {isChecked && (
-                          <div className="pl-6 animate-fadeIn">
-                            <select
-                              size={(PROBLEM_DETAILS[c.id]?.length || 0) + 1}
-                              value={defectDetailMap[c.id] || ""}
-                              onChange={(e) => setDefectDetailMap(prev => ({ ...prev, [c.id]: e.target.value }))}
-                              className="w-full px-2 py-1 rounded-md bg-slate-50 border border-slate-200 text-xs font-semibold focus:border-rose-400 focus:bg-white focus:ring-1 focus:ring-rose-400 outline-none transition-all scrollbar-hide overflow-hidden"
-                            >
-                              <option value="" disabled>-- Pilih Detail Masalah --</option>
-                              {(PROBLEM_DETAILS[c.id] || []).map(p => (
-                                <option key={`${c.id}-${p}`} value={p} className="p-2 hover:bg-rose-50 cursor-pointer">{p}</option>
-                              ))}
-                            </select>
+                          <div className="pl-6 animate-fadeIn mt-2">
+                            <div className="w-full rounded-md bg-white border border-rose-200 overflow-hidden flex flex-col shadow-inner">
+                              <div className="px-3 py-1.5 bg-slate-50 border-b border-rose-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                Pilih Detail Masalah
+                              </div>
+                              <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                                {(PROBLEM_DETAILS[c.id] || []).map(p => {
+                                  const isSelected = defectDetailMap[c.id] === p;
+                                  return (
+                                    <label 
+                                      key={`${c.id}-${p}`} 
+                                      className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${
+                                        isSelected ? 'bg-rose-50 text-rose-700 font-bold' : 'hover:bg-slate-50 text-slate-600'
+                                      }`}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name={`detail-${c.id}`}
+                                        value={p}
+                                        checked={isSelected}
+                                        onChange={(e) => setDefectDetailMap(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                        className="hidden"
+                                      />
+                                      <span>{p}</span>
+                                      {isSelected && <CheckCircle className="w-4 h-4 text-rose-500 shrink-0 ml-2" />}
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>

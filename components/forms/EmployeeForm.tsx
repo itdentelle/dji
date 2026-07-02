@@ -863,17 +863,34 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                                     </label>
 
                                     {isChecked && (
-                                      <div className="pl-6 animate-fadeIn">
-                                        <select
-                                          size={(NEW_PROBLEMS[c.id]?.length || 0) + 1}
-                                          {...register(`pcsData.${index}.detailMasalahMap.${c.id}` as const)}
-                                          className="w-full px-2 py-1 rounded-md bg-slate-50 border border-red-200 text-xs font-semibold focus:border-red-400 focus:bg-white focus:ring-1 focus:ring-red-400 outline-none transition-all scrollbar-hide overflow-hidden"
-                                        >
-                                          <option value="" disabled>-- Pilih Detail Masalah --</option>
-                                          {NEW_PROBLEMS[c.id]?.map(p => (
-                                            <option key={p} value={p} className="p-2 hover:bg-red-50 cursor-pointer">{p}</option>
-                                          ))}
-                                        </select>
+                                      <div className="pl-6 animate-fadeIn mt-2">
+                                        <div className="w-full rounded-md bg-white border border-red-200 overflow-hidden flex flex-col shadow-inner">
+                                          <div className="px-3 py-1.5 bg-slate-50 border-b border-red-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                            Pilih Detail Masalah
+                                          </div>
+                                          <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                                            {NEW_PROBLEMS[c.id]?.map(p => {
+                                              const isSelected = watch(`pcsData.${index}.detailMasalahMap.${c.id}`) === p;
+                                              return (
+                                                <label 
+                                                  key={p} 
+                                                  className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${
+                                                    isSelected ? 'bg-red-50 text-red-700 font-bold' : 'hover:bg-slate-50 text-slate-600'
+                                                  }`}
+                                                >
+                                                  <input 
+                                                    type="radio"
+                                                    value={p}
+                                                    {...register(`pcsData.${index}.detailMasalahMap.${c.id}` as const)}
+                                                    className="hidden"
+                                                  />
+                                                  <span>{p}</span>
+                                                  {isSelected && <CheckCircle2 className="w-4 h-4 text-red-500 shrink-0 ml-2" />}
+                                                </label>
+                                              )
+                                            })}
+                                          </div>
+                                        </div>
                                         {errors.pcsData?.[index]?.detailMasalahMap?.[c.id] && (
                                           <span className="text-red-500 text-[10px] font-bold mt-1 block">
                                             {errors.pcsData[index]?.detailMasalahMap?.[c.id]?.message}
