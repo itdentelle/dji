@@ -10,24 +10,45 @@ import { getEmployeeHistoryDetail } from "@/actions/employee-actions";
 // Problem categories matching ContinuousForm
 const PROBLEM_CATEGORIES = [
   { id: "A", name: "Kode A: Masalah dan Perbaikan Benang" },
-  { id: "B", name: "Kode B: Perbaikan Jarum dan Element Rajutan" },
+  { id: "B", name: "Kode B: Perbaikan Jarum dan Element Rajutan (Mechanical)" },
   { id: "C", name: "Kode C: Pengaturan dan Design stup" },
   { id: "D", name: "Kode D: Bahan Baku dan penggantian Benang" },
   { id: "E", name: "Kode E: Masalah Kelistrikan" },
-  { id: "F", name: "Kode F: Perbaikan Mekanik (Pneumatic dan Mechanical)" },
-  { id: "G", name: "Kode G: Perawatan mesin (Maintenance/Overhaul)" },
-  { id: "H", name: "Kode H: Faktor Eksternal dan Non-Teknis" },
+  { id: "F", name: "Kode F: Perawatan Mesin,Perbaikan Mekanik (maintenance)" },
+  { id: "G", name: "Kode G: Faktor Eksternal dan Non-Teknis" },
 ];
 
 const PROBLEM_DETAILS: Record<string, string[]> = {
-  "A": ["Perbaikan L1,L2,L3 Benang timbul putus", "Perbaikan Benang lolos", "Perbaikan Bolong corak", "Perbaikan Benang narik/Kendor", "Perbaikan Benang Nyilang", "Perbaikan/Beset benang Dasar", "Perbaikan Benang Kejepit/Jebol/kusut"],
-  "B": ["Perbaikan jarum pattern patah/bengkok", "Perbaikan/Ganti Jacquard", "Perbaikan ganti jarum Compoun Nedle, pattern", "Perbaikan ngampul", "Ganti dari scaloop ke non scaloop atau sebaliknya", "Perbaikan Ngegaris/Stopline", "Perbaikan Keluar Jarum"],
-  "C": ["Loading design/Ganti Design", "Perbaikan corak/revisi", "Salah ganti design", "Error design", "Proofing/PCB", "Ganti Pattern Disk", "Ganti pick"],
-  "D": ["Ganti benang dasar L1/L2", "Salah ganti benang dasar", "Ganti benang Pattern Linner", "Ganti benang Pattern Heavy", "Ganti benang Pattern Shadow", "Ganti benang pattern keseluruhan (L,H,S)", "salah ganti benang pattern", "Ngelancarin", "Over Cone/Rewind", "Tunggu benang dasar dari warping", "Tunggu benang (benang belum datang)"],
-  "E": ["Mati Listrik", "Perbaikan Error Servo Drive", "Perbaikan/ganti motor servo", "Sensor Benang/Laser Stop", "Perbaikan Eletrik lainnya", "Konsleting"],
-  "F": ["Perbaikan cilynder Angin", "Perbaikan/ganti String bar", "Perbaikan /ganti PBO", "Perbaikan pressan As beam kendor", "Perbaikan tensi tensioner", "Perbaikan gear/Take Up Roll"],
-  "G": ["Ganti Oli", "Ganti Bellow", "Ganti Vanbelt", "Ganti Black grip roll", "Pelumasan/greace pada mesin", "Perawatan Panel Listrik", "Ganti rantai/pertensi", "Servis Overhaul"],
-  "H": ["Hari Libur", "Tidak ada order", "Tunggu info", "Demo", "Bencana/gempa/banjir", "Istirahat selama buka puasa", "Tunggu Sparepart"],
+  "A": [
+    "L1,L2,L3 Benang timbul putus", "Benang lolos", "Bolong corak",
+    "Benang narik/Kendor", "Benang Nyilang", "Perbaikan/Beset benang Dasar", "Benang Kejepit/Jebol/Kusut", "Jalur benang"
+  ],
+  "B": [
+    "Jarum pattern patah/bengkok", "Ganti Jacquard", "Ganti jarum Compoun Nedle, pattern",
+    "Ngampul", "Ganti dari scaloop ke non scaloop atau sebaliknya", "Ngegaris/Stopline", "Keluar Jarum",
+    "Ganti String bar", "Ganti PBO", "Pressan As beam kendor", "Tensi tensioner"
+  ],
+  "C": [
+    "Loading design/Ganti Design", "Perbaikan corak/revisi", "Salah ganti design", "Error design",
+    "Proofing/PCB", "Ganti Pattern Disk", "Ganti pick"
+  ],
+  "D": [
+    "Ganti benang dasar L1/L2", "Salah ganti benang dasar", "Ganti benang Pattern Linner", "Ganti benang Pattern Heavy",
+    "Ganti benang Pattern Shadow", "Ganti benang pattern keseluruhan (L,H,S)", "salah ganti benang pattern", "Ngelancarin",
+    "Over Cone/Rewind", "Tunggu benang dasar dari warping", "Tunggu benang (benang belum datang)"
+  ],
+  "E": [
+    "Error Servo Drive", "Ganti motor servo", "Sensor Benang/Laser Stop",
+    "Perbaikan Eletrik lainnya", "Konsleting", "Perbaikan listrik"
+  ],
+  "F": [
+    "Perbaikan cilynder Angin", "Ganti Bellow", "Perbaikan gear/Take Up Roll", 
+    "Ganti rantai/pertensi", "Ganti Black grip roll", "Ganti Oli", "Pelumasan/greace pada mesin",
+    "Ganti Vanbelt", "Perawatan Panel Listrik", "Servis Overhaul"
+  ],
+  "G": [
+    "Hari Libur", "Tidak ada order", "Tunggu info", "Demo", "Bencana/gempa/banjir", "Istirahat selama buka puasa", "Tunggu Sparepart", "Mati Listrik"
+  ]
 };
 
 export default function QCPage() {

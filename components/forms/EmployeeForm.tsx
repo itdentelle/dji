@@ -43,23 +43,23 @@ const FALLBACK_GROUPS = [
 // NEW PROBLEM KATEGORI (A-H)
 const NEW_PROBLEM_CATEGORIES = [
   { id: "A", name: "Kode A: Masalah dan Perbaikan Benang" },
-  { id: "B", name: "Kode B: Perbaikan Jarum dan Element Rajutan" },
+  { id: "B", name: "Kode B: Perbaikan Jarum dan Element Rajutan (Mechanical)" },
   { id: "C", name: "Kode C: Pengaturan dan Design stup" },
   { id: "D", name: "Kode D: Bahan Baku dan penggantian Benang" },
   { id: "E", name: "Kode E: Masalah Kelistrikan" },
-  { id: "F", name: "Kode F: Perbaikan Mekanik (Pneumatic dan Mechanical)" },
-  { id: "G", name: "Kode G: Perawatan mesin (Maintenance/Overhaul)" },
-  { id: "H", name: "Kode H: Faktor Eksternal dan Non-Teknis" },
+  { id: "F", name: "Kode F: Perawatan Mesin,Perbaikan Mekanik (maintenance)" },
+  { id: "G", name: "Kode G: Faktor Eksternal dan Non-Teknis" },
 ];
 
 const NEW_PROBLEMS: Record<string, string[]> = {
   "A": [
-    "Perbaikan L1,L2,L3 Benang timbul putus", "Perbaikan Benang lolos", "Perbaikan Bolong corak",
-    "Perbaikan Benang narik/Kendor", "Perbaikan Benang Nyilang", "Perbaikan/Beset benang Dasar", "Perbaikan Benang Kejepit/Jebol/kusut"
+    "L1,L2,L3 Benang timbul putus", "Benang lolos", "Bolong corak",
+    "Benang narik/Kendor", "Benang Nyilang", "Perbaikan/Beset benang Dasar", "Benang Kejepit/Jebol/Kusut", "Jalur benang"
   ],
   "B": [
-    "Perbaikan jarum pattern patah/bengkok", "Perbaikan/Ganti Jacquard", "Perbaikan ganti jarum Compoun Nedle, pattern",
-    "Perbaikan ngampul", "Ganti dari scaloop ke non scaloop atau sebaliknya", "Perbaikan Ngegaris/Stopline", "Perbaikan Keluar Jarum"
+    "Jarum pattern patah/bengkok", "Ganti Jacquard", "Ganti jarum Compoun Nedle, pattern",
+    "Ngampul", "Ganti dari scaloop ke non scaloop atau sebaliknya", "Ngegaris/Stopline", "Keluar Jarum",
+    "Ganti String bar", "Ganti PBO", "Pressan As beam kendor", "Tensi tensioner"
   ],
   "C": [
     "Loading design/Ganti Design", "Perbaikan corak/revisi", "Salah ganti design", "Error design",
@@ -71,19 +71,16 @@ const NEW_PROBLEMS: Record<string, string[]> = {
     "Over Cone/Rewind", "Tunggu benang dasar dari warping", "Tunggu benang (benang belum datang)"
   ],
   "E": [
-    "Mati Listrik", "Perbaikan Error Servo Drive", "Perbaikan/ganti motor servo", "Sensor Benang/Laser Stop",
-    "Perbaikan Eletrik lainnya", "Konsleting"
+    "Error Servo Drive", "Ganti motor servo", "Sensor Benang/Laser Stop",
+    "Perbaikan Eletrik lainnya", "Konsleting", "Perbaikan listrik"
   ],
   "F": [
-    "Perbaikan cilynder Angin", "Perbaikan/ganti String bar", "Perbaikan /ganti PBO", "Perbaikan pressan As beam kendor",
-    "Perbaikan tensi tensioner", "Perbaikan gear/Take Up Roll"
+    "Perbaikan cilynder Angin", "Ganti Bellow", "Perbaikan gear/Take Up Roll", 
+    "Ganti rantai/pertensi", "Ganti Black grip roll", "Ganti Oli", "Pelumasan/greace pada mesin",
+    "Ganti Vanbelt", "Perawatan Panel Listrik", "Servis Overhaul"
   ],
   "G": [
-    "Ganti Oli", "Ganti Bellow", "Ganti Vanbelt", "Ganti Black grip roll", "Pelumasan/greace pada mesin",
-    "Perawatan Panel Listrik", "Ganti rantai/pertensi", "Servis Overhaul"
-  ],
-  "H": [
-    "Hari Libur", "Tidak ada order", "Tunggu info", "Demo", "Bencana/gempa/banjir", "Istirahat selama buka puasa", "Tunggu Sparepart"
+    "Hari Libur", "Tidak ada order", "Tunggu info", "Demo", "Bencana/gempa/banjir", "Istirahat selama buka puasa", "Tunggu Sparepart", "Mati Listrik"
   ]
 };
 
