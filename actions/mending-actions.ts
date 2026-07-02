@@ -130,7 +130,7 @@ export async function getPendingMendingDetailsByBatch(mesin: string, designId: s
     // Get inspected & unmended items, but only from fully-inspected PCS indexes
     const { data: details, error: detailsError } = await supabase
       .from("production_details")
-      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id, qc_inspection_items(qc_inspection_batches(berat_inspecting))")
+      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id, qc_inspection_items(qc_inspection_batches(berat_kain))")
       .in("header_id", headerIds)
       .not("final_inspection_id", "is", null)
       .is("status_mending", null);
@@ -193,7 +193,7 @@ export async function submitMending(params: {
       }
     }
 
-    // Update berat_inspecting in qc_inspection_batches if berat_kain is provided
+    // Update berat_kain in qc_inspection_batches if berat_kain is provided
     if (params.berat_kain !== undefined) {
       const detailIds = params.details.map(d => d.detailId);
       const { data: qcItems } = await supabase
@@ -205,11 +205,11 @@ export async function submitMending(params: {
         const batchIds = Array.from(new Set(qcItems.map(i => i.batch_id)));
         const { error: qcUpdateError } = await supabase
           .from("qc_inspection_batches")
-          .update({ berat_inspecting: params.berat_kain })
+          .update({ berat_kain: params.berat_kain })
           .in("id", batchIds);
           
         if (qcUpdateError) {
-          console.error("Gagal update berat_inspecting di qc_inspection_batches:", qcUpdateError);
+          console.error("Gagal update berat_kain di qc_inspection_batches:", qcUpdateError);
         }
       }
     }

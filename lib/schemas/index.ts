@@ -66,6 +66,7 @@ export const productionFormSchemaBase = z.object({
       kategoriMasalah: z.array(z.string()).optional(),
       detailMasalahMap: z.record(z.string(), z.string()).optional(),
       detailMasalah: z.string().optional().nullable(),
+      spesifikMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
       keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
     })
@@ -125,6 +126,7 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
       kategoriMasalah: z.array(z.string()).optional(),
       detailMasalahMap: z.record(z.string(), z.string()).optional(),
       detailMasalah: z.string().optional().nullable(),
+      spesifikMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
       rollNo: z.string().optional().nullable(),
       keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),

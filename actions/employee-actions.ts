@@ -113,6 +113,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         indikator_stop: pcsItem.indikatorStop || false,
         kategori_masalah: kategoriStr,
         detail_masalah: pcsItem.detailMasalah || null,
+        spesifik_masalah: pcsItem.spesifikMasalah || null,
         keterangan_cacat: pcsItem.keteranganCacat || null,
         meter_kain: pcsItem.meterKain || null,
       };
@@ -255,6 +256,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
             "Kategori Masalah": detail.kategori_masalah || "",
             "Detail Masalah": detail.detail_masalah || "",
+            "Spesifik Masalah": detail.spesifik_masalah || "",
             "Keterangan Cacat": detail.keterangan_cacat || "",
             "Penanggung Jawab": headerData.created_by_name || ""
           }));
@@ -316,6 +318,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
         "Kategori Masalah": detail.kategori_masalah || "",
         "Detail Masalah": detail.detail_masalah || "",
+        "Spesifik Masalah": detail.spesifik_masalah || "",
         "Keterangan Cacat": detail.keterangan_cacat || ""
       }));
 
@@ -615,6 +618,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
           indikator_stop: pcsItem.indikatorStop || false,
           kategori_masalah: kategoriStr,
           detail_masalah: pcsItem.detailMasalah || null,
+          spesifik_masalah: pcsItem.spesifikMasalah || null,
           keterangan_cacat: pcsItem.keteranganCacat || null,
           meter_kain: pcsItem.meterKain || null,
           roll_no: pcsItem.rollNo || null,

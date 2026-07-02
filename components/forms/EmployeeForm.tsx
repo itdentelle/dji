@@ -458,15 +458,21 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;
 
-    // Gabungkan detailMasalahMap ke detailMasalah
+    // Gabungkan detailMasalahMap ke spesifikMasalah, dan set detailMasalah ke nama kategori lengkap
     if (data.pcsData) {
       data.pcsData.forEach(pcs => {
         if (pcs.indikatorStop && pcs.kategoriMasalah && pcs.detailMasalahMap) {
-          const combinedDetails = pcs.kategoriMasalah
+          const detailNames = pcs.kategoriMasalah
+            .map(catId => NEW_PROBLEM_CATEGORIES.find(c => c.id === catId)?.name || catId)
+            .join(', ');
+          
+          const combinedSpesifik = pcs.kategoriMasalah
             .map(cat => pcs.detailMasalahMap?.[cat])
             .filter(Boolean)
             .join(', ');
-          pcs.detailMasalah = combinedDetails || null;
+            
+          pcs.detailMasalah = detailNames || null;
+          pcs.spesifikMasalah = combinedSpesifik || null;
         }
       });
     }

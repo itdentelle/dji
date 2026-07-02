@@ -13,8 +13,7 @@ const qcSchema = z.object({
   tanggal_inspeksi: z.string().min(1, "Wajib diisi"),
   start_inspect: z.string().min(1, "Wajib diisi"),
   finish_inspect: z.string().min(1, "Wajib diisi"),
-  berat_produksi: z.number().min(0, "Harus >= 0").optional().nullable(),
-  berat_inspecting: z.number().min(0, "Harus >= 0").optional().nullable(),
+  berat_kain: z.number().min(0, "Harus >= 0").optional().nullable(),
   prod_ceklis: z.number().min(0),
   prod_silang: z.number().min(0),
   
@@ -54,8 +53,7 @@ export default function QCInspectionModal({
       tanggal_inspeksi: new Date().toISOString().split('T')[0],
       start_inspect: "",
       finish_inspect: "",
-      berat_produksi: 0,
-      berat_inspecting: 0,
+      berat_kain: 0,
       prod_ceklis: 0,
       prod_silang: 0,
       qc_ceklis: 0,
@@ -135,8 +133,7 @@ export default function QCInspectionModal({
         tanggal_inspeksi: data.tanggal_inspeksi,
         start_inspect: data.start_inspect,
         finish_inspect: data.finish_inspect,
-        berat_produksi: data.berat_produksi,
-        berat_inspecting: data.berat_inspecting,
+        berat_kain: data.berat_kain,
         prod_ceklis: data.prod_ceklis,
         prod_silang: data.prod_silang,
         qc_ceklis: data.qc_ceklis,
@@ -284,8 +281,8 @@ export default function QCInspectionModal({
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2"><Scale className="w-4 h-4 text-emerald-500"/> Data Fisik</h4>
               <div className="w-full">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Berat Kain (kg)</label>
-                <input type="number" step="0.01" {...register("berat_produksi", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
-                {errors.berat_produksi && <p className="text-red-500 text-[10px] mt-1">{errors.berat_produksi.message}</p>}
+                <input type="number" step="0.01" {...register("berat_kain", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none" />
+                {errors.berat_kain && <p className="text-red-500 text-[10px] mt-1">{errors.berat_kain.message}</p>}
               </div>
             </div>
 

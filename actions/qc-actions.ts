@@ -93,8 +93,7 @@ export async function submitQCInspection(params: {
   tanggal_inspeksi: string;
   start_inspect: string;
   finish_inspect: string;
-  berat_produksi?: number | null;
-  berat_inspecting?: number | null;
+  berat_kain?: number | null;
   prod_ceklis: number;
   prod_silang: number;
   qc_ceklis: number;
@@ -137,8 +136,7 @@ export async function submitQCInspection(params: {
         design_id,
         potongan_ke,
         pcs_index,
-        berat_produksi: params.berat_produksi,
-        berat_inspecting: params.berat_produksi, // Disamakan
+        berat_kain: params.berat_kain,
         inspeksi_ceklis: params.qc_ceklis,
         inspeksi_silang: params.qc_silang
       })
@@ -223,8 +221,7 @@ export async function submitQCInspection(params: {
             tanggal_qc: params.tanggal_inspeksi || "",
             waktu_qc: `${params.start_inspect || ""} - ${params.finish_inspect || ""}`,
             hasil_qc: gradeStr,
-            berat_produksi: params.berat_produksi,
-            berat_qc: params.berat_produksi, // Disamakan dengan berat kain
+            berat_kain: params.berat_kain,
             keterangan_qc: params.notes || "",
             prod_ceklis: params.prod_ceklis,
             prod_silang: params.prod_silang,

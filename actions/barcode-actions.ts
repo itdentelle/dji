@@ -13,7 +13,7 @@ export async function getBatchesForBarcode(filters: {
       id, nomor_mc, design_id, potongan_ke, no_order_barang, no_customer, tgl,
       production_details!inner (
         id, pcs_index, status_mending,
-        qc_inspections (berat_inspecting),
+        qc_inspections (berat_kain),
         mending_inspections!inner (id)
       )
     `);
@@ -31,7 +31,7 @@ export async function getBatchesForBarcode(filters: {
       return h.production_details.map((d: any) => {
         let berat = 0;
         if (d.qc_inspections && d.qc_inspections.length > 0) {
-           berat = Number(d.qc_inspections[0].berat_inspecting) || 0;
+           berat = Number(d.qc_inspections[0].berat_kain) || 0;
         }
         
         return {

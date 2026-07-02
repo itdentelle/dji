@@ -88,7 +88,7 @@ export default function MendingModal({ isOpen, onClose, headerData, selections, 
       if (detailData && detailData.length > 0) {
         const firstDetail = detailData[0];
         if (firstDetail.qc_inspection_items && firstDetail.qc_inspection_items.length > 0) {
-          initialBerat = Number(firstDetail.qc_inspection_items[0].qc_inspection_batches?.berat_inspecting) || 0;
+          initialBerat = Number(firstDetail.qc_inspection_items[0].qc_inspection_batches?.berat_kain) || 0;
         }
       }
       setValue('berat_kain', initialBerat);
