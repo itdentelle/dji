@@ -865,12 +865,13 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                                     {isChecked && (
                                       <div className="pl-6 animate-fadeIn">
                                         <select
+                                          size={(NEW_PROBLEMS[c.id]?.length || 0) + 1}
                                           {...register(`pcsData.${index}.detailMasalahMap.${c.id}` as const)}
-                                          className="h-9 px-3 rounded-md bg-slate-50 border border-red-200 text-xs font-semibold focus:border-red-400 focus:bg-white focus:ring-1 focus:ring-red-400 outline-none w-full transition-all"
+                                          className="w-full px-2 py-1 rounded-md bg-slate-50 border border-red-200 text-xs font-semibold focus:border-red-400 focus:bg-white focus:ring-1 focus:ring-red-400 outline-none transition-all scrollbar-hide overflow-hidden"
                                         >
-                                          <option value="">-- Pilih Detail Masalah --</option>
+                                          <option value="" disabled>-- Pilih Detail Masalah --</option>
                                           {NEW_PROBLEMS[c.id]?.map(p => (
-                                            <option key={p} value={p}>{p}</option>
+                                            <option key={p} value={p} className="p-2 hover:bg-red-50 cursor-pointer">{p}</option>
                                           ))}
                                         </select>
                                         {errors.pcsData?.[index]?.detailMasalahMap?.[c.id] && (

@@ -610,13 +610,14 @@ export default function QCPage() {
                         {isChecked && (
                           <div className="pl-6 animate-fadeIn">
                             <select
+                              size={(PROBLEM_DETAILS[c.id]?.length || 0) + 1}
                               value={defectDetailMap[c.id] || ""}
                               onChange={(e) => setDefectDetailMap(prev => ({ ...prev, [c.id]: e.target.value }))}
-                              className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold focus:border-rose-400 focus:bg-white focus:ring-1 focus:ring-rose-400 outline-none w-full transition-all"
+                              className="w-full px-2 py-1 rounded-md bg-slate-50 border border-slate-200 text-xs font-semibold focus:border-rose-400 focus:bg-white focus:ring-1 focus:ring-rose-400 outline-none transition-all scrollbar-hide overflow-hidden"
                             >
-                              <option value="">-- Pilih Detail Masalah --</option>
+                              <option value="" disabled>-- Pilih Detail Masalah --</option>
                               {(PROBLEM_DETAILS[c.id] || []).map(p => (
-                                <option key={`${c.id}-${p}`} value={p}>{p}</option>
+                                <option key={`${c.id}-${p}`} value={p} className="p-2 hover:bg-rose-50 cursor-pointer">{p}</option>
                               ))}
                             </select>
                           </div>
