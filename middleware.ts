@@ -94,8 +94,14 @@ export async function middleware(request: NextRequest) {
 
     // Role-Based Access Control (RBAC)
     if (role === "operator") {
-      // Operator hanya boleh mengakses halaman /input, /input-meter, dan /dashboard
-      if (pathname !== "/input" && pathname !== "/input-meter" && pathname !== "/dashboard") {
+      // Operator hanya boleh mengakses halaman /input, /input-meter, /dashboard, /history, dan /edit
+      if (
+        pathname !== "/input" && 
+        pathname !== "/input-meter" && 
+        pathname !== "/dashboard" && 
+        pathname !== "/history" &&
+        !pathname.startsWith("/edit")
+      ) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
     } else if (role === "inspeksi") {
