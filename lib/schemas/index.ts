@@ -64,6 +64,7 @@ export const productionFormSchemaBase = z.object({
       jmlHasilProduksi: z.string().optional().nullable(),
       indikatorStop: z.boolean().optional(),
       kategoriMasalah: z.array(z.string()).optional(),
+      detailMasalahMap: z.record(z.string()).optional(),
       detailMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
       keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
@@ -83,6 +84,16 @@ export const productionFormSchema = productionFormSchemaBase.superRefine((data, 
             code: z.ZodIssueCode.custom,
             message: "Wajib memilih minimal 1 Kategori Masalah jika mencentang cacat",
             path: ["pcsData", index, "kategoriMasalah"],
+          });
+        } else {
+          pcs.kategoriMasalah.forEach((catId) => {
+            if (!pcs.detailMasalahMap || !pcs.detailMasalahMap[catId] || pcs.detailMasalahMap[catId].trim() === "") {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Wajib memilih Detail Masalah`,
+                path: ["pcsData", index, "detailMasalahMap", catId],
+              });
+            }
           });
         }
       }
@@ -112,6 +123,7 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
       jmlHasilProduksi: z.string().optional().nullable(),
       indikatorStop: z.boolean().optional(),
       kategoriMasalah: z.array(z.string()).optional(),
+      detailMasalahMap: z.record(z.string()).optional(),
       detailMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
       rollNo: z.string().optional().nullable(),
@@ -137,6 +149,16 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
             code: z.ZodIssueCode.custom,
             message: "Wajib memilih minimal 1 Kategori Masalah jika mencentang cacat",
             path: ["pcsData", index, "kategoriMasalah"],
+          });
+        } else {
+          pcs.kategoriMasalah.forEach((catId) => {
+            if (!pcs.detailMasalahMap || !pcs.detailMasalahMap[catId] || pcs.detailMasalahMap[catId].trim() === "") {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Wajib memilih Detail Masalah`,
+                path: ["pcsData", index, "detailMasalahMap", catId],
+              });
+            }
           });
         }
       }

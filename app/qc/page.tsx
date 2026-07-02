@@ -103,7 +103,7 @@ export default function QCPage() {
   const [isDefectModalOpen, setIsDefectModalOpen] = useState(false);
   const [defectMeterKain, setDefectMeterKain] = useState("");
   const [defectKategori, setDefectKategori] = useState<string[]>([]);
-  const [defectDetail, setDefectDetail] = useState("");
+  const [defectDetailMap, setDefectDetailMap] = useState<Record<string, string>>({});
   const [defectKeterangan, setDefectKeterangan] = useState("");
   const [isSubmittingDefect, setIsSubmittingDefect] = useState(false);
   const [defectError, setDefectError] = useState<string | null>(null);
@@ -126,6 +126,11 @@ export default function QCPage() {
       setDefectError("Pilih minimal 1 Kategori Masalah.");
       return;
     }
+    const missingDetails = defectKategori.some(cat => !defectDetailMap[cat] || defectDetailMap[cat].trim() === "");
+    if (missingDetails) {
+      setDefectError("Wajib memilih Detail Masalah untuk setiap Kategori yang dicentang.");
+      return;
+    }
     if (!meteranHeaderId) {
       setDefectError("Tidak ditemukan header ID untuk batch ini.");
       return;
@@ -133,18 +138,21 @@ export default function QCPage() {
     setIsSubmittingDefect(true);
     setDefectError(null);
     try {
+      const combinedDetails = defectKategori.map(cat => defectDetailMap[cat]).join(', ');
+      
       const res = await addQCDefectDetail({
         headerId: meteranHeaderId,
         meterKain: defectMeterKain,
         kategoriMasalah: defectKategori,
-        detailMasalah: defectDetail || undefined,
+        detailMasalah: combinedDetails || undefined,
         keteranganCacat: defectKeterangan || undefined,
       });
       if (res.success) {
-        // Reset form
+        // Sukses!
+        setIsDefectModalOpen(false);
         setDefectMeterKain("");
         setDefectKategori([]);
-        setDefectDetail("");
+        setDefectDetailMap({});
         setDefectKeterangan("");
         setIsDefectModalOpen(false);
         // Refresh data
@@ -584,41 +592,40 @@ export default function QCPage() {
               {/* Kategori Masalah */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-rose-600 uppercase">Kategori Masalah <span className="text-rose-500">*</span> (Pilih 1 atau lebih)</label>
-                <div className="grid grid-cols-1 gap-2 mt-1">
-                  {PROBLEM_CATEGORIES.map(c => (
-                    <label key={c.id} className={`flex items-center gap-2 p-2.5 border rounded-xl cursor-pointer transition-all ${
-                      defectKategori.includes(c.id) 
-                        ? 'border-rose-400 bg-rose-50 ring-1 ring-rose-200' 
-                        : 'border-slate-200 bg-white hover:border-rose-300'
-                    }`}>
-                      <input
-                        type="checkbox"
-                        checked={defectKategori.includes(c.id)}
-                        onChange={() => handleDefectToggleKategori(c.id)}
-                        className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500"
-                      />
-                      <span className="text-[11px] font-bold text-slate-700">{c.name}</span>
-                    </label>
-                  ))}
+                <div className="flex flex-col gap-2 mt-1">
+                  {PROBLEM_CATEGORIES.map(c => {
+                    const isChecked = defectKategori.includes(c.id);
+                    return (
+                      <div key={c.id} className="flex flex-col gap-2 p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                        <label className="flex items-center gap-2 cursor-pointer transition-all hover:text-rose-500">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleDefectToggleKategori(c.id)}
+                            className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500"
+                          />
+                          <span className="text-[11px] font-bold text-slate-700">{c.name}</span>
+                        </label>
+
+                        {isChecked && (
+                          <div className="pl-6 animate-fadeIn">
+                            <select
+                              value={defectDetailMap[c.id] || ""}
+                              onChange={(e) => setDefectDetailMap(prev => ({ ...prev, [c.id]: e.target.value }))}
+                              className="h-10 px-3 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold focus:border-rose-400 focus:bg-white focus:ring-1 focus:ring-rose-400 outline-none w-full transition-all"
+                            >
+                              <option value="">-- Pilih Detail Masalah --</option>
+                              {(PROBLEM_DETAILS[c.id] || []).map(p => (
+                                <option key={`${c.id}-${p}`} value={p}>{p}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Detail Masalah Dropdown */}
-              {defectKategori.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-600 uppercase">Detail Masalah</label>
-                  <select
-                    value={defectDetail}
-                    onChange={(e) => setDefectDetail(e.target.value)}
-                    className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-rose-400 focus:bg-white outline-none transition-all"
-                  >
-                    <option value="">-- Pilih Detail --</option>
-                    {defectKategori.flatMap(catId => (PROBLEM_DETAILS[catId] || []).map(p => (
-                      <option key={`${catId}-${p}`} value={p}>{p}</option>
-                    )))}
-                  </select>
-                </div>
-              )}
 
               {/* Keterangan Tambahan */}
               <div className="flex flex-col gap-1.5">

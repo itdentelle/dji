@@ -458,6 +458,19 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;
 
+    // Gabungkan detailMasalahMap ke detailMasalah
+    if (data.pcsData) {
+      data.pcsData.forEach(pcs => {
+        if (pcs.indikatorStop && pcs.kategoriMasalah && pcs.detailMasalahMap) {
+          const combinedDetails = pcs.kategoriMasalah
+            .map(cat => pcs.detailMasalahMap?.[cat])
+            .filter(Boolean)
+            .join(', ');
+          pcs.detailMasalah = combinedDetails || null;
+        }
+      });
+    }
+
     // Save Header Data to LocalStorage automatically on submit
     // Save Header Data to LocalStorage automatically on submit
     const currentPanelNo = data.panelNo;
@@ -834,18 +847,42 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                         <div className="p-4 border-t border-red-100/50 space-y-4 animate-fadeIn">
                           <div className="flex flex-col gap-1">
                             <label className="text-[10px] font-bold text-red-600 uppercase">Kategori Masalah (Pilih lebih dari 1)</label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                              {NEW_PROBLEM_CATEGORIES.map(c => (
-                                <label key={c.id} className="flex items-center gap-2 p-2 bg-white border border-red-100 rounded-lg cursor-pointer hover:border-red-300 transition-colors">
-                                  <input 
-                                    type="checkbox" 
-                                    value={c.id} 
-                                    {...register(`pcsData.${index}.kategoriMasalah` as const)} 
-                                    className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500" 
-                                  />
-                                  <span className="text-[10px] font-bold text-slate-700">{c.name}</span>
-                                </label>
-                              ))}
+                            <div className="flex flex-col gap-2 mt-1">
+                              {NEW_PROBLEM_CATEGORIES.map(c => {
+                                const isChecked = watch(`pcsData.${index}.kategoriMasalah`)?.includes(c.id);
+                                return (
+                                  <div key={c.id} className="flex flex-col gap-2 p-3 bg-white border border-red-100 rounded-lg shadow-sm">
+                                    <label className="flex items-center gap-2 cursor-pointer hover:text-red-500 transition-colors">
+                                      <input 
+                                        type="checkbox" 
+                                        value={c.id} 
+                                        {...register(`pcsData.${index}.kategoriMasalah` as const)} 
+                                        className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500" 
+                                      />
+                                      <span className="text-xs font-bold text-slate-700">{c.name}</span>
+                                    </label>
+
+                                    {isChecked && (
+                                      <div className="pl-6 animate-fadeIn">
+                                        <select
+                                          {...register(`pcsData.${index}.detailMasalahMap.${c.id}` as const)}
+                                          className="h-9 px-3 rounded-md bg-slate-50 border border-red-200 text-xs font-semibold focus:border-red-400 focus:bg-white focus:ring-1 focus:ring-red-400 outline-none w-full transition-all"
+                                        >
+                                          <option value="">-- Pilih Detail Masalah --</option>
+                                          {NEW_PROBLEMS[c.id]?.map(p => (
+                                            <option key={p} value={p}>{p}</option>
+                                          ))}
+                                        </select>
+                                        {errors.pcsData?.[index]?.detailMasalahMap?.[c.id] && (
+                                          <span className="text-red-500 text-[10px] font-bold mt-1 block">
+                                            {errors.pcsData[index]?.detailMasalahMap?.[c.id]?.message}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                             {errors.pcsData?.[index]?.kategoriMasalah && (
                               <span className="text-red-500 text-[10px] font-bold mt-1 block">
