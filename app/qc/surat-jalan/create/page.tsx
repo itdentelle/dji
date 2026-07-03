@@ -3,10 +3,19 @@
 import React, { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createSuratJalan, SuratJalanItem, SuratJalanHeader } from "@/actions/surat-jalan-actions";
-import { ArrowLeft, Save, ScanLine, Trash2, Box, Camera, Keyboard, X, CheckCircle } from "lucide-react";
+import { ArrowLeft, Save, ScanLine, Trash2, Box, Camera, Keyboard, X, CheckCircle, HelpCircle } from "lucide-react";
 import Link from "next/link";
 import CameraScanner from "@/components/CameraScanner";
 import SuratJalanPrintTemplate from "@/components/SuratJalanPrintTemplate";
+import ProductTour, { ProductTourStep } from "@/components/ProductTour";
+
+const QC_CREATE_SJ_TOUR_STEPS: ProductTourStep[] = [
+  { target: "qc-create-sj-header", title: "Buat Surat Jalan", description: "Halaman ini dipakai untuk membuat dokumen pengiriman dari barcode batch yang sudah lolos QC." },
+  { target: "qc-create-sj-info", title: "Info Pengiriman", description: "Isi tujuan, alamat, kota, provinsi, kode pos, dan detail pengiriman lainnya." },
+  { target: "qc-create-sj-scanner", title: "Scan Barcode", description: "Gunakan scanner infrared atau kamera untuk memasukkan batch kain ke daftar muatan." },
+  { target: "qc-create-sj-items", title: "Daftar Muatan", description: "Batch yang berhasil discan akan muncul di sini. Hapus baris jika ada scan yang salah." },
+  { target: "qc-create-sj-actions", title: "Preview dan Simpan", description: "Preview dokumen sebelum menyimpan, lalu tekan Simpan Surat Jalan jika muatan sudah lengkap." },
+];
 
 export default function CreateSuratJalanPage() {
   const router = useRouter();
@@ -32,6 +41,7 @@ export default function CreateSuratJalanPage() {
   const [scanSuccessMsg, setScanSuccessMsg] = useState<string | null>(null);
   const [scanMode, setScanMode] = useState<"infrared" | "camera">("infrared");
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   const scanInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -125,16 +135,19 @@ export default function CreateSuratJalanPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+      <div data-tour="qc-create-sj-header" className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
         <Link href="/qc/surat-jalan" className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-200 text-slate-500 hover:text-slate-800 transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
             Buat Surat Jalan Baru
           </h1>
           <p className="text-sm text-slate-500 font-medium mt-1">Lengkapi informasi pengiriman dan scan barcode kain yang akan dimuat.</p>
         </div>
+        <button type="button" onClick={() => setIsTourOpen(true)} className="h-11 px-4 rounded-full bg-[#0070bc] hover:bg-[#004777] text-white text-xs font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-2 self-start md:self-auto">
+          <HelpCircle className="w-4 h-4" /> Tu
+        </button>
       </div>
 
       {errorMsg && (
@@ -147,7 +160,7 @@ export default function CreateSuratJalanPage() {
         
         {/* Kolom Kiri - Form Header */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div data-tour="qc-create-sj-info" className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b pb-2">Info Pengiriman</h3>
             
             <div className="space-y-4">
@@ -264,7 +277,7 @@ export default function CreateSuratJalanPage() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* Scanner Area */}
-          <div className="bg-[#0070bc]/5 border border-[#0070bc]/20 p-6 rounded-2xl">
+          <div data-tour="qc-create-sj-scanner" className="bg-[#0070bc]/5 border border-[#0070bc]/20 p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-4 border-b border-[#0070bc]/10 pb-3">
               <h3 className="font-bold text-[#0070bc] flex items-center gap-2">
                 <ScanLine className="w-5 h-5" /> 
@@ -318,7 +331,7 @@ export default function CreateSuratJalanPage() {
           </div>
 
           {/* Tabel Muatan */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div data-tour="qc-create-sj-items" className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Daftar Muatan ({items.length} Batch)</h3>
             </div>
@@ -374,7 +387,7 @@ export default function CreateSuratJalanPage() {
             )}
           </div>
           
-          <div className="flex justify-end gap-3">
+          <div data-tour="qc-create-sj-actions" className="flex justify-end gap-3">
             <button
               type="button"
               onClick={() => setIsPreviewOpen(true)}
@@ -394,6 +407,12 @@ export default function CreateSuratJalanPage() {
 
         </div>
       </form>
+
+      <ProductTour
+        steps={QC_CREATE_SJ_TOUR_STEPS}
+        isOpen={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+      />
 
       {/* Preview Modal */}
       {isPreviewOpen && (

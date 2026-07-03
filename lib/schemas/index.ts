@@ -10,6 +10,14 @@ export const pinSchema = z.object({
 
 export type PinSchemaInput = z.infer<typeof pinSchema>;
 
+const detailMasalahSelectionSchema = z.union([z.array(z.string()), z.string(), z.boolean()]);
+
+const hasSelectedDetailMasalah = (value: z.infer<typeof detailMasalahSelectionSchema> | undefined) => {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "string") return value.trim() !== "";
+  return false;
+};
+
 // Skema untuk Form Portal Input Produksi Harian (Sesuai Supabase Productions Table)
 export const productionFormSchemaBase = z.object({
   operatorId: z.string().min(1, "Minimal pilih 1 operator"),
@@ -64,7 +72,7 @@ export const productionFormSchemaBase = z.object({
       jmlHasilProduksi: z.string().optional().nullable(),
       indikatorStop: z.boolean().optional(),
       kategoriMasalah: z.array(z.string()).optional(),
-      detailMasalahMap: z.record(z.string(), z.array(z.string())).optional(),
+      detailMasalahMap: z.record(z.string(), detailMasalahSelectionSchema).optional(),
       detailMasalah: z.string().optional().nullable(),
       spesifikMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
@@ -88,10 +96,10 @@ export const productionFormSchema = productionFormSchemaBase.superRefine((data, 
           });
         } else {
           pcs.kategoriMasalah.forEach((catId) => {
-            if (!pcs.detailMasalahMap || !pcs.detailMasalahMap[catId] || pcs.detailMasalahMap[catId].length === 0) {
+            if (!pcs.detailMasalahMap || !hasSelectedDetailMasalah(pcs.detailMasalahMap[catId])) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: `Wajib memilih Detail Masalah`,
+                message: "Harus memilih salah satu detail masalah",
                 path: ["pcsData", index, "detailMasalahMap", catId],
               });
             }
@@ -124,7 +132,7 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
       jmlHasilProduksi: z.string().optional().nullable(),
       indikatorStop: z.boolean().optional(),
       kategoriMasalah: z.array(z.string()).optional(),
-      detailMasalahMap: z.record(z.string(), z.array(z.string())).optional(),
+      detailMasalahMap: z.record(z.string(), detailMasalahSelectionSchema).optional(),
       detailMasalah: z.string().optional().nullable(),
       spesifikMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
@@ -166,10 +174,10 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
           });
         } else {
           pcs.kategoriMasalah.forEach((catId) => {
-            if (!pcs.detailMasalahMap || !pcs.detailMasalahMap[catId] || pcs.detailMasalahMap[catId].length === 0) {
+            if (!pcs.detailMasalahMap || !hasSelectedDetailMasalah(pcs.detailMasalahMap[catId])) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: `Wajib memilih Detail Masalah`,
+                message: "Harus memilih salah satu detail masalah",
                 path: ["pcsData", index, "detailMasalahMap", catId],
               });
             }

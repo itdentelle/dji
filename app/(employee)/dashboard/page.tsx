@@ -16,10 +16,38 @@ import {
   Search,
   ArrowRight,
   LogOut,
-  Download,
   X,
+  HelpCircle,
 } from "lucide-react";
 import { getRealProductionsData } from "@/actions/dashboard-actions";
+import ProductTour, { ProductTourStep } from "@/components/ProductTour";
+
+const EMPLOYEE_DASHBOARD_TOUR_STEPS: ProductTourStep[] = [
+  {
+    target: "employee-dashboard-header",
+    title: "Dashboard Pegawai",
+    description:
+      "Header ini menunjukkan nama pegawai aktif, tombol rekap Excel, reset slicer, dan tombol untuk mengganti pegawai.",
+  },
+  {
+    target: "employee-dashboard-slicers",
+    title: "Filter Periode",
+    description:
+      "Pilih range waktu dan filter lain untuk melihat performa produksi sesuai periode yang dibutuhkan.",
+  },
+  {
+    target: "employee-dashboard-kpi",
+    title: "Kartu Performa",
+    description:
+      "Kartu ini merangkum hasil produksi, cacat, efisiensi, dan jumlah masalah dari pegawai terpilih.",
+  },
+  {
+    target: "employee-dashboard-visuals",
+    title: "Grafik dan Kualitas",
+    description:
+      "Gunakan grafik untuk membaca tren produksi dan ringkasan kualitas berdasarkan grade.",
+  },
+];
 
 interface Transaction {
   id: string | number;
@@ -44,52 +72,251 @@ interface Transaction {
   kategori_masalah?: string;
 }
 
+const getNiceChartMax = (rawValue: number, minimum = 5) => {
+  if (!Number.isFinite(rawValue) || rawValue <= minimum) return minimum;
+
+  const roughTick = rawValue / 4;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughTick)));
+  const normalized = roughTick / magnitude;
+  const niceNormalized =
+    normalized <= 1 ? 1 :
+    normalized <= 2 ? 2 :
+    normalized <= 2.5 ? 2.5 :
+    normalized <= 5 ? 5 :
+    10;
+
+  return niceNormalized * magnitude * 4;
+};
+
 const dummyData: Transaction[] = [
-  { id: 1, tanggal: "2026-05-18", hari: "SEN", nama_operator: "Budi Santoso", mesin_id: "KNIT-001", hasil_pcs: 240, target_pcs: 250, status_qc: "Lolos", rpm_mesin: 850, grade: "GRADE A", design: "Design A", group: "Grup A" },
-  { id: 2, tanggal: "2026-05-18", hari: "SEN", nama_operator: "Rina Wijaya", mesin_id: "KNIT-003", hasil_pcs: 220, target_pcs: 230, status_qc: "Lolos", rpm_mesin: 840, grade: "GRADE B", design: "Design B", group: "Grup B" },
-  { id: 3, tanggal: "2026-05-19", hari: "SEL", nama_operator: "Siti Rahma", mesin_id: "KNIT-002", hasil_pcs: 180, target_pcs: 200, status_qc: "Recheck", rpm_mesin: 720, grade: "BS", design: "Design A", group: "Grup A" },
-  { id: 4, tanggal: "2026-05-19", hari: "SEL", nama_operator: "Ahmad Fauzi", mesin_id: "KNIT-004", hasil_pcs: 230, target_pcs: 230, status_qc: "Lolos", rpm_mesin: 860, grade: "GRADE A", design: "Design C", group: "Grup C" },
-  { id: 5, tanggal: "2026-05-20", hari: "RAB", nama_operator: "Doni Setiawan", mesin_id: "KNIT-001", hasil_pcs: 250, target_pcs: 250, status_qc: "Lolos", rpm_mesin: 850, grade: "GRADE A", design: "Design A", group: "Grup A" },
-  { id: 6, tanggal: "2026-05-20", hari: "RAB", nama_operator: "Eko Prasetyo", mesin_id: "KNIT-003", hasil_pcs: 190, target_pcs: 210, status_qc: "Recheck", rpm_mesin: 780, grade: "BS", design: "Design B", group: "Grup B" },
-  { id: 7, tanggal: "2026-05-21", hari: "KAM", nama_operator: "Budi Santoso", mesin_id: "KNIT-001", hasil_pcs: 245, target_pcs: 245, status_qc: "Lolos", rpm_mesin: 855, grade: "GRADE A", design: "Design A", group: "Grup A" },
-  { id: 8, tanggal: "2026-05-21", hari: "KAM", nama_operator: "Dewi Lestari", mesin_id: "KNIT-002", hasil_pcs: 235, target_pcs: 240, status_qc: "Lolos", rpm_mesin: 845, grade: "GRADE B", design: "Design C", group: "Grup C" },
-  { id: 9, tanggal: "2026-05-22", hari: "JUM", nama_operator: "Rina Wijaya", mesin_id: "KNIT-003", hasil_pcs: 260, target_pcs: 260, status_qc: "Lolos", rpm_mesin: 860, grade: "GRADE A", design: "Design B", group: "Grup B" },
-  { id: 10, tanggal: "2026-05-22", hari: "JUM", nama_operator: "Siti Rahma", mesin_id: "KNIT-002", hasil_pcs: 170, target_pcs: 200, status_qc: "Recheck", rpm_mesin: 690, grade: "BS", design: "Design A", group: "Grup A" },
-  { id: 11, tanggal: "2026-05-23", hari: "SAB", nama_operator: "Ahmad Fauzi", mesin_id: "KNIT-004", hasil_pcs: 150, target_pcs: 160, status_qc: "Lolos", rpm_mesin: 820, grade: "GRADE B", design: "Design C", group: "Grup C" },
-  { id: 12, tanggal: "2026-05-23", hari: "SAB", nama_operator: "Doni Setiawan", mesin_id: "KNIT-001", hasil_pcs: 140, target_pcs: 140, status_qc: "Lolos", rpm_mesin: 830, grade: "GRADE A", design: "Design A", group: "Grup A" },
-  { id: 13, tanggal: "2026-05-24", hari: "MIN", nama_operator: "Eko Prasetyo", mesin_id: "KNIT-003", hasil_pcs: 120, target_pcs: 130, status_qc: "Lolos", rpm_mesin: 810, grade: "GRADE A", design: "Design B", group: "Grup B" },
+  {
+    id: 1,
+    tanggal: "2026-05-18",
+    hari: "SEN",
+    nama_operator: "Budi Santoso",
+    mesin_id: "KNIT-001",
+    hasil_pcs: 240,
+    target_pcs: 250,
+    status_qc: "Lolos",
+    rpm_mesin: 850,
+    grade: "GRADE A",
+    design: "Design A",
+    group: "Grup A",
+  },
+  {
+    id: 2,
+    tanggal: "2026-05-18",
+    hari: "SEN",
+    nama_operator: "Rina Wijaya",
+    mesin_id: "KNIT-003",
+    hasil_pcs: 220,
+    target_pcs: 230,
+    status_qc: "Lolos",
+    rpm_mesin: 840,
+    grade: "GRADE B",
+    design: "Design B",
+    group: "Grup B",
+  },
+  {
+    id: 3,
+    tanggal: "2026-05-19",
+    hari: "SEL",
+    nama_operator: "Siti Rahma",
+    mesin_id: "KNIT-002",
+    hasil_pcs: 180,
+    target_pcs: 200,
+    status_qc: "Recheck",
+    rpm_mesin: 720,
+    grade: "BS",
+    design: "Design A",
+    group: "Grup A",
+  },
+  {
+    id: 4,
+    tanggal: "2026-05-19",
+    hari: "SEL",
+    nama_operator: "Ahmad Fauzi",
+    mesin_id: "KNIT-004",
+    hasil_pcs: 230,
+    target_pcs: 230,
+    status_qc: "Lolos",
+    rpm_mesin: 860,
+    grade: "GRADE A",
+    design: "Design C",
+    group: "Grup C",
+  },
+  {
+    id: 5,
+    tanggal: "2026-05-20",
+    hari: "RAB",
+    nama_operator: "Doni Setiawan",
+    mesin_id: "KNIT-001",
+    hasil_pcs: 250,
+    target_pcs: 250,
+    status_qc: "Lolos",
+    rpm_mesin: 850,
+    grade: "GRADE A",
+    design: "Design A",
+    group: "Grup A",
+  },
+  {
+    id: 6,
+    tanggal: "2026-05-20",
+    hari: "RAB",
+    nama_operator: "Eko Prasetyo",
+    mesin_id: "KNIT-003",
+    hasil_pcs: 190,
+    target_pcs: 210,
+    status_qc: "Recheck",
+    rpm_mesin: 780,
+    grade: "BS",
+    design: "Design B",
+    group: "Grup B",
+  },
+  {
+    id: 7,
+    tanggal: "2026-05-21",
+    hari: "KAM",
+    nama_operator: "Budi Santoso",
+    mesin_id: "KNIT-001",
+    hasil_pcs: 245,
+    target_pcs: 245,
+    status_qc: "Lolos",
+    rpm_mesin: 855,
+    grade: "GRADE A",
+    design: "Design A",
+    group: "Grup A",
+  },
+  {
+    id: 8,
+    tanggal: "2026-05-21",
+    hari: "KAM",
+    nama_operator: "Dewi Lestari",
+    mesin_id: "KNIT-002",
+    hasil_pcs: 235,
+    target_pcs: 240,
+    status_qc: "Lolos",
+    rpm_mesin: 845,
+    grade: "GRADE B",
+    design: "Design C",
+    group: "Grup C",
+  },
+  {
+    id: 9,
+    tanggal: "2026-05-22",
+    hari: "JUM",
+    nama_operator: "Rina Wijaya",
+    mesin_id: "KNIT-003",
+    hasil_pcs: 260,
+    target_pcs: 260,
+    status_qc: "Lolos",
+    rpm_mesin: 860,
+    grade: "GRADE A",
+    design: "Design B",
+    group: "Grup B",
+  },
+  {
+    id: 10,
+    tanggal: "2026-05-22",
+    hari: "JUM",
+    nama_operator: "Siti Rahma",
+    mesin_id: "KNIT-002",
+    hasil_pcs: 170,
+    target_pcs: 200,
+    status_qc: "Recheck",
+    rpm_mesin: 690,
+    grade: "BS",
+    design: "Design A",
+    group: "Grup A",
+  },
+  {
+    id: 11,
+    tanggal: "2026-05-23",
+    hari: "SAB",
+    nama_operator: "Ahmad Fauzi",
+    mesin_id: "KNIT-004",
+    hasil_pcs: 150,
+    target_pcs: 160,
+    status_qc: "Lolos",
+    rpm_mesin: 820,
+    grade: "GRADE B",
+    design: "Design C",
+    group: "Grup C",
+  },
+  {
+    id: 12,
+    tanggal: "2026-05-23",
+    hari: "SAB",
+    nama_operator: "Doni Setiawan",
+    mesin_id: "KNIT-001",
+    hasil_pcs: 140,
+    target_pcs: 140,
+    status_qc: "Lolos",
+    rpm_mesin: 830,
+    grade: "GRADE A",
+    design: "Design A",
+    group: "Grup A",
+  },
+  {
+    id: 13,
+    tanggal: "2026-05-24",
+    hari: "MIN",
+    nama_operator: "Eko Prasetyo",
+    mesin_id: "KNIT-003",
+    hasil_pcs: 120,
+    target_pcs: 130,
+    status_qc: "Lolos",
+    rpm_mesin: 810,
+    grade: "GRADE A",
+    design: "Design B",
+    group: "Grup B",
+  },
 ];
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [activeFilter, setActiveFilter] = useState<"ALL" | "LOLOS" | "EFISIENSI" | "PROBLEMS" | "NOL_PRODUKSI">("ALL");
+  const [isTourOpen, setIsTourOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<
+    "ALL" | "LOLOS" | "EFISIENSI" | "PROBLEMS" | "NOL_PRODUKSI"
+  >("ALL");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLive, setIsLive] = useState(false);
-  
+
   // Kiosk Mode State
-  const [activeEmployeeName, setActiveEmployeeName] = useState<string | null>(null);
+  const [activeEmployeeName, setActiveEmployeeName] = useState<string | null>(
+    null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
 
   // Metric Mode State (also controls sliders)
-  const [metricMode, setMetricMode] = useState<"PCS" | "METER" | "BARIS">("PCS");
+  const [metricMode, setMetricMode] = useState<"PCS" | "METER" | "BARIS">(
+    "PCS",
+  );
 
   // Date Filtering State
-  const [dateRangeMode, setDateRangeMode] = useState<"ALL" | "TODAY" | "7DAYS" | "CUSTOM">("7DAYS");
+  const [dateRangeMode, setDateRangeMode] = useState<
+    "ALL" | "TODAY" | "7DAYS" | "CUSTOM"
+  >("7DAYS");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
   // Grade breakdown filter for Chart
-  const [chartGradeFilter, setChartGradeFilter] = useState<"ALL" | "GRADE_A" | "GRADE_B" | "BS">("ALL");
+  const [chartGradeFilter, setChartGradeFilter] = useState<
+    "ALL" | "GRADE_A" | "GRADE_B" | "BS"
+  >("ALL");
 
   // Chart Dimension State
-  const [chartGroupBy, setChartGroupBy] = useState<"HARI" | "DESIGN" | "PEGAWAI" | "GROUP">("HARI");
+  const [chartGroupBy, setChartGroupBy] = useState<
+    "HARI" | "DESIGN" | "PEGAWAI" | "GROUP"
+  >("HARI");
 
   // Chart Type State
   const [chartType, setChartType] = useState<"BAR" | "LINE">("BAR");
 
   // Swipe State for mobile
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
+  const handleTouchStart = (e: React.TouchEvent) =>
+    setTouchStartX(e.touches[0].clientX);
   const handleTouchEndMetric = (e: React.TouchEvent) => {
     if (touchStartX === null) return;
     const diff = touchStartX - e.changedTouches[0].clientX;
@@ -100,23 +327,18 @@ export default function DashboardPage() {
   const handleTouchEndProblems = (e: React.TouchEvent) => {
     if (touchStartX === null) return;
     const diff = touchStartX - e.changedTouches[0].clientX;
-    if (diff > 40) { setActiveFilter("NOL_PRODUKSI"); setMetricMode("METER"); }
-    else if (diff < -40) { setActiveFilter("PROBLEMS"); setMetricMode("PCS"); }
+    if (diff > 40) {
+      setActiveFilter("NOL_PRODUKSI");
+      setMetricMode("METER");
+    } else if (diff < -40) {
+      setActiveFilter("PROBLEMS");
+      setMetricMode("PCS");
+    }
     setTouchStartX(null);
   };
 
   // Active chart bar for mobile tap
   const [activeChartBar, setActiveChartBar] = useState<number | null>(null);
-
-  // Export Modal State
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [exportMonth, setExportMonth] = useState<number>(new Date().getMonth() + 1);
-  const [exportYear, setExportYear] = useState<number>(new Date().getFullYear());
-
-  const handleDownloadRekap = () => {
-    window.open(`/api/export?month=${exportMonth}&year=${exportYear}`, '_blank');
-    setIsExportModalOpen(false);
-  };
 
   // Load real production data from Supabase
   useEffect(() => {
@@ -142,10 +364,13 @@ export default function DashboardPage() {
   // Unique Operators for Filter Dropdown
   const uniqueOperators = useMemo(() => {
     const ops = new Set<string>();
-    transactions.forEach(t => {
+    transactions.forEach((t) => {
       // Split by comma in case there are multiple operators, trim spaces
-      const names = t.nama_operator.split(',').map(n => n.trim()).filter(Boolean);
-      names.forEach(name => ops.add(name));
+      const names = t.nama_operator
+        .split(",")
+        .map((n) => n.trim())
+        .filter(Boolean);
+      names.forEach((name) => ops.add(name));
     });
     return Array.from(ops).sort();
   }, [transactions]);
@@ -158,7 +383,7 @@ export default function DashboardPage() {
       const now = new Date();
       const todayStr = now.toLocaleDateString("en-CA");
 
-      result = result.filter(item => {
+      result = result.filter((item) => {
         const itemDate = new Date(item.tanggal);
         if (isNaN(itemDate.getTime())) return true;
 
@@ -194,8 +419,11 @@ export default function DashboardPage() {
 
     if (activeEmployeeName) {
       // Check if the comma-separated string contains the active employee name
-      result = result.filter(item => 
-        item.nama_operator.split(',').map(n => n.trim()).includes(activeEmployeeName)
+      result = result.filter((item) =>
+        item.nama_operator
+          .split(",")
+          .map((n) => n.trim())
+          .includes(activeEmployeeName),
       );
     }
 
@@ -207,17 +435,23 @@ export default function DashboardPage() {
     // Apply grade filter to the date-filtered transactions
     let gradeScoped = dateFilteredTransactions;
     if (chartGradeFilter === "GRADE_A") {
-      gradeScoped = dateFilteredTransactions.filter(item => item.grade === "GRADE A");
+      gradeScoped = dateFilteredTransactions.filter(
+        (item) => item.grade === "GRADE A",
+      );
     } else if (chartGradeFilter === "GRADE_B") {
-      gradeScoped = dateFilteredTransactions.filter(item => item.grade === "GRADE B");
+      gradeScoped = dateFilteredTransactions.filter(
+        (item) => item.grade === "GRADE B",
+      );
     } else if (chartGradeFilter === "BS") {
-      gradeScoped = dateFilteredTransactions.filter(item => item.grade === "BS");
+      gradeScoped = dateFilteredTransactions.filter(
+        (item) => item.grade === "BS",
+      );
     }
 
-    const productionOnly = gradeScoped.filter(item => item.is_production);
+    const productionOnly = gradeScoped.filter((item) => item.is_production);
 
     const panelMap = new Map<string, number>();
-    productionOnly.forEach(item => {
+    productionOnly.forEach((item) => {
       if ((item.hasil_meter || 0) === 0 && item.potongan_ke) {
         const groupKey = `${item.tanggal}_${item.mesin_id}_${item.potongan_ke}`;
         const currentMax = panelMap.get(groupKey) || 0;
@@ -226,41 +460,85 @@ export default function DashboardPage() {
         }
       }
     });
-    
+
     let totalProduksiPanel = 0;
-    panelMap.forEach(max => totalProduksiPanel += max);
+    panelMap.forEach((max) => (totalProduksiPanel += max));
     const totalProduksi = totalProduksiPanel; // Rename to keep compatibility
 
-    const totalProduksiMeter = productionOnly.reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
-    const totalTarget = productionOnly.reduce((acc, curr) => acc + curr.target_pcs, 0);
+    const totalProduksiMeter = productionOnly.reduce(
+      (acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0),
+      0,
+    );
+    const totalTarget = productionOnly.reduce(
+      (acc, curr) => acc + curr.target_pcs,
+      0,
+    );
     const totalItems = productionOnly.length;
 
     // Perhitungan Cacat Produksi (Panel)
     // "menghitung baris panel yang ada kategori masalahnya di baris tsb" -> hitung baris/detail
-    const countMasalahPanel = gradeScoped.filter(item => item.status_qc === "Recheck" && item.is_production && (item.hasil_meter || 0) === 0 && (item.posisi_meter || 0) === 0).length;
+    const countMasalahPanel = gradeScoped.filter(
+      (item) =>
+        item.status_qc === "Recheck" &&
+        item.is_production &&
+        (item.hasil_meter || 0) === 0 &&
+        (item.posisi_meter || 0) === 0,
+    ).length;
     const totalPanelValid = totalProduksiPanel; // "dari Y panel"
-    const persentaseCacatPanel = totalPanelValid > 0 ? (countMasalahPanel / totalPanelValid) * 100 : 0;
+    const persentaseCacatPanel =
+      totalPanelValid > 0 ? (countMasalahPanel / totalPanelValid) * 100 : 0;
 
     // Perhitungan Cacat Produksi (Meteran)
-    const countMasalahMeteran = gradeScoped.filter(item => item.status_qc === "Recheck" && item.is_production && (item.posisi_meter || 0) > 0).length;
-    const persentaseCacatMeteran = totalProduksiMeter > 0 ? (countMasalahMeteran / totalProduksiMeter) * 100 : 0;
+    const countMasalahMeteran = gradeScoped.filter(
+      (item) =>
+        item.status_qc === "Recheck" &&
+        item.is_production &&
+        (item.posisi_meter || 0) > 0,
+    ).length;
+    const persentaseCacatMeteran =
+      totalProduksiMeter > 0
+        ? (countMasalahMeteran / totalProduksiMeter) * 100
+        : 0;
 
     // Perhitungan Efisiensi Waktu Kerja Akumulatif
     // Menghitung jumlah kombinasi Tanggal + Operator_ID (Jumlah Sesi Shift)
-    const shiftSessions = new Set(gradeScoped.map(item => item.tanggal + "_" + item.nama_operator)).size;
+    const shiftSessions = new Set(
+      gradeScoped.map((item) => item.tanggal + "_" + item.nama_operator),
+    ).size;
     const totalDetikTersedia = shiftSessions * 480 * 60;
-    const totalDowntimeDetik = gradeScoped.reduce((acc, curr) => acc + (curr.total_downtime_detik || 0), 0);
-    const totalDetikKerjaEfektif = Math.max(0, totalDetikTersedia - totalDowntimeDetik);
-    const efisiensi = totalDetikTersedia > 0 ? (totalDetikKerjaEfektif / totalDetikTersedia) * 100 : 0;
+    const totalDowntimeDetik = gradeScoped.reduce(
+      (acc, curr) => acc + (curr.total_downtime_detik || 0),
+      0,
+    );
+    const totalDetikKerjaEfektif = Math.max(
+      0,
+      totalDetikTersedia - totalDowntimeDetik,
+    );
+    const efisiensi =
+      totalDetikTersedia > 0
+        ? (totalDetikKerjaEfektif / totalDetikTersedia) * 100
+        : 0;
 
     // Total Masalah Umum (berdasarkan kemunculan kategori masalah)
     let countMasalah = 0;
-    gradeScoped.filter(item => item.status_qc === "Recheck" && item.is_production && item.kategori_masalah).forEach(item => {
-      const cats = item.kategori_masalah!.split(',').map(c => c.trim()).filter(c => c !== '');
-      countMasalah += cats.length;
-    });
-    
-    const countNolProduksi = gradeScoped.filter(item => item.hasil_pcs === 0).length;
+    gradeScoped
+      .filter(
+        (item) =>
+          item.status_qc === "Recheck" &&
+          item.is_production &&
+          item.kategori_masalah,
+      )
+      .forEach((item) => {
+        const cats = item
+          .kategori_masalah!.split(",")
+          .map((c) => c.trim())
+          .filter((c) => c !== "");
+        countMasalah += cats.length;
+      });
+
+    const countNolProduksi = gradeScoped.filter(
+      (item) => item.hasil_pcs === 0,
+    ).length;
     const totalPanel = gradeScoped.length;
 
     return {
@@ -278,7 +556,7 @@ export default function DashboardPage() {
       countMasalahMeteran,
       persentaseCacatMeteran,
       totalDetikTersedia,
-      totalDowntimeDetik
+      totalDowntimeDetik,
     };
   }, [dateFilteredTransactions, chartGradeFilter]);
 
@@ -294,17 +572,25 @@ export default function DashboardPage() {
   const filteredData = useMemo(() => {
     switch (activeFilter) {
       case "LOLOS":
-        return dateFilteredTransactions.filter(item => item.status_qc === "Lolos");
+        return dateFilteredTransactions.filter(
+          (item) => item.status_qc === "Lolos",
+        );
       case "EFISIENSI":
         // Filter efisiensi optimal (>= 90%)
-        return dateFilteredTransactions.filter(item => {
-          const ef = item.target_pcs > 0 ? (item.hasil_pcs / item.target_pcs) * 100 : 0;
+        return dateFilteredTransactions.filter((item) => {
+          const ef =
+            item.target_pcs > 0 ? (item.hasil_pcs / item.target_pcs) * 100 : 0;
           return ef >= 90;
         });
       case "PROBLEMS":
-        return dateFilteredTransactions.filter(item => item.status_qc === "Recheck" && item.grade !== "UNGRADED" && item.is_production);
+        return dateFilteredTransactions.filter(
+          (item) =>
+            item.status_qc === "Recheck" &&
+            item.grade !== "UNGRADED" &&
+            item.is_production,
+        );
       case "NOL_PRODUKSI":
-        return dateFilteredTransactions.filter(item => item.hasil_pcs === 0);
+        return dateFilteredTransactions.filter((item) => item.hasil_pcs === 0);
       case "ALL":
       default:
         return dateFilteredTransactions;
@@ -317,40 +603,54 @@ export default function DashboardPage() {
 
     if (chartGroupBy === "HARI") {
       // Get unique dates from the filtered data and sort them chronologically
-      const dates = Array.from(new Set(filteredData.map(item => item.tanggal)));
-      groups = dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-      
+      const dates = Array.from(
+        new Set(filteredData.map((item) => item.tanggal)),
+      );
+      groups = dates.sort(
+        (a, b) => new Date(a).getTime() - new Date(b).getTime(),
+      );
+
       // If no data, show at least today's date
       if (groups.length === 0) {
-         groups = [new Date().toISOString().split("T")[0]];
+        groups = [new Date().toISOString().split("T")[0]];
       }
     } else if (chartGroupBy === "DESIGN") {
       // Get unique designs, sorted
-      const designs = Array.from(new Set(filteredData.map(item => item.design || "Tanpa Design")));
+      const designs = Array.from(
+        new Set(filteredData.map((item) => item.design || "Tanpa Design")),
+      );
       groups = designs.sort();
     } else if (chartGroupBy === "PEGAWAI") {
       // Get all operators by volume
       const operatorVolume: Record<string, number> = {};
-      filteredData.forEach(item => {
-        operatorVolume[item.nama_operator] = (operatorVolume[item.nama_operator] || 0) + item.hasil_pcs;
+      filteredData.forEach((item) => {
+        operatorVolume[item.nama_operator] =
+          (operatorVolume[item.nama_operator] || 0) + item.hasil_pcs;
       });
-      groups = Object.keys(operatorVolume)
-        .sort((a, b) => operatorVolume[b] - operatorVolume[a]);
+      groups = Object.keys(operatorVolume).sort(
+        (a, b) => operatorVolume[b] - operatorVolume[a],
+      );
     } else if (chartGroupBy === "GROUP") {
-      const g = Array.from(new Set(filteredData.map(item => item.group || "Tanpa Group")));
+      const g = Array.from(
+        new Set(filteredData.map((item) => item.group || "Tanpa Group")),
+      );
       groups = g.sort();
     }
 
-    return groups.map(groupName => {
+    return groups.map((groupName) => {
       let items: Transaction[] = [];
       if (chartGroupBy === "HARI") {
-        items = filteredData.filter(item => item.tanggal === groupName);
+        items = filteredData.filter((item) => item.tanggal === groupName);
       } else if (chartGroupBy === "DESIGN") {
-        items = filteredData.filter(item => (item.design || "Tanpa Design") === groupName);
+        items = filteredData.filter(
+          (item) => (item.design || "Tanpa Design") === groupName,
+        );
       } else if (chartGroupBy === "PEGAWAI") {
-        items = filteredData.filter(item => item.nama_operator === groupName);
+        items = filteredData.filter((item) => item.nama_operator === groupName);
       } else if (chartGroupBy === "GROUP") {
-        items = filteredData.filter(item => (item.group || "Tanpa Group") === groupName);
+        items = filteredData.filter(
+          (item) => (item.group || "Tanpa Group") === groupName,
+        );
       }
 
       let gradeA_sum = 0;
@@ -359,32 +659,73 @@ export default function DashboardPage() {
       let ungraded_sum = 0;
 
       if (metricMode === "PCS") {
-        gradeA_sum = new Set(items.filter(i => i.grade === "GRADE A").map(i => i.header_id)).size;
-        gradeB_sum = new Set(items.filter(i => i.grade === "GRADE B").map(i => i.header_id)).size;
-        bs_sum = new Set(items.filter(i => i.grade === "BS").map(i => i.header_id)).size;
-        ungraded_sum = new Set(items.filter(i => i.grade === "UNGRADED" || !["GRADE A", "GRADE B", "BS"].includes(i.grade)).map(i => i.header_id)).size;
+        gradeA_sum = new Set(
+          items.filter((i) => i.grade === "GRADE A").map((i) => i.header_id),
+        ).size;
+        gradeB_sum = new Set(
+          items.filter((i) => i.grade === "GRADE B").map((i) => i.header_id),
+        ).size;
+        bs_sum = new Set(
+          items.filter((i) => i.grade === "BS").map((i) => i.header_id),
+        ).size;
+        ungraded_sum = new Set(
+          items
+            .filter(
+              (i) =>
+                i.grade === "UNGRADED" ||
+                !["GRADE A", "GRADE B", "BS"].includes(i.grade),
+            )
+            .map((i) => i.header_id),
+        ).size;
       } else {
-        const uniqueHeadersMap = new Map<string, typeof items[0]>();
-        items.forEach(item => {
+        const uniqueHeadersMap = new Map<string, (typeof items)[0]>();
+        items.forEach((item) => {
           if (item.header_id && !uniqueHeadersMap.has(item.header_id)) {
             uniqueHeadersMap.set(item.header_id, item);
           }
         });
         const uniqueItems = Array.from(uniqueHeadersMap.values());
-        gradeA_sum = uniqueItems.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
-        gradeB_sum = uniqueItems.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
-        bs_sum = uniqueItems.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
-        ungraded_sum = uniqueItems.filter(i => i.grade === "UNGRADED" || !["GRADE A", "GRADE B", "BS"].includes(i.grade)).reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
+        gradeA_sum = uniqueItems
+          .filter((i) => i.grade === "GRADE A")
+          .reduce(
+            (acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0),
+            0,
+          );
+        gradeB_sum = uniqueItems
+          .filter((i) => i.grade === "GRADE B")
+          .reduce(
+            (acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0),
+            0,
+          );
+        bs_sum = uniqueItems
+          .filter((i) => i.grade === "BS")
+          .reduce(
+            (acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0),
+            0,
+          );
+        ungraded_sum = uniqueItems
+          .filter(
+            (i) =>
+              i.grade === "UNGRADED" ||
+              !["GRADE A", "GRADE B", "BS"].includes(i.grade),
+          )
+          .reduce(
+            (acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0),
+            0,
+          );
       }
 
       const total = gradeA_sum + gradeB_sum + bs_sum + ungraded_sum;
 
       let displayLabel = groupName;
       if (chartGroupBy === "HARI") {
-         const d = new Date(groupName);
-         if (!isNaN(d.getTime())) {
-            displayLabel = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
-         }
+        const d = new Date(groupName);
+        if (!isNaN(d.getTime())) {
+          displayLabel = d.toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "short",
+          });
+        }
       }
 
       return {
@@ -393,71 +734,31 @@ export default function DashboardPage() {
         gradeB_sum,
         bs_sum,
         ungraded_sum,
-        total
+        total,
       };
     });
   }, [filteredData, chartGroupBy, metricMode]);
 
   const maxChartValue = useMemo(() => {
-    let groups: string[] = [];
-    if (chartGroupBy === "HARI") {
-      groups = Array.from(new Set(dateFilteredTransactions.map(item => item.tanggal)));
-      if (groups.length === 0) groups = [new Date().toISOString().split("T")[0]];
-    } else if (chartGroupBy === "DESIGN") {
-      groups = Array.from(new Set(dateFilteredTransactions.map(item => item.design || "Tanpa Design")));
-    } else if (chartGroupBy === "PEGAWAI") {
-      groups = Array.from(new Set(dateFilteredTransactions.map(item => item.nama_operator)));
-    } else if (chartGroupBy === "GROUP") {
-      groups = Array.from(new Set(dateFilteredTransactions.map(item => item.group || "Tanpa Group")));
-    }
+    const maxVisibleValue = Math.max(
+      ...chartData.map((item) => {
+        if (chartGradeFilter === "GRADE_A") return item.gradeA_sum;
+        if (chartGradeFilter === "GRADE_B") return item.gradeB_sum;
+        if (chartGradeFilter === "BS") return item.bs_sum;
 
-    const maxValues = groups.map(groupName => {
-      let items: Transaction[] = [];
-      if (chartGroupBy === "HARI") {
-        items = dateFilteredTransactions.filter(item => item.tanggal === groupName);
-      } else if (chartGroupBy === "DESIGN") {
-        items = dateFilteredTransactions.filter(item => (item.design || "Tanpa Design") === groupName);
-      } else if (chartGroupBy === "PEGAWAI") {
-        items = dateFilteredTransactions.filter(item => item.nama_operator === groupName);
-      } else if (chartGroupBy === "GROUP") {
-        items = dateFilteredTransactions.filter(item => (item.group || "Tanpa Group") === groupName);
-      }
-      
-      let gA = 0, gB = 0, bs = 0, un = 0;
-      if (metricMode === "PCS") {
-        gA = new Set(items.filter(i => i.grade === "GRADE A").map(i => i.header_id)).size;
-        gB = new Set(items.filter(i => i.grade === "GRADE B").map(i => i.header_id)).size;
-        bs = new Set(items.filter(i => i.grade === "BS").map(i => i.header_id)).size;
-        un = new Set(items.filter(i => i.grade === "UNGRADED" || !["GRADE A", "GRADE B", "BS"].includes(i.grade)).map(i => i.header_id)).size;
-      } else {
-        const uniqueHeadersMap = new Map<string, typeof items[0]>();
-        items.forEach(item => {
-          if (item.header_id && !uniqueHeadersMap.has(item.header_id)) {
-            uniqueHeadersMap.set(item.header_id, item);
-          }
-        });
-        const uniqueItems = Array.from(uniqueHeadersMap.values());
-        gA = uniqueItems.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
-        gB = uniqueItems.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
-        bs = uniqueItems.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
-        un = uniqueItems.filter(i => i.grade === "UNGRADED" || !["GRADE A", "GRADE B", "BS"].includes(i.grade)).reduce((acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0), 0);
-      }
+        return Math.max(
+          item.total,
+          item.gradeA_sum,
+          item.gradeB_sum,
+          item.bs_sum,
+          item.ungraded_sum,
+        );
+      }),
+      0,
+    );
 
-      if (chartGradeFilter === "ALL") {
-        return Math.max(gA, gB, bs, un);
-      } else if (chartGradeFilter === "GRADE_A") {
-        return gA;
-      } else if (chartGradeFilter === "GRADE_B") {
-        return gB;
-      } else if (chartGradeFilter === "BS") {
-        return bs;
-      }
-      return 0;
-    });
-
-    const max = Math.max(...maxValues, 5); // fallback min scale 5 agar batang kecil tetap terlihat
-    return max;
-  }, [dateFilteredTransactions, chartGroupBy, chartGradeFilter, metricMode]);
+    return getNiceChartMax(maxVisibleValue);
+  }, [chartData, chartGradeFilter]);
 
   const handleResetFilters = () => {
     setActiveFilter("ALL");
@@ -470,22 +771,29 @@ export default function DashboardPage() {
 
   // KIOSK IDENTITY SELECTOR UI
   if (!activeEmployeeName) {
-    const filteredOperators = uniqueOperators.filter(op => op.toLowerCase().includes(searchQuery.toLowerCase()));
-    
+    const filteredOperators = uniqueOperators.filter((op) =>
+      op.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+
     return (
       <div className="min-h-[80vh] flex items-center justify-center animate-fadeIn p-4">
         <div className="bg-white rounded-[32px] p-8 sm:p-12 max-w-xl w-full shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col items-center text-center">
           <div className="w-24 h-24 bg-sky-50 rounded-full flex items-center justify-center mb-6">
             <Users className="w-12 h-12 text-sky-500" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-3">Pilih Nama Anda</h1>
-          <p className="text-slate-500 mb-8 max-w-md font-medium">Silakan temukan dan pilih nama Anda pada daftar di bawah ini untuk mengakses Dashboard pribadi Anda.</p>
-          
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-3">
+            Pilih Nama Anda
+          </h1>
+          <p className="text-slate-500 mb-8 max-w-md font-medium">
+            Silakan temukan dan pilih nama Anda pada daftar di bawah ini untuk
+            mengakses Dashboard pribadi Anda.
+          </p>
+
           <div className="w-full relative mb-6">
             <Search className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Ketik nama Anda di sini..." 
+            <input
+              type="text"
+              placeholder="Ketik nama Anda di sini..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-14 pr-5 py-4 bg-slate-50/50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 font-bold text-slate-700 transition-all text-lg"
@@ -494,9 +802,11 @@ export default function DashboardPage() {
 
           <div className="w-full max-h-[350px] overflow-y-auto custom-scrollbar flex flex-col gap-3 p-1 text-left pr-2">
             {filteredOperators.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-sm font-semibold border-2 border-dashed border-slate-100 rounded-2xl">Tidak ada pegawai yang cocok dengan pencarian.</div>
+              <div className="p-8 text-center text-slate-400 text-sm font-semibold border-2 border-dashed border-slate-100 rounded-2xl">
+                Tidak ada pegawai yang cocok dengan pencarian.
+              </div>
             ) : (
-              filteredOperators.map(op => (
+              filteredOperators.map((op) => (
                 <button
                   key={op}
                   onClick={() => setActiveEmployeeName(op)}
@@ -518,115 +828,60 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* KIOSK STYLES */}
-      <style dangerouslySetInnerHTML={{__html: `
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      `}} />
-
-      {/* Export Modal */}
-      {isExportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                <Download className="w-5 h-5 text-[#0070bc]" />
-                Download Rekap Bulanan
-              </h3>
-              <button 
-                onClick={() => setIsExportModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-100 p-1.5 rounded-full transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-5">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Bulan</label>
-                <select 
-                  value={exportMonth}
-                  onChange={(e) => setExportMonth(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#0070bc]/30 focus:border-[#0070bc]"
-                >
-                  <option value={1}>Januari</option>
-                  <option value={2}>Februari</option>
-                  <option value={3}>Maret</option>
-                  <option value={4}>April</option>
-                  <option value={5}>Mei</option>
-                  <option value={6}>Juni</option>
-                  <option value={7}>Juli</option>
-                  <option value={8}>Agustus</option>
-                  <option value={9}>September</option>
-                  <option value={10}>Oktober</option>
-                  <option value={11}>November</option>
-                  <option value={12}>Desember</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tahun</label>
-                <select 
-                  value={exportYear}
-                  onChange={(e) => setExportYear(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#0070bc]/30 focus:border-[#0070bc]"
-                >
-                  {[2024, 2025, 2026, 2027, 2028].map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="p-5 border-t border-slate-100 bg-slate-50 flex gap-3 justify-end">
-              <button 
-                onClick={() => setIsExportModalOpen(false)}
-                className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={handleDownloadRekap}
-                className="px-5 py-2 text-sm font-bold text-white bg-[#0070bc] hover:bg-[#005a96] rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Generate Excel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      `,
+        }}
+      />
 
       {/* Welcome Header */}
-      <div className="bg-white border border-[#e9ecef] rounded-[24px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5 relative z-10">
+      <div
+        data-tour="employee-dashboard-header"
+        className="bg-white border border-[#e9ecef] rounded-[24px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5 relative z-10"
+      >
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex flex-wrap items-center gap-3 leading-tight">
             <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
               Dashboard: {activeEmployeeName}
             </span>
             {isLive && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Live Data
-                </span>
-              )}
-            </h1>
-            <p className="text-slate-500 text-sm sm:text-base font-medium max-w-2xl leading-relaxed flex items-start gap-1.5 mt-1">
-              <svg className="w-5 h-5 text-sky-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Pantau pencapaian produksi harian dan kualitas kerja Anda secara real-time.
-            </p>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Live Data
+              </span>
+            )}
+          </h1>
+          <p className="text-slate-500 text-sm sm:text-base font-medium max-w-2xl leading-relaxed flex items-start gap-1.5 mt-1">
+            <svg
+              className="w-5 h-5 text-sky-500 shrink-0 mt-0.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            Pantau pencapaian produksi harian dan kualitas kerja Anda secara
+            real-time.
+          </p>
         </div>
         <div className="flex items-center gap-2 z-10 shrink-0 flex-wrap">
           <button
-            onClick={() => setIsExportModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-[#0070bc] hover:bg-[#005a96] rounded-full shadow-md hover:shadow-lg cursor-pointer transition-all duration-300 group"
-            title="Download Rekap Laporan Bulanan"
+            type="button"
+            onClick={() => setIsTourOpen(true)}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-[#0070bc] bg-sky-50 hover:bg-sky-100 rounded-full border border-sky-100 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300"
           >
-            <Download className="w-4 h-4 transition-transform duration-500 group-hover:-translate-y-1" />
-            Rekap Excel
+            <HelpCircle className="w-4 h-4" />
+            Tutorial
           </button>
           <button
             onClick={handleResetFilters}
@@ -651,7 +906,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Slicers Container */}
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div
+        data-tour="employee-dashboard-slicers"
+        className="flex flex-col lg:flex-row gap-4"
+      >
         {/* Date Range Slicer Component (Vercel-style minimal capsule) */}
         <div className="flex-1 flex flex-wrap items-center justify-between gap-4 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
           <div className="flex flex-wrap items-center gap-2">
@@ -664,37 +922,41 @@ export default function DashboardPage() {
             <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-150">
               <button
                 onClick={() => setDateRangeMode("ALL")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${dateRangeMode === "ALL"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-150"
-                  : "text-slate-500 hover:text-slate-800"
-                  }`}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  dateRangeMode === "ALL"
+                    ? "bg-white text-slate-800 shadow-xs border border-slate-150"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
               >
                 Semua Waktu
               </button>
               <button
                 onClick={() => setDateRangeMode("TODAY")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${dateRangeMode === "TODAY"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-150"
-                  : "text-slate-500 hover:text-slate-800"
-                  }`}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  dateRangeMode === "TODAY"
+                    ? "bg-white text-slate-800 shadow-xs border border-slate-150"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
               >
                 Hari Ini
               </button>
               <button
                 onClick={() => setDateRangeMode("7DAYS")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${dateRangeMode === "7DAYS"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-150"
-                  : "text-slate-500 hover:text-slate-800"
-                  }`}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  dateRangeMode === "7DAYS"
+                    ? "bg-white text-slate-800 shadow-xs border border-slate-150"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
               >
                 7 Hari Terakhir
               </button>
               <button
                 onClick={() => setDateRangeMode("CUSTOM")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${dateRangeMode === "CUSTOM"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-150"
-                  : "text-slate-500 hover:text-slate-800"
-                  }`}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  dateRangeMode === "CUSTOM"
+                    ? "bg-white text-slate-800 shadow-xs border border-slate-150"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
               >
                 Kustom
               </button>
@@ -705,7 +967,9 @@ export default function DashboardPage() {
           {dateRangeMode === "CUSTOM" && (
             <div className="flex items-center gap-2 animate-fadeIn">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Mulai:</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  Mulai:
+                </span>
                 <input
                   type="date"
                   value={startDate}
@@ -714,7 +978,9 @@ export default function DashboardPage() {
                 />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  Sampai:
+                </span>
                 <input
                   type="date"
                   value={endDate}
@@ -725,32 +991,39 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-        </div>
+      </div>
 
       {/* Grid KPI Cards / Slicer Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-
+      <div
+        data-tour="employee-dashboard-kpi"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
+      >
         {/* Card 1: Hasil Produksi & Meteran (Slider Slicer) */}
-        <div 
-          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group transition-all duration-300 flex flex-col ${activeFilter === "ALL"
-            ? "bg-[#004777] shadow-xl scale-[1.03] ring-2 ring-[#0070bc] ring-offset-2"
-            : "bg-[#0070bc] shadow-md hover:scale-[1.01]"
+        <div
+          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group transition-all duration-300 flex flex-col ${
+            activeFilter === "ALL"
+              ? "bg-[#004777] shadow-xl scale-[1.03] ring-2 ring-[#0070bc] ring-offset-2"
+              : "bg-[#0070bc] shadow-md hover:scale-[1.01]"
           }`}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEndMetric}
         >
-          
           {/* Background decoration */}
           <div className="absolute -right-8 -bottom-8 w-24 h-24 rounded-full bg-sky-400/20 blur-xl group-hover:scale-125 transition-all duration-300 pointer-events-none" />
 
           {/* Slide Container */}
-          <div 
+          <div
             className="flex h-full w-[200%] transition-transform duration-500 ease-in-out"
-            style={{ transform: `translateX(-${metricMode === "PCS" ? 0 : 50}%)` }}
+            style={{
+              transform: `translateX(-${metricMode === "PCS" ? 0 : 50}%)`,
+            }}
           >
             {/* Slide 0: Total Produksi (PCS) */}
-            <div 
-              onClick={() => { setActiveFilter("ALL"); setMetricMode("PCS"); }}
+            <div
+              onClick={() => {
+                setActiveFilter("ALL");
+                setMetricMode("PCS");
+              }}
               className="w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative text-white"
             >
               <div className="flex justify-between items-start relative z-10">
@@ -774,8 +1047,11 @@ export default function DashboardPage() {
             </div>
 
             {/* Slide 1: Total Meter (Meter) */}
-            <div 
-              onClick={() => { setActiveFilter("ALL"); setMetricMode("METER"); }}
+            <div
+              onClick={() => {
+                setActiveFilter("ALL");
+                setMetricMode("METER");
+              }}
               className="w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative text-white"
             >
               <div className="flex justify-between items-start relative z-10">
@@ -800,99 +1076,155 @@ export default function DashboardPage() {
           </div>
 
           {/* Dots Indicator */}
-          <div className="absolute bottom-3 right-3 flex items-center gap-1 z-20" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="absolute bottom-3 right-3 flex items-center gap-1 z-20"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
-              onClick={() => { setMetricMode("PCS"); if(activeFilter === "NOL_PRODUKSI") setActiveFilter("PROBLEMS"); }}
+              onClick={() => {
+                setMetricMode("PCS");
+                if (activeFilter === "NOL_PRODUKSI")
+                  setActiveFilter("PROBLEMS");
+              }}
               className="p-3 -m-3 cursor-pointer"
               title="Geser ke Total Produksi"
             >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`} />
+              <div
+                className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`}
+              />
             </button>
             <button
-              onClick={() => { setMetricMode("METER"); if(activeFilter === "PROBLEMS") setActiveFilter("NOL_PRODUKSI"); }}
+              onClick={() => {
+                setMetricMode("METER");
+                if (activeFilter === "PROBLEMS")
+                  setActiveFilter("NOL_PRODUKSI");
+              }}
               className="p-3 -m-3 cursor-pointer ml-3"
               title="Geser ke Total Meteran"
             >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "METER" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`} />
+              <div
+                className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "METER" ? "w-4 bg-white" : "w-1.5 bg-sky-300/50 hover:bg-sky-200"}`}
+              />
             </button>
           </div>
         </div>
 
         {/* Card 2: Persentase Cacat (Slider Slicer) */}
-        <div 
-          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border transition-all duration-300 flex flex-col ${activeFilter === "PROBLEMS"
-            ? "bg-rose-50/50 border-rose-500 text-slate-800 shadow-md scale-[1.03] ring-2 ring-rose-500"
-            : "bg-white border-[#e9ecef] text-slate-800 hover:scale-[1.01] hover:shadow-xs"
+        <div
+          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border transition-all duration-300 flex flex-col ${
+            activeFilter === "PROBLEMS"
+              ? "bg-rose-50/50 border-rose-500 text-slate-800 shadow-md scale-[1.03] ring-2 ring-rose-500"
+              : "bg-white border-[#e9ecef] text-slate-800 hover:scale-[1.01] hover:shadow-xs"
           }`}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEndMetric}
         >
-
           {/* Slide Container */}
-          <div 
+          <div
             className="flex h-full w-[200%] transition-transform duration-500 ease-in-out"
-            style={{ transform: `translateX(-${metricMode === "PCS" ? 0 : 50}%)` }}
+            style={{
+              transform: `translateX(-${metricMode === "PCS" ? 0 : 50}%)`,
+            }}
           >
             {/* Slide 0: Persentase Cacat Panel */}
-            <div 
-              onClick={() => { setActiveFilter("PROBLEMS"); setMetricMode("PCS"); }}
+            <div
+              onClick={() => {
+                setActiveFilter("PROBLEMS");
+                setMetricMode("PCS");
+              }}
               className="w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative"
             >
               <div className="flex justify-between items-start relative z-10">
                 <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
                   Cacat Panel ({gradeLabel})
                 </span>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "PROBLEMS" ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-500"
-                  }`}>
+                <span
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    activeFilter === "PROBLEMS"
+                      ? "bg-rose-100 text-rose-600"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
                   <AlertTriangle className="w-3.5 h-3.5" />
                 </span>
               </div>
               <div className="mt-2 relative z-10">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{stats.persentaseCacatPanel.toFixed(1)}%</div>
+                <div className="text-3xl font-black tracking-tight text-slate-800">
+                  {stats.persentaseCacatPanel.toFixed(1)}%
+                </div>
                 <div className="flex items-center gap-1 mt-1 text-[11px] text-rose-600 font-bold">
                   <TrendingUp className="w-3.5 h-3.5" />
-                  <span>{stats.countMasalahPanel} pcs cacat dari {stats.totalPanelValid} panel</span>
+                  <span>
+                    {stats.countMasalahPanel} pcs cacat dari{" "}
+                    {stats.totalPanelValid} panel
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Slide 1: Persentase Cacat Meteran */}
-            <div 
-              onClick={() => { setActiveFilter("PROBLEMS"); setMetricMode("METER"); }}
+            <div
+              onClick={() => {
+                setActiveFilter("PROBLEMS");
+                setMetricMode("METER");
+              }}
               className="w-1/2 cursor-pointer p-5 flex flex-col justify-between h-full relative"
             >
               <div className="flex justify-between items-start relative z-10">
                 <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
                   Cacat Meteran ({gradeLabel})
                 </span>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "PROBLEMS" ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-500"
-                  }`}>
+                <span
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    activeFilter === "PROBLEMS"
+                      ? "bg-rose-100 text-rose-600"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
                   <AlertTriangle className="w-3.5 h-3.5" />
                 </span>
               </div>
               <div className="mt-2 relative z-10">
-                <div className="text-3xl font-black tracking-tight text-slate-800">{stats.persentaseCacatMeteran.toFixed(2)}%</div>
+                <div className="text-3xl font-black tracking-tight text-slate-800">
+                  {stats.persentaseCacatMeteran.toFixed(2)}%
+                </div>
                 <div className="flex items-center gap-1 mt-1 text-[11px] text-rose-600 font-bold">
                   <Layers className="w-3.5 h-3.5" />
-                  <span>{stats.countMasalahMeteran} masalah di {stats.totalProduksiMeter} Meter</span>
+                  <span>
+                    {stats.countMasalahMeteran} masalah di{" "}
+                    {stats.totalProduksiMeter} Meter
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Dots Indicator */}
-          <div className="absolute bottom-3 right-3 flex items-center gap-1 z-20" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="absolute bottom-3 right-3 flex items-center gap-1 z-20"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
-              onClick={() => { setMetricMode("PCS"); setActiveFilter("PROBLEMS"); }}
+              onClick={() => {
+                setMetricMode("PCS");
+                setActiveFilter("PROBLEMS");
+              }}
               className="p-3 -m-3 cursor-pointer"
             >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? (activeFilter === "PROBLEMS" ? "w-4 bg-rose-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+              <div
+                className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "PCS" ? (activeFilter === "PROBLEMS" ? "w-4 bg-rose-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`}
+              />
             </button>
             <button
-              onClick={() => { setMetricMode("METER"); setActiveFilter("PROBLEMS"); }}
+              onClick={() => {
+                setMetricMode("METER");
+                setActiveFilter("PROBLEMS");
+              }}
               className="p-3 -m-3 cursor-pointer ml-3"
             >
-              <div className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "METER" ? (activeFilter === "PROBLEMS" ? "w-4 bg-rose-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+              <div
+                className={`h-1.5 rounded-full transition-all duration-300 ${metricMode === "METER" ? (activeFilter === "PROBLEMS" ? "w-4 bg-rose-500" : "w-4 bg-slate-800") : "w-1.5 bg-slate-300 hover:bg-slate-400"}`}
+              />
             </button>
           </div>
         </div>
@@ -908,8 +1240,10 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="mt-2">
-            <div className="text-3xl font-black tracking-tight text-slate-800">{stats.efisiensi.toFixed(1)}%</div>
-            
+            <div className="text-3xl font-black tracking-tight text-slate-800">
+              {stats.efisiensi.toFixed(1)}%
+            </div>
+
             {/* Target Indicator */}
             {stats.totalDowntimeDetik > 0 ? (
               <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-700 font-extrabold uppercase tracking-wider">
@@ -918,11 +1252,11 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                0 Detik Terbuang
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />0
+                Detik Terbuang
               </div>
             )}
-            
+
             <div className="flex items-center gap-1 mt-2 text-[11px] text-purple-600 font-bold">
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Shift 8 Jam (480 mnt)</span>
@@ -931,11 +1265,15 @@ export default function DashboardPage() {
         </div>
 
         {/* Card 4: Masalah */}
-        <div 
-          onClick={() => { setActiveFilter("PROBLEMS"); setMetricMode("PCS"); }}
-          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${activeFilter === "PROBLEMS"
-            ? "bg-red-50/40 shadow-[0_8px_30px_rgba(239,68,68,0.12)] text-slate-800"
-            : "bg-white hover:shadow-xs text-slate-800"
+        <div
+          onClick={() => {
+            setActiveFilter("PROBLEMS");
+            setMetricMode("PCS");
+          }}
+          className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${
+            activeFilter === "PROBLEMS"
+              ? "bg-red-50/40 shadow-[0_8px_30px_rgba(239,68,68,0.12)] text-slate-800"
+              : "bg-white hover:shadow-xs text-slate-800"
           }`}
         >
           {activeFilter === "PROBLEMS" && (
@@ -945,32 +1283,45 @@ export default function DashboardPage() {
             <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
               Masalah ({gradeLabel})
             </span>
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "PROBLEMS" ? "bg-red-100 text-red-600 animate-pulse" : "bg-slate-100 text-slate-500"
-              }`}>
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                activeFilter === "PROBLEMS"
+                  ? "bg-red-100 text-red-600 animate-pulse"
+                  : "bg-slate-100 text-slate-500"
+              }`}
+            >
               <AlertTriangle className="w-3.5 h-3.5" />
             </span>
           </div>
           <div className="mt-2 relative z-10">
-            <div className="text-3xl font-black tracking-tight text-slate-800">{stats.countMasalah} Masalah</div>
+            <div className="text-3xl font-black tracking-tight text-slate-800">
+              {stats.countMasalah} Masalah
+            </div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-red-600 font-extrabold">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
               <span>Butuh Pemeriksaan</span>
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Grid Dashboard Visuals */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
+      <div
+        data-tour="employee-dashboard-visuals"
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+      >
         {/* Dynamic Production Trend Chart */}
         <div className="lg:col-span-2 bg-white border border-[#e9ecef] rounded-[32px] p-6 flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.02)]">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4 mb-6">
             <div>
-              <h3 className="text-base font-extrabold text-slate-800">Tren Hasil Produksi & Analisis Kualitas</h3>
+              <h3 className="text-base font-extrabold text-slate-800">
+                Tren Hasil Produksi & Analisis Kualitas
+              </h3>
               <p className="text-[11px] text-slate-400 font-semibold">
-                Filter Aktif: <span className="font-extrabold text-[#0070bc] uppercase">{activeFilter}</span>
+                Filter Aktif:{" "}
+                <span className="font-extrabold text-[#0070bc] uppercase">
+                  {activeFilter}
+                </span>
               </p>
             </div>
 
@@ -980,19 +1331,21 @@ export default function DashboardPage() {
               <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200">
                 <button
                   onClick={() => setChartType("BAR")}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartType === "BAR"
-                    ? "bg-white text-slate-800 shadow-xs border border-slate-200"
-                    : "text-slate-500 hover:text-slate-800"
-                    }`}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+                    chartType === "BAR"
+                      ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
                 >
                   Bar
                 </button>
                 <button
                   onClick={() => setChartType("LINE")}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartType === "LINE"
-                    ? "bg-white text-slate-800 shadow-xs border border-slate-200"
-                    : "text-slate-500 hover:text-slate-800"
-                    }`}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+                    chartType === "LINE"
+                      ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
                 >
                   Line
                 </button>
@@ -1000,54 +1353,65 @@ export default function DashboardPage() {
 
               {/* Grade Slicer Toggles */}
               <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200">
-              <button
-                onClick={() => setChartGradeFilter("ALL")}
-                className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "ALL"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-200"
-                  : "text-slate-500 hover:text-slate-800"
+                <button
+                  onClick={() => setChartGradeFilter("ALL")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+                    chartGradeFilter === "ALL"
+                      ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
                   }`}
-              >
-                Semua
-              </button>
-              <button
-                onClick={() => setChartGradeFilter("GRADE_A")}
-                className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "GRADE_A"
-                  ? "bg-sky-600 text-white shadow-xs"
-                  : "text-[#0070bc] hover:bg-sky-50"
+                >
+                  Semua
+                </button>
+                <button
+                  onClick={() => setChartGradeFilter("GRADE_A")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+                    chartGradeFilter === "GRADE_A"
+                      ? "bg-sky-600 text-white shadow-xs"
+                      : "text-[#0070bc] hover:bg-sky-50"
                   }`}
-              >
-                Grade A
-              </button>
-              <button
-                onClick={() => setChartGradeFilter("GRADE_B")}
-                className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "GRADE_B"
-                  ? "bg-amber-500 text-white shadow-xs"
-                  : "text-amber-700 hover:bg-amber-50"
+                >
+                  Grade A
+                </button>
+                <button
+                  onClick={() => setChartGradeFilter("GRADE_B")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+                    chartGradeFilter === "GRADE_B"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "text-amber-700 hover:bg-amber-50"
                   }`}
-              >
-                Grade B
-              </button>
-              <button
-                onClick={() => setChartGradeFilter("BS")}
-                className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "BS"
-                  ? "bg-rose-500 text-white shadow-xs"
-                  : "text-rose-700 hover:bg-rose-50"
+                >
+                  Grade B
+                </button>
+                <button
+                  onClick={() => setChartGradeFilter("BS")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+                    chartGradeFilter === "BS"
+                      ? "bg-rose-500 text-white shadow-xs"
+                      : "text-rose-700 hover:bg-rose-50"
                   }`}
-              >
-                BS
-              </button>
+                >
+                  BS
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-        {/* SVG Custom Dynamic Grouped Bar Chart */}
+          {/* SVG Custom Dynamic Grouped Bar Chart */}
           <div className="flex-1 relative flex flex-col mt-4">
             {(() => {
               const svgWidth = Math.max(800, chartData.length * 100);
               const totalWidth = svgWidth - 60; // 40 left padding, 20 right padding
               return (
                 <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar pb-4 w-full flex flex-col">
-                  <div style={{ minWidth: `${svgWidth}px` }} className="relative mx-auto w-full flex-1 min-h-[250px]">
-                    <svg viewBox={`0 0 ${svgWidth} 250`} className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none">
+                  <div
+                    style={{ minWidth: `${svgWidth}px` }}
+                    className="relative mx-auto w-full flex-1 min-h-[250px]"
+                  >
+                    <svg
+                      viewBox={`0 0 ${svgWidth} 250`}
+                      className="absolute inset-0 w-full h-full overflow-visible"
+                      preserveAspectRatio="none"
+                    >
                       <defs>
                         <pattern
                           id="diagonalStripes"
@@ -1062,63 +1426,174 @@ export default function DashboardPage() {
                       </defs>
 
                       {/* Horizontal grid lines */}
-                      <line x1="40" y1="20" x2={svgWidth - 20} y2="20" stroke="#f1f3f5" strokeWidth="1" />
-                      <line x1="40" y1="65" x2={svgWidth - 20} y2="65" stroke="#f1f3f5" strokeWidth="1" />
-                      <line x1="40" y1="110" x2={svgWidth - 20} y2="110" stroke="#f1f3f5" strokeWidth="1" />
-                      <line x1="40" y1="155" x2={svgWidth - 20} y2="155" stroke="#f1f3f5" strokeWidth="1" />
-                      <line x1="40" y1="195" x2={svgWidth - 20} y2="195" stroke="#e9ecef" strokeWidth="1.5" />
+                      <line
+                        x1="40"
+                        y1="20"
+                        x2={svgWidth - 20}
+                        y2="20"
+                        stroke="#f1f3f5"
+                        strokeWidth="1"
+                      />
+                      <line
+                        x1="40"
+                        y1="65"
+                        x2={svgWidth - 20}
+                        y2="65"
+                        stroke="#f1f3f5"
+                        strokeWidth="1"
+                      />
+                      <line
+                        x1="40"
+                        y1="110"
+                        x2={svgWidth - 20}
+                        y2="110"
+                        stroke="#f1f3f5"
+                        strokeWidth="1"
+                      />
+                      <line
+                        x1="40"
+                        y1="155"
+                        x2={svgWidth - 20}
+                        y2="155"
+                        stroke="#f1f3f5"
+                        strokeWidth="1"
+                      />
+                      <line
+                        x1="40"
+                        y1="195"
+                        x2={svgWidth - 20}
+                        y2="195"
+                        stroke="#e9ecef"
+                        strokeWidth="1.5"
+                      />
 
                       {/* Y-Axis text labels */}
-                      <text x="30" y="24" fill="#a1a1aa" fontSize="9" fontWeight="bold" textAnchor="end">{Math.round(maxChartValue)}</text>
-                      <text x="30" y="69" fill="#a1a1aa" fontSize="9" fontWeight="bold" textAnchor="end">{Math.round(maxChartValue * 0.75)}</text>
-                      <text x="30" y="114" fill="#a1a1aa" fontSize="9" fontWeight="bold" textAnchor="end">{Math.round(maxChartValue * 0.5)}</text>
-                      <text x="30" y="159" fill="#a1a1aa" fontSize="9" fontWeight="bold" textAnchor="end">{Math.round(maxChartValue * 0.25)}</text>
+                      <text
+                        x="30"
+                        y="24"
+                        fill="#a1a1aa"
+                        fontSize="9"
+                        fontWeight="bold"
+                        textAnchor="end"
+                      >
+                        {Math.round(maxChartValue)}
+                      </text>
+                      <text
+                        x="30"
+                        y="69"
+                        fill="#a1a1aa"
+                        fontSize="9"
+                        fontWeight="bold"
+                        textAnchor="end"
+                      >
+                        {Math.round(maxChartValue * 0.75)}
+                      </text>
+                      <text
+                        x="30"
+                        y="114"
+                        fill="#a1a1aa"
+                        fontSize="9"
+                        fontWeight="bold"
+                        textAnchor="end"
+                      >
+                        {Math.round(maxChartValue * 0.5)}
+                      </text>
+                      <text
+                        x="30"
+                        y="159"
+                        fill="#a1a1aa"
+                        fontSize="9"
+                        fontWeight="bold"
+                        textAnchor="end"
+                      >
+                        {Math.round(maxChartValue * 0.25)}
+                      </text>
 
                       {/* Polylines for LINE chart */}
                       {chartType === "LINE" && (
                         <>
                           {chartGradeFilter === "ALL" && (
                             <polyline
-                              points={chartData.map((d, index) => {
-                                const spacing = totalWidth / Math.max(chartData.length, 1);
-                                const cx = 40 + (spacing * index) + (spacing / 2);
-                                const h = maxChartValue > 0 ? (d.total / maxChartValue) * 165 : 0;
-                                return `${cx},${195 - Math.max(h, 1.5)}`;
-                              }).join(' ')}
-                              fill="none" stroke="#334155" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"
+                              points={chartData
+                                .map((d, index) => {
+                                  const spacing =
+                                    totalWidth / Math.max(chartData.length, 1);
+                                  const cx = 40 + spacing * index + spacing / 2;
+                                  const h =
+                                    maxChartValue > 0
+                                      ? (d.total / maxChartValue) * 165
+                                      : 0;
+                                  return `${cx},${195 - Math.max(h, 1.5)}`;
+                                })
+                                .join(" ")}
+                              fill="none"
+                              stroke="#334155"
+                              strokeWidth="3.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
                             />
                           )}
                           {chartGradeFilter === "GRADE_A" && (
                             <polyline
-                              points={chartData.map((d, index) => {
-                                const spacing = totalWidth / Math.max(chartData.length, 1);
-                                const cx = 40 + (spacing * index) + (spacing / 2);
-                                const h = maxChartValue > 0 ? (d.gradeA_sum / maxChartValue) * 165 : 0;
-                                return `${cx},${195 - Math.max(h, 1.5)}`;
-                              }).join(' ')}
-                              fill="none" stroke="#0070bc" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                              points={chartData
+                                .map((d, index) => {
+                                  const spacing =
+                                    totalWidth / Math.max(chartData.length, 1);
+                                  const cx = 40 + spacing * index + spacing / 2;
+                                  const h =
+                                    maxChartValue > 0
+                                      ? (d.gradeA_sum / maxChartValue) * 165
+                                      : 0;
+                                  return `${cx},${195 - Math.max(h, 1.5)}`;
+                                })
+                                .join(" ")}
+                              fill="none"
+                              stroke="#0070bc"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
                             />
                           )}
                           {chartGradeFilter === "GRADE_B" && (
                             <polyline
-                              points={chartData.map((d, index) => {
-                                const spacing = totalWidth / Math.max(chartData.length, 1);
-                                const cx = 40 + (spacing * index) + (spacing / 2);
-                                const h = maxChartValue > 0 ? (d.gradeB_sum / maxChartValue) * 165 : 0;
-                                return `${cx},${195 - Math.max(h, 1.5)}`;
-                              }).join(' ')}
-                              fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                              points={chartData
+                                .map((d, index) => {
+                                  const spacing =
+                                    totalWidth / Math.max(chartData.length, 1);
+                                  const cx = 40 + spacing * index + spacing / 2;
+                                  const h =
+                                    maxChartValue > 0
+                                      ? (d.gradeB_sum / maxChartValue) * 165
+                                      : 0;
+                                  return `${cx},${195 - Math.max(h, 1.5)}`;
+                                })
+                                .join(" ")}
+                              fill="none"
+                              stroke="#f59e0b"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
                             />
                           )}
                           {chartGradeFilter === "BS" && (
                             <polyline
-                              points={chartData.map((d, index) => {
-                                const spacing = totalWidth / Math.max(chartData.length, 1);
-                                const cx = 40 + (spacing * index) + (spacing / 2);
-                                const h = maxChartValue > 0 ? (d.bs_sum / maxChartValue) * 165 : 0;
-                                return `${cx},${195 - Math.max(h, 1.5)}`;
-                              }).join(' ')}
-                              fill="none" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                              points={chartData
+                                .map((d, index) => {
+                                  const spacing =
+                                    totalWidth / Math.max(chartData.length, 1);
+                                  const cx = 40 + spacing * index + spacing / 2;
+                                  const h =
+                                    maxChartValue > 0
+                                      ? (d.bs_sum / maxChartValue) * 165
+                                      : 0;
+                                  return `${cx},${195 - Math.max(h, 1.5)}`;
+                                })
+                                .join(" ")}
+                              fill="none"
+                              stroke="#ef4444"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
                             />
                           )}
                         </>
@@ -1130,17 +1605,29 @@ export default function DashboardPage() {
                         // Calculate spacing based on number of bars to keep them aligned
                         const spacing = totalWidth / Math.max(totalBars, 1);
                         // Center align items horizontally
-                        const groupCenter = 40 + (spacing * index) + (spacing / 2);
+                        const groupCenter = 40 + spacing * index + spacing / 2;
 
                         // Active state for mobile tap
                         const isActive = activeChartBar === index;
 
                         // Grouped Rendering Logic
                         if (chartGradeFilter === "ALL") {
-                          const hA = maxChartValue > 0 ? (d.gradeA_sum / maxChartValue) * 175 : 0;
-                          const hB = maxChartValue > 0 ? (d.gradeB_sum / maxChartValue) * 175 : 0;
-                          const hBS = maxChartValue > 0 ? (d.bs_sum / maxChartValue) * 175 : 0;
-                          const hUN = maxChartValue > 0 ? (d.ungraded_sum / maxChartValue) * 175 : 0;
+                          const hA =
+                            maxChartValue > 0
+                              ? (d.gradeA_sum / maxChartValue) * 175
+                              : 0;
+                          const hB =
+                            maxChartValue > 0
+                              ? (d.gradeB_sum / maxChartValue) * 175
+                              : 0;
+                          const hBS =
+                            maxChartValue > 0
+                              ? (d.bs_sum / maxChartValue) * 175
+                              : 0;
+                          const hUN =
+                            maxChartValue > 0
+                              ? (d.ungraded_sum / maxChartValue) * 175
+                              : 0;
 
                           const displayHA = Math.max(hA, 1.5);
                           const displayHB = Math.max(hB, 1.5);
@@ -1159,46 +1646,138 @@ export default function DashboardPage() {
                           const xUN = groupCenter + 12;
 
                           return (
-                            <g key={d.label} className="group/bar cursor-pointer" onClick={() => setActiveChartBar(isActive ? null : index)}>
+                            <g
+                              key={d.label}
+                              className="group/bar cursor-pointer"
+                              onClick={() =>
+                                setActiveChartBar(isActive ? null : index)
+                              }
+                            >
                               {/* X-Axis Tick Mark for Grouping Clarity */}
                               {index > 0 && (
-                                <line x1={40 + spacing * index} y1={195} x2={40 + spacing * index} y2={205} stroke="#cbd5e1" strokeWidth="2" />
+                                <line
+                                  x1={40 + spacing * index}
+                                  y1={195}
+                                  x2={40 + spacing * index}
+                                  y2={205}
+                                  stroke="#cbd5e1"
+                                  strokeWidth="2"
+                                />
                               )}
 
                               {/* Hover Tooltip Zone */}
-                              <rect x={40 + spacing * index} y={20} width={spacing} height={175} fill="transparent" className="cursor-pointer" />
+                              <rect
+                                x={40 + spacing * index}
+                                y={20}
+                                width={spacing}
+                                height={175}
+                                fill="transparent"
+                                className="cursor-pointer"
+                              />
 
                               {chartType === "BAR" && (
                                 <>
                                   {/* Grade A Section */}
-                                  <rect x={xA} y={yA} width={barW} height={displayHA} rx="3" fill="#0070bc" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
+                                  <rect
+                                    x={xA}
+                                    y={yA}
+                                    width={barW}
+                                    height={displayHA}
+                                    rx="3"
+                                    fill="#0070bc"
+                                    className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer"
+                                  />
                                   {/* Grade B Section */}
-                                  <rect x={xB} y={yB} width={barW} height={displayHB} rx="3" fill="#f59e0b" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
+                                  <rect
+                                    x={xB}
+                                    y={yB}
+                                    width={barW}
+                                    height={displayHB}
+                                    rx="3"
+                                    fill="#f59e0b"
+                                    className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer"
+                                  />
                                   {/* BS Section */}
-                                  <rect x={xBS} y={yBS} width={barW} height={displayHBS} rx="3" fill="#ef4444" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
+                                  <rect
+                                    x={xBS}
+                                    y={yBS}
+                                    width={barW}
+                                    height={displayHBS}
+                                    rx="3"
+                                    fill="#ef4444"
+                                    className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer"
+                                  />
                                   {/* Ungraded Section */}
-                                  <rect x={xUN} y={yUN} width={barW} height={displayHUN} rx="3" fill="#94a3b8" className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer" />
+                                  <rect
+                                    x={xUN}
+                                    y={yUN}
+                                    width={barW}
+                                    height={displayHUN}
+                                    rx="3"
+                                    fill="#94a3b8"
+                                    className="transition-all duration-500 ease-out hover:opacity-85 cursor-pointer"
+                                  />
                                 </>
                               )}
 
                               {/* Labels on top of bars */}
                               {chartType === "BAR" && (
                                 <>
-                                  <text x={xA + barW / 2} y={yA - 4} fill="#475569" fontSize="8" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                  <text
+                                    x={xA + barW / 2}
+                                    y={yA - 4}
+                                    fill="#475569"
+                                    fontSize="8"
+                                    fontWeight="bold"
+                                    textAnchor="middle"
+                                    className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}
+                                  >
                                     {d.gradeA_sum}
                                   </text>
-                                  <text x={xB + barW / 2} y={yB - 4} fill="#475569" fontSize="8" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                  <text
+                                    x={xB + barW / 2}
+                                    y={yB - 4}
+                                    fill="#475569"
+                                    fontSize="8"
+                                    fontWeight="bold"
+                                    textAnchor="middle"
+                                    className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}
+                                  >
                                     {d.gradeB_sum}
                                   </text>
-                                  <text x={xBS + barW / 2} y={yBS - 4} fill="#475569" fontSize="8" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                  <text
+                                    x={xBS + barW / 2}
+                                    y={yBS - 4}
+                                    fill="#475569"
+                                    fontSize="8"
+                                    fontWeight="bold"
+                                    textAnchor="middle"
+                                    className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}
+                                  >
                                     {d.bs_sum}
                                   </text>
-                                  <text x={xUN + barW / 2} y={yUN - 4} fill="#64748b" fontSize="8" fontWeight="bold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                  <text
+                                    x={xUN + barW / 2}
+                                    y={yUN - 4}
+                                    fill="#64748b"
+                                    fontSize="8"
+                                    fontWeight="bold"
+                                    textAnchor="middle"
+                                    className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}
+                                  >
                                     {d.ungraded_sum}
                                   </text>
 
                                   {/* Total summary below tooltip */}
-                                  <text x={groupCenter} y={12} fill="#1e293b" fontSize="9" fontWeight="extrabold" textAnchor="middle" className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                  <text
+                                    x={groupCenter}
+                                    y={12}
+                                    fill="#1e293b"
+                                    fontSize="9"
+                                    fontWeight="extrabold"
+                                    textAnchor="middle"
+                                    className={`transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}
+                                  >
                                     {d.total > 0 ? `Total: ${d.total}` : ""}
                                   </text>
                                 </>
@@ -1206,25 +1785,140 @@ export default function DashboardPage() {
 
                               {/* Unified Tooltip for LINE chart */}
                               {chartType === "LINE" && (
-                                <g className={`transition-opacity duration-200 pointer-events-none ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
+                                <g
+                                  className={`transition-opacity duration-200 pointer-events-none ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}
+                                >
                                   {/* Crosshair Line */}
-                                  <line x1={groupCenter} y1={20} x2={groupCenter} y2={195} stroke="#94a3b8" strokeDasharray="3 3" strokeWidth="1" />
+                                  <line
+                                    x1={groupCenter}
+                                    y1={20}
+                                    x2={groupCenter}
+                                    y2={195}
+                                    stroke="#94a3b8"
+                                    strokeDasharray="3 3"
+                                    strokeWidth="1"
+                                  />
 
                                   {/* Tooltip Box */}
-                                  <rect x={index === 0 ? groupCenter + 5 : (index === chartData.length - 1 ? groupCenter - 95 : groupCenter - 45)} y={5} width={90} height={68} rx="6" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" className="shadow-sm" />
+                                  <rect
+                                    x={
+                                      index === 0
+                                        ? groupCenter + 5
+                                        : index === chartData.length - 1
+                                          ? groupCenter - 95
+                                          : groupCenter - 45
+                                    }
+                                    y={5}
+                                    width={90}
+                                    height={68}
+                                    rx="6"
+                                    fill="#ffffff"
+                                    stroke="#e2e8f0"
+                                    strokeWidth="1"
+                                    className="shadow-sm"
+                                  />
 
                                   {/* Tooltip Text Data */}
-                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={17} fill="#0070bc" fontSize="9" fontWeight="extrabold" textAnchor="middle">Grade A: <tspan fill="#334155">{d.gradeA_sum}</tspan></text>
-                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={29} fill="#f59e0b" fontSize="9" fontWeight="extrabold" textAnchor="middle">Grade B: <tspan fill="#334155">{d.gradeB_sum}</tspan></text>
-                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={41} fill="#ef4444" fontSize="9" fontWeight="extrabold" textAnchor="middle">BS: <tspan fill="#334155">{d.bs_sum}</tspan></text>
-                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={53} fill="#64748b" fontSize="9" fontWeight="extrabold" textAnchor="middle">Ungraded: <tspan fill="#334155">{d.ungraded_sum}</tspan></text>
-                                  <text x={index === 0 ? groupCenter + 50 : (index === chartData.length - 1 ? groupCenter - 50 : groupCenter)} y={65} fill="#1e293b" fontSize="9" fontWeight="extrabold" textAnchor="middle">{d.total > 0 ? `Total: ${d.total}` : ""}</text>
+                                  <text
+                                    x={
+                                      index === 0
+                                        ? groupCenter + 50
+                                        : index === chartData.length - 1
+                                          ? groupCenter - 50
+                                          : groupCenter
+                                    }
+                                    y={17}
+                                    fill="#0070bc"
+                                    fontSize="9"
+                                    fontWeight="extrabold"
+                                    textAnchor="middle"
+                                  >
+                                    Grade A:{" "}
+                                    <tspan fill="#334155">{d.gradeA_sum}</tspan>
+                                  </text>
+                                  <text
+                                    x={
+                                      index === 0
+                                        ? groupCenter + 50
+                                        : index === chartData.length - 1
+                                          ? groupCenter - 50
+                                          : groupCenter
+                                    }
+                                    y={29}
+                                    fill="#f59e0b"
+                                    fontSize="9"
+                                    fontWeight="extrabold"
+                                    textAnchor="middle"
+                                  >
+                                    Grade B:{" "}
+                                    <tspan fill="#334155">{d.gradeB_sum}</tspan>
+                                  </text>
+                                  <text
+                                    x={
+                                      index === 0
+                                        ? groupCenter + 50
+                                        : index === chartData.length - 1
+                                          ? groupCenter - 50
+                                          : groupCenter
+                                    }
+                                    y={41}
+                                    fill="#ef4444"
+                                    fontSize="9"
+                                    fontWeight="extrabold"
+                                    textAnchor="middle"
+                                  >
+                                    BS: <tspan fill="#334155">{d.bs_sum}</tspan>
+                                  </text>
+                                  <text
+                                    x={
+                                      index === 0
+                                        ? groupCenter + 50
+                                        : index === chartData.length - 1
+                                          ? groupCenter - 50
+                                          : groupCenter
+                                    }
+                                    y={53}
+                                    fill="#64748b"
+                                    fontSize="9"
+                                    fontWeight="extrabold"
+                                    textAnchor="middle"
+                                  >
+                                    Ungraded:{" "}
+                                    <tspan fill="#334155">
+                                      {d.ungraded_sum}
+                                    </tspan>
+                                  </text>
+                                  <text
+                                    x={
+                                      index === 0
+                                        ? groupCenter + 50
+                                        : index === chartData.length - 1
+                                          ? groupCenter - 50
+                                          : groupCenter
+                                    }
+                                    y={65}
+                                    fill="#1e293b"
+                                    fontSize="9"
+                                    fontWeight="extrabold"
+                                    textAnchor="middle"
+                                  >
+                                    {d.total > 0 ? `Total: ${d.total}` : ""}
+                                  </text>
                                 </g>
                               )}
 
                               {/* X-Axis Label */}
-                              <text x={groupCenter} y={220} fill="#94a3b8" fontSize="10" fontWeight="extrabold" textAnchor="middle">
-                                {d.label.length > 12 ? d.label.substring(0, 10) + '...' : d.label}
+                              <text
+                                x={groupCenter}
+                                y={220}
+                                fill="#94a3b8"
+                                fontSize="10"
+                                fontWeight="extrabold"
+                                textAnchor="middle"
+                              >
+                                {d.label.length > 12
+                                  ? d.label.substring(0, 10) + "..."
+                                  : d.label}
                               </text>
                             </g>
                           );
@@ -1244,45 +1938,133 @@ export default function DashboardPage() {
                             barFill = "#ef4444";
                           }
 
-                          const hVal = maxChartValue > 0 ? (value / maxChartValue) * 165 : 0;
+                          const hVal =
+                            maxChartValue > 0
+                              ? (value / maxChartValue) * 165
+                              : 0;
                           const displayHVal = Math.max(hVal, 1.5);
                           const yVal = 195 - displayHVal;
                           const barW = 28;
-                          const xVal = groupCenter - (barW / 2);
+                          const xVal = groupCenter - barW / 2;
 
                           return (
-                            <g key={d.label} className="group/bar cursor-pointer" onClick={() => setActiveChartBar(isActive ? null : index)}>
+                            <g
+                              key={d.label}
+                              className="group/bar cursor-pointer"
+                              onClick={() =>
+                                setActiveChartBar(isActive ? null : index)
+                              }
+                            >
                               {/* X-Axis Tick Mark for Grouping Clarity */}
                               {index > 0 && (
-                                <line x1={40 + spacing * index} y1={195} x2={40 + spacing * index} y2={205} stroke="#cbd5e1" strokeWidth="2" />
+                                <line
+                                  x1={40 + spacing * index}
+                                  y1={195}
+                                  x2={40 + spacing * index}
+                                  y2={205}
+                                  stroke="#cbd5e1"
+                                  strokeWidth="2"
+                                />
                               )}
 
                               {/* Hover Tooltip Zone */}
-                              <rect x={40 + spacing * index} y={20} width={spacing} height={175} fill="transparent" className="cursor-pointer" />
+                              <rect
+                                x={40 + spacing * index}
+                                y={20}
+                                width={spacing}
+                                height={175}
+                                fill="transparent"
+                                className="cursor-pointer"
+                              />
 
                               {chartType === "BAR" && (
-                                <rect x={xVal} y={yVal} width={barW} height={displayHVal} rx="6" fill={barFill} className="transition-all duration-500 ease-out cursor-pointer hover:opacity-85" />
+                                <rect
+                                  x={xVal}
+                                  y={yVal}
+                                  width={barW}
+                                  height={displayHVal}
+                                  rx="6"
+                                  fill={barFill}
+                                  className="transition-all duration-500 ease-out cursor-pointer hover:opacity-85"
+                                />
                               )}
 
                               {/* Permanent Value Label on Top (BAR only) */}
                               {chartType === "BAR" && (
-                                <text x={groupCenter} y={yVal - 6} fill="#475569" fontSize="9" fontWeight="extrabold" textAnchor="middle">
+                                <text
+                                  x={groupCenter}
+                                  y={yVal - 6}
+                                  fill="#475569"
+                                  fontSize="9"
+                                  fontWeight="extrabold"
+                                  textAnchor="middle"
+                                >
                                   {value}
                                 </text>
                               )}
 
                               {/* Unified Tooltip for LINE chart (Single Mode) */}
                               {chartType === "LINE" && (
-                                <g className={`transition-opacity duration-200 pointer-events-none ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}>
-                                  <line x1={groupCenter} y1={20} x2={groupCenter} y2={195} stroke="#94a3b8" strokeDasharray="3 3" strokeWidth="1" />
-                                  <rect x={index === 0 ? groupCenter + 5 : (index === chartData.length - 1 ? groupCenter - 45 : groupCenter - 20)} y={yVal > 40 ? yVal - 30 : yVal + 10} width={40} height={20} rx="4" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" className="shadow-sm" />
-                                  <text x={index === 0 ? groupCenter + 25 : (index === chartData.length - 1 ? groupCenter - 25 : groupCenter)} y={yVal > 40 ? yVal - 16 : yVal + 24} fill={barFill} fontSize="10" fontWeight="extrabold" textAnchor="middle">{value}</text>
+                                <g
+                                  className={`transition-opacity duration-200 pointer-events-none ${isActive ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100"}`}
+                                >
+                                  <line
+                                    x1={groupCenter}
+                                    y1={20}
+                                    x2={groupCenter}
+                                    y2={195}
+                                    stroke="#94a3b8"
+                                    strokeDasharray="3 3"
+                                    strokeWidth="1"
+                                  />
+                                  <rect
+                                    x={
+                                      index === 0
+                                        ? groupCenter + 5
+                                        : index === chartData.length - 1
+                                          ? groupCenter - 45
+                                          : groupCenter - 20
+                                    }
+                                    y={yVal > 40 ? yVal - 30 : yVal + 10}
+                                    width={40}
+                                    height={20}
+                                    rx="4"
+                                    fill="#ffffff"
+                                    stroke="#e2e8f0"
+                                    strokeWidth="1"
+                                    className="shadow-sm"
+                                  />
+                                  <text
+                                    x={
+                                      index === 0
+                                        ? groupCenter + 25
+                                        : index === chartData.length - 1
+                                          ? groupCenter - 25
+                                          : groupCenter
+                                    }
+                                    y={yVal > 40 ? yVal - 16 : yVal + 24}
+                                    fill={barFill}
+                                    fontSize="10"
+                                    fontWeight="extrabold"
+                                    textAnchor="middle"
+                                  >
+                                    {value}
+                                  </text>
                                 </g>
                               )}
 
                               {/* X-Axis Label */}
-                              <text x={groupCenter} y="215" fill="#94a3b8" fontSize="9" fontWeight="extrabold" textAnchor="middle">
-                                {d.label.length > 12 ? d.label.substring(0, 10) + '...' : d.label}
+                              <text
+                                x={groupCenter}
+                                y="215"
+                                fill="#94a3b8"
+                                fontSize="9"
+                                fontWeight="extrabold"
+                                textAnchor="middle"
+                              >
+                                {d.label.length > 12
+                                  ? d.label.substring(0, 10) + "..."
+                                  : d.label}
                               </text>
                             </g>
                           );
@@ -1318,9 +2100,24 @@ export default function DashboardPage() {
 
         {/* Quality Breakdown Donut Chart */}
         {(() => {
-          const totalA = filteredData.filter(i => i.grade === "GRADE A").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
-          const totalB = filteredData.filter(i => i.grade === "GRADE B").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
-          const totalBS = filteredData.filter(i => i.grade === "BS").reduce((acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1), 0);
+          const totalA = filteredData
+            .filter((i) => i.grade === "GRADE A")
+            .reduce(
+              (acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1),
+              0,
+            );
+          const totalB = filteredData
+            .filter((i) => i.grade === "GRADE B")
+            .reduce(
+              (acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1),
+              0,
+            );
+          const totalBS = filteredData
+            .filter((i) => i.grade === "BS")
+            .reduce(
+              (acc, curr) => acc + (metricMode === "PCS" ? curr.hasil_pcs : 1),
+              0,
+            );
           const totalQuality = totalA + totalB + totalBS;
 
           const pctA = totalQuality > 0 ? (totalA / totalQuality) * 100 : 0;
@@ -1333,23 +2130,44 @@ export default function DashboardPage() {
                 <div>
                   <div className="border-b border-slate-100 pb-4 mb-6 flex justify-between items-start">
                     <div>
-                      <h3 className="text-base font-extrabold text-slate-800">Ringkasan Kualitas</h3>
-                      <p className="text-[11px] text-slate-400 font-semibold">Persentase barang berdasarkan Grade</p>
+                      <h3 className="text-base font-extrabold text-slate-800">
+                        Ringkasan Kualitas
+                      </h3>
+                      <p className="text-[11px] text-slate-400 font-semibold">
+                        Persentase barang berdasarkan Grade
+                      </p>
                     </div>
                     <span className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 flex items-center gap-1 shrink-0">
-                      {totalQuality.toLocaleString()} {metricMode === "PCS" ? "Pcs" : "Baris"}
+                      {totalQuality.toLocaleString()}{" "}
+                      {metricMode === "PCS" ? "Pcs" : "Baris"}
                     </span>
                   </div>
 
                   {/* Donut Chart Visual */}
                   <div className="relative w-48 h-48 mx-auto flex items-center justify-center">
-                    <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                    <svg
+                      viewBox="0 0 100 100"
+                      className="w-full h-full transform -rotate-90"
+                    >
                       {/* Background Track */}
-                      <circle cx="50" cy="50" r="40" fill="transparent" stroke="#f1f5f9" strokeWidth="12" />
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r="40"
+                        fill="transparent"
+                        stroke="#f1f5f9"
+                        strokeWidth="12"
+                      />
 
                       {/* Grade A */}
                       {pctA > 0 && (
-                        <circle cx="50" cy="50" r="40" fill="transparent" stroke="#0070bc" strokeWidth="12"
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          fill="transparent"
+                          stroke="#0070bc"
+                          strokeWidth="12"
                           strokeDasharray={`${(pctA / 100) * 251.2} 251.2`}
                           strokeDashoffset="0"
                           className="transition-all duration-1000 ease-out"
@@ -1357,7 +2175,13 @@ export default function DashboardPage() {
                       )}
                       {/* Grade B */}
                       {pctB > 0 && (
-                        <circle cx="50" cy="50" r="40" fill="transparent" stroke="#f59e0b" strokeWidth="12"
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          fill="transparent"
+                          stroke="#f59e0b"
+                          strokeWidth="12"
                           strokeDasharray={`${(pctB / 100) * 251.2} 251.2`}
                           strokeDashoffset={-((pctA / 100) * 251.2)}
                           className="transition-all duration-1000 ease-out"
@@ -1365,7 +2189,13 @@ export default function DashboardPage() {
                       )}
                       {/* BS */}
                       {pctBS > 0 && (
-                        <circle cx="50" cy="50" r="40" fill="transparent" stroke="#ef4444" strokeWidth="12"
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          fill="transparent"
+                          stroke="#ef4444"
+                          strokeWidth="12"
                           strokeDasharray={`${(pctBS / 100) * 251.2} 251.2`}
                           strokeDashoffset={-(((pctA + pctB) / 100) * 251.2)}
                           className="transition-all duration-1000 ease-out"
@@ -1374,8 +2204,12 @@ export default function DashboardPage() {
                     </svg>
                     {/* Center Content */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-3xl font-black text-slate-800 tracking-tight">{pctA.toFixed(0)}%</span>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Grade A</span>
+                      <span className="text-3xl font-black text-slate-800 tracking-tight">
+                        {pctA.toFixed(0)}%
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                        Grade A
+                      </span>
                     </div>
                   </div>
 
@@ -1384,31 +2218,49 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-sky-50/50 transition-colors border border-transparent hover:border-sky-100/50">
                       <div className="flex items-center gap-3">
                         <div className="w-3.5 h-3.5 rounded-full bg-[#0070bc] shadow-[0_0_8px_rgba(0,112,188,0.4)]" />
-                        <span className="text-xs font-extrabold text-slate-700">Grade A (Lolos)</span>
+                        <span className="text-xs font-extrabold text-slate-700">
+                          Grade A (Lolos)
+                        </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-black text-slate-800">{totalA.toLocaleString()}</span>
-                        <span className="text-[10px] text-slate-400 font-bold ml-1.5">{metricMode === "PCS" ? "Pcs" : "Baris"}</span>
+                        <span className="text-sm font-black text-slate-800">
+                          {totalA.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold ml-1.5">
+                          {metricMode === "PCS" ? "Pcs" : "Baris"}
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-amber-50/50 transition-colors border border-transparent hover:border-amber-100/50">
                       <div className="flex items-center gap-3">
                         <div className="w-3.5 h-3.5 rounded-full bg-[#f59e0b] shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
-                        <span className="text-xs font-extrabold text-slate-700">Grade B (Lolos)</span>
+                        <span className="text-xs font-extrabold text-slate-700">
+                          Grade B (Lolos)
+                        </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-black text-slate-800">{totalB.toLocaleString()}</span>
-                        <span className="text-[10px] text-slate-400 font-bold ml-1.5">{metricMode === "PCS" ? "Pcs" : "Baris"}</span>
+                        <span className="text-sm font-black text-slate-800">
+                          {totalB.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold ml-1.5">
+                          {metricMode === "PCS" ? "Pcs" : "Baris"}
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-red-50/50 transition-colors border border-transparent hover:border-red-100/50">
                       <div className="flex items-center gap-3">
                         <div className="w-3.5 h-3.5 rounded-full bg-[#ef4444] shadow-[0_0_8px_rgba(239,68,68,0.4)] animate-pulse" />
-                        <span className="text-xs font-extrabold text-slate-700">BS (Recheck)</span>
+                        <span className="text-xs font-extrabold text-slate-700">
+                          BS (Recheck)
+                        </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-black text-slate-800">{totalBS.toLocaleString()}</span>
-                        <span className="text-[10px] text-slate-400 font-bold ml-1.5">{metricMode === "PCS" ? "Pcs" : "Baris"}</span>
+                        <span className="text-sm font-black text-slate-800">
+                          {totalBS.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold ml-1.5">
+                          {metricMode === "PCS" ? "Pcs" : "Baris"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1423,8 +2275,12 @@ export default function DashboardPage() {
             </div>
           );
         })()}
-
       </div>
+      <ProductTour
+        steps={EMPLOYEE_DASHBOARD_TOUR_STEPS}
+        isOpen={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+      />
     </div>
   );
 }

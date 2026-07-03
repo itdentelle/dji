@@ -115,15 +115,9 @@ export default function ProductionHeaderModal({
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Tanggal Produksi</label>
-                  <input type="date" {...register("tanggalProduksi")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">RPM</label>
-                  <input type="text" {...register("rpm")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">RPM</label>
+                <input type="text" {...register("rpm")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">

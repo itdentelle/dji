@@ -1,13 +1,51 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { RefreshCw, CheckCircle2, XCircle, Calendar, SlidersHorizontal, Users, RotateCcw } from "lucide-react";
+import {
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  Calendar,
+  SlidersHorizontal,
+  Users,
+  RotateCcw,
+  HelpCircle,
+} from "lucide-react";
+import ProductTour, { ProductTourStep } from "@/components/ProductTour";
+
+const SYNC_TOUR_STEPS: ProductTourStep[] = [
+  {
+    target: "sync-header",
+    title: "Status Sinkronisasi",
+    description:
+      "Gunakan halaman ini untuk mengecek data produksi yang sudah atau belum tersinkron ke Google Sheets.",
+  },
+  {
+    target: "sync-actions",
+    title: "Sync Data Terfilter",
+    description:
+      "Tombol ini menjalankan sinkronisasi ulang untuk semua laporan yang sedang tampil sesuai filter aktif.",
+  },
+  {
+    target: "sync-filters",
+    title: "Filter Data",
+    description:
+      "Saring laporan berdasarkan tanggal produksi, mesin, atau operator sebelum melakukan pengecekan dan sinkronisasi.",
+  },
+  {
+    target: "sync-table",
+    title: "Daftar Laporan",
+    description:
+      "Tabel ini menampilkan status Sheets tiap laporan. Data yang gagal atau tertunda bisa disinkronkan ulang per baris.",
+  },
+];
 
 export default function SyncPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [operatorsList, setOperatorsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   // Filters State
   const [filterDate, setFilterDate] = useState("");
@@ -26,11 +64,13 @@ export default function SyncPage() {
     try {
       const { data, error } = await supabase
         .from("production_headers" as any)
-        .select(`
+        .select(
+          `
           *,
           groups(nama_grup),
           operators(nama_operator)
-        `)
+        `,
+        )
         .order("tanggal_jam", { ascending: false })
         .limit(200);
 
@@ -63,11 +103,15 @@ export default function SyncPage() {
       const res = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ headerId })
+        body: JSON.stringify({ headerId }),
       });
       const result = await res.json();
       if (result.success) {
-        setReports(reports.map(r => r.id === headerId ? { ...r, is_synced_to_sheet: true } : r));
+        setReports(
+          reports.map((r) =>
+            r.id === headerId ? { ...r, is_synced_to_sheet: true } : r,
+          ),
+        );
         alert("Berhasil sinkronisasi ulang ke Google Sheets!");
       } else {
         alert("Gagal: " + result.error);
@@ -81,9 +125,15 @@ export default function SyncPage() {
   };
 
   const forceSyncAll = async () => {
-    if (filteredReports.length === 0) return alert("Belum ada data untuk disinkronkan.");
-    if (!confirm(`Anda yakin ingin menyinkronkan paksa ${filteredReports.length} data yang terfilter di halaman ini?`)) return;
-    
+    if (filteredReports.length === 0)
+      return alert("Belum ada data untuk disinkronkan.");
+    if (
+      !confirm(
+        `Anda yakin ingin menyinkronkan paksa ${filteredReports.length} data yang terfilter di halaman ini?`,
+      )
+    )
+      return;
+
     let count = 0;
     for (const report of filteredReports) {
       setSyncingId(report.id);
@@ -91,25 +141,31 @@ export default function SyncPage() {
         const res = await fetch("/api/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ headerId: report.id })
+          body: JSON.stringify({ headerId: report.id }),
         });
         const result = await res.json();
         if (result.success) {
           count++;
-          setReports(prev => prev.map(r => r.id === report.id ? { ...r, is_synced_to_sheet: true } : r));
+          setReports((prev) =>
+            prev.map((r) =>
+              r.id === report.id ? { ...r, is_synced_to_sheet: true } : r,
+            ),
+          );
         }
       } catch (e) {
         console.error(e);
       }
     }
     setSyncingId(null);
-    alert(`Berhasil sinkronisasi ulang ${count} dari ${filteredReports.length} data.`);
+    alert(
+      `Berhasil sinkronisasi ulang ${count} dari ${filteredReports.length} data.`,
+    );
   };
 
   // Get unique machines list dynamically from current reports dataset
   const uniqueMachines = useMemo(() => {
     const machinesSet = new Set<string>();
-    reports.forEach(r => {
+    reports.forEach((r) => {
       if (r.nomor_mc) machinesSet.add(r.nomor_mc);
     });
     return Array.from(machinesSet).sort();
@@ -117,10 +173,12 @@ export default function SyncPage() {
 
   // Apply filters client-side
   const filteredReports = useMemo(() => {
-    return reports.filter(report => {
+    return reports.filter((report) => {
       // 1. Date Filter
       if (filterDate) {
-        const itemDateStr = report.tgl ? new Date(report.tgl).toLocaleDateString("en-CA") : "";
+        const itemDateStr = report.tgl
+          ? new Date(report.tgl).toLocaleDateString("en-CA")
+          : "";
         if (itemDateStr !== filterDate) return false;
       }
       // 2. Machine Filter
@@ -144,36 +202,63 @@ export default function SyncPage() {
     if (!isoString) return "-";
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return isoString;
-    return date.toLocaleString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    }).replace(/:/g, ".");
+    return date
+      .toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+      .replace(/:/g, ".");
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div
+        data-tour="sync-header"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+      >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-800">Status Sinkronisasi Google Sheets</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-800">
+            Status Sinkronisasi Google Sheets
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
             Pantau dan sinkronkan ulang data yang gagal masuk ke Google Sheets.
           </p>
         </div>
-        <button
-          onClick={forceSyncAll}
-          disabled={syncingId !== null || loading || filteredReports.length === 0}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 disabled:opacity-50 shadow-sm transition-all cursor-pointer"
+        <div
+          data-tour="sync-actions"
+          className="flex flex-wrap items-center gap-3"
         >
-          <RefreshCw className={`w-4 h-4 ${syncingId ? 'animate-spin' : ''}`} />
-          Force Sync Data Terfilter ({filteredReports.length})
-        </button>
+          <button
+            type="button"
+            onClick={() => setIsTourOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-4 py-2 text-sm font-bold text-[#0070bc] shadow-sm transition-all hover:bg-sky-100"
+          >
+            <HelpCircle className="w-4 h-4" />
+            Tutorial
+          </button>
+          <button
+            onClick={forceSyncAll}
+            disabled={
+              syncingId !== null || loading || filteredReports.length === 0
+            }
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 disabled:opacity-50 shadow-sm transition-all cursor-pointer"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${syncingId ? "animate-spin" : ""}`}
+            />
+            Force Sync Data Terfilter ({filteredReports.length})
+          </button>
+        </div>
       </div>
 
       {/* Premium Filters Panel */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white border border-[#e9ecef] rounded-2xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
+      <div
+        data-tour="sync-filters"
+        className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white border border-[#e9ecef] rounded-2xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)]"
+      >
         {/* Date Filter */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -198,8 +283,10 @@ export default function SyncPage() {
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold cursor-pointer w-full"
           >
             <option value="">Semua Mesin</option>
-            {uniqueMachines.map(mc => (
-              <option key={mc} value={mc}>{mc}</option>
+            {uniqueMachines.map((mc) => (
+              <option key={mc} value={mc}>
+                {mc}
+              </option>
             ))}
           </select>
         </div>
@@ -215,8 +302,10 @@ export default function SyncPage() {
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold cursor-pointer w-full"
           >
             <option value="">Semua Operator</option>
-            {operatorsList.map(op => (
-              <option key={op.id} value={op.nama_operator}>{op.nama_operator}</option>
+            {operatorsList.map((op) => (
+              <option key={op.id} value={op.nama_operator}>
+                {op.nama_operator}
+              </option>
             ))}
           </select>
         </div>
@@ -235,7 +324,10 @@ export default function SyncPage() {
       </div>
 
       {/* Table Container */}
-      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.01)] border border-[#e9ecef] overflow-hidden">
+      <div
+        data-tour="sync-table"
+        className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.01)] border border-[#e9ecef] overflow-hidden"
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 text-slate-500 uppercase font-semibold text-xs border-b border-slate-100">
@@ -251,24 +343,35 @@ export default function SyncPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-400 font-medium">
+                  <td
+                    colSpan={6}
+                    className="px-5 py-8 text-center text-slate-400 font-medium"
+                  >
                     Memuat data...
                   </td>
                 </tr>
               ) : filteredReports.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-400 font-medium">
+                  <td
+                    colSpan={6}
+                    className="px-5 py-8 text-center text-slate-400 font-medium"
+                  >
                     Tidak ada riwayat laporan yang cocok dengan filter.
                   </td>
                 </tr>
               ) : (
                 filteredReports.map((report) => (
-                  <tr key={report.id} className="hover:bg-slate-50/60 transition-colors">
+                  <tr
+                    key={report.id}
+                    className="hover:bg-slate-50/60 transition-colors"
+                  >
                     <td className="px-5 py-3.5 whitespace-nowrap text-slate-700 font-medium">
                       {formatReportDateTime(report.tanggal_jam)}
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-slate-700">
-                      <span className="font-semibold text-slate-800">{report.nomor_mc || "-"}</span>
+                      <span className="font-semibold text-slate-800">
+                        {report.nomor_mc || "-"}
+                      </span>
                       <span className="text-slate-300 mx-1.5">/</span>
                       <span className="text-xs font-bold text-slate-500 px-2 py-0.5 rounded-md bg-slate-100 uppercase">
                         {report.groups?.nama_grup || "-"}
@@ -276,7 +379,9 @@ export default function SyncPage() {
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap font-semibold text-slate-800">
                       <div className="flex flex-col">
-                        <span>{report.operators?.nama_operator || report.pic || "-"}</span>
+                        <span>
+                          {report.operators?.nama_operator || report.pic || "-"}
+                        </span>
                         {report.created_by_name && (
                           <span className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
                             PIC: {report.created_by_name}
@@ -290,11 +395,13 @@ export default function SyncPage() {
                     <td className="px-5 py-3.5 text-center whitespace-nowrap">
                       {report.is_synced_to_sheet ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Berhasil
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />{" "}
+                          Berhasil
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-100">
-                          <XCircle className="w-3.5 h-3.5 text-rose-500 animate-pulse" /> Gagal / Tertunda
+                          <XCircle className="w-3.5 h-3.5 text-rose-500 animate-pulse" />{" "}
+                          Gagal / Tertunda
                         </span>
                       )}
                     </td>
@@ -303,12 +410,14 @@ export default function SyncPage() {
                         onClick={() => forceSync(report.id)}
                         disabled={syncingId === report.id}
                         className={`${
-                          report.is_synced_to_sheet 
-                            ? "text-slate-600 hover:text-slate-800 bg-slate-100 border border-slate-200/60" 
+                          report.is_synced_to_sheet
+                            ? "text-slate-600 hover:text-slate-800 bg-slate-100 border border-slate-200/60"
                             : "text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-100"
                         } disabled:opacity-50 text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer`}
                       >
-                        {syncingId === report.id ? "Menyinkronkan..." : "Sync Ulang"}
+                        {syncingId === report.id
+                          ? "Menyinkronkan..."
+                          : "Sync Ulang"}
                       </button>
                     </td>
                   </tr>
@@ -318,6 +427,11 @@ export default function SyncPage() {
           </table>
         </div>
       </div>
+      <ProductTour
+        steps={SYNC_TOUR_STEPS}
+        isOpen={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+      />
     </div>
   );
 }

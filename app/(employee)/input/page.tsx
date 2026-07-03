@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { HelpCircle } from "lucide-react";
 import EmployeeForm from "@/components/forms/EmployeeForm";
 import { useAuth } from "@/lib/auth-context";
 
@@ -18,20 +19,49 @@ export default function EmployeeInputPage() {
             </span>
           </h1>
           <p className="text-slate-500 text-sm sm:text-base font-medium max-w-2xl leading-relaxed flex items-start gap-1.5 mt-1">
-            <svg className="w-5 h-5 text-sky-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="w-5 h-5 text-sky-500 shrink-0 mt-0.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
-            Pastikan data parameter mesin rajut sudah benar sebelum mengirimkan formulir.
+            Pastikan data parameter mesin rajut sudah benar sebelum mengirimkan
+            formulir.
           </p>
         </div>
 
-        {/* Active Session Pill */}
-        <div className="relative z-10 flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm text-xs text-slate-600 font-medium shrink-0">
-          <span className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.6)] animate-pulse" />
-          <span>Sesi: <strong className="font-bold text-[#0070bc]">{user?.fullName.replace(" (Demo)", "")}</strong></span>
-          <span className="text-[9px] font-bold text-slate-500 bg-slate-100 rounded-md px-1.5 py-0.5 uppercase ml-1">
-            {user?.role}
-          </span>
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("dji:start-panel-tour"))
+            }
+            className="h-11 px-4 rounded-full bg-[#0070bc] hover:bg-[#004777] text-white text-xs font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+          >
+            <HelpCircle className="w-4 h-4" />
+            Tutorial
+          </button>
+
+          {/* Active Session Pill */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm text-xs text-slate-600 font-medium">
+            <span className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.6)] animate-pulse" />
+            <span>
+              Sesi:{" "}
+              <strong className="font-bold text-[#0070bc]">
+                {user?.fullName.replace(" (Demo)", "")}
+              </strong>
+            </span>
+            <span className="text-[9px] font-bold text-slate-500 bg-slate-100 rounded-md px-1.5 py-0.5 uppercase ml-1">
+              {user?.role}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -42,4 +72,3 @@ export default function EmployeeInputPage() {
     </div>
   );
 }
-

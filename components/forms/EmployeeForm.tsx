@@ -5,9 +5,36 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { productionFormSchema, ProductionFormInput } from "@/lib/schemas";
 import { useAuth } from "@/lib/auth-context";
-import { createProductionReport, uploadProductionPhoto, getLastPanelNoByPotongan, updateProductionReport } from "@/actions/employee-actions";
+import {
+  createProductionReport,
+  uploadProductionPhoto,
+  getLastPanelNoByPotongan,
+  updateProductionReport,
+} from "@/actions/employee-actions";
 import { createClient } from "@/lib/supabase/client";
-import { AlertCircle, RefreshCw, UploadCloud, X, Camera, Database, FileText, Settings2, Trash2, ChevronUp, ChevronDown, CheckCircle2, Save, Plus, Box, ClipboardList, Play, Square, Timer } from "lucide-react";
+import {
+  AlertCircle,
+  RefreshCw,
+  UploadCloud,
+  X,
+  Camera,
+  Database,
+  FileText,
+  Settings2,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  CheckCircle2,
+  Save,
+  Plus,
+  Box,
+  ClipboardList,
+  Play,
+  Square,
+  Timer,
+  ArrowLeft,
+  ArrowRight,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
 import ProductionHeaderModal from "./ProductionHeaderModal";
@@ -15,29 +42,57 @@ import ProductionHeaderModal from "./ProductionHeaderModal";
 // DATA FALLBACK DARI EXCEL
 const FALLBACK_OPERATORS = [
   // Shift A
-  { id: 1, name: "Rohmat", shift: "A" }, { id: 2, name: "M.Alwi", shift: "A" }, { id: 3, name: "Anwar", shift: "A" },
-  { id: 4, name: "Jaya", shift: "A" }, { id: 5, name: "Riki S", shift: "A" }, { id: 6, name: "Sandi M", shift: "A" },
-  { id: 7, name: "Padlan", shift: "A" }, { id: 8, name: "Rissa A", shift: "A" }, { id: 9, name: "Devi K", shift: "A" },
-  { id: 10, name: "Novi S", shift: "A" }, { id: 11, name: "Udin", shift: "A" },
+  { id: 1, name: "Rohmat", shift: "A" },
+  { id: 2, name: "M.Alwi", shift: "A" },
+  { id: 3, name: "Anwar", shift: "A" },
+  { id: 4, name: "Jaya", shift: "A" },
+  { id: 5, name: "Riki S", shift: "A" },
+  { id: 6, name: "Sandi M", shift: "A" },
+  { id: 7, name: "Padlan", shift: "A" },
+  { id: 8, name: "Rissa A", shift: "A" },
+  { id: 9, name: "Devi K", shift: "A" },
+  { id: 10, name: "Novi S", shift: "A" },
+  { id: 11, name: "Udin", shift: "A" },
   // Shift B
-  { id: 12, name: "Irfan", shift: "B" }, { id: 13, name: "Anton", shift: "B" }, { id: 14, name: "Ahmad S", shift: "B" },
-  { id: 15, name: "Saepudin", shift: "B" }, { id: 16, name: "Parid", shift: "B" }, { id: 17, name: "Noval", shift: "B" },
-  { id: 18, name: "Sigit", shift: "B" }, { id: 19, name: "Rani Y", shift: "B" }, { id: 20, name: "Yanti P", shift: "B" },
-  { id: 21, name: "Irma P", shift: "B" }, { id: 22, name: "Aris W", shift: "B" },
+  { id: 12, name: "Irfan", shift: "B" },
+  { id: 13, name: "Anton", shift: "B" },
+  { id: 14, name: "Ahmad S", shift: "B" },
+  { id: 15, name: "Saepudin", shift: "B" },
+  { id: 16, name: "Parid", shift: "B" },
+  { id: 17, name: "Noval", shift: "B" },
+  { id: 18, name: "Sigit", shift: "B" },
+  { id: 19, name: "Rani Y", shift: "B" },
+  { id: 20, name: "Yanti P", shift: "B" },
+  { id: 21, name: "Irma P", shift: "B" },
+  { id: 22, name: "Aris W", shift: "B" },
   // Shift C
-  { id: 23, name: "Tubagus", shift: "C" }, { id: 24, name: "Andri Y", shift: "C" }, { id: 25, name: "Royana", shift: "C" },
-  { id: 26, name: "Komara", shift: "C" }, { id: 27, name: "Sopian", shift: "C" }, { id: 28, name: "Iki S", shift: "C" },
-  { id: 29, name: "Hardi", shift: "C" }, { id: 30, name: "Rini D", shift: "C" }, { id: 31, name: "Neneng", shift: "C" },
-  { id: 32, name: "Rina R", shift: "C" }, { id: 33, name: "Farhan", shift: "C" }
+  { id: 23, name: "Tubagus", shift: "C" },
+  { id: 24, name: "Andri Y", shift: "C" },
+  { id: 25, name: "Royana", shift: "C" },
+  { id: 26, name: "Komara", shift: "C" },
+  { id: 27, name: "Sopian", shift: "C" },
+  { id: 28, name: "Iki S", shift: "C" },
+  { id: 29, name: "Hardi", shift: "C" },
+  { id: 30, name: "Rini D", shift: "C" },
+  { id: 31, name: "Neneng", shift: "C" },
+  { id: 32, name: "Rina R", shift: "C" },
+  { id: 33, name: "Farhan", shift: "C" },
 ];
 
 const FALLBACK_DESIGNS = [
-  { id: 1, name: "TCD 5826 XA" }, { id: 2, name: "DL 5675 CO" }, { id: 3, name: "DL 5167 CO" },
-  { id: 4, name: "DL 5169 CO" }, { id: 5, name: "DL 6460 CR" }, { id: 6, name: "DL 5162 CO" }, { id: 7, name: "DL 5168 CO" }
+  { id: 1, name: "TCD 5826 XA" },
+  { id: 2, name: "DL 5675 CO" },
+  { id: 3, name: "DL 5167 CO" },
+  { id: 4, name: "DL 5169 CO" },
+  { id: 5, name: "DL 6460 CR" },
+  { id: 6, name: "DL 5162 CO" },
+  { id: 7, name: "DL 5168 CO" },
 ];
 
 const FALLBACK_GROUPS = [
-  { id: 1, name: "A" }, { id: 2, name: "B" }, { id: 3, name: "C" }
+  { id: 1, name: "A" },
+  { id: 2, name: "B" },
+  { id: 3, name: "C" },
 ];
 
 // NEW PROBLEM KATEGORI (A-H)
@@ -51,41 +106,136 @@ const NEW_PROBLEM_CATEGORIES = [
   { id: "G", name: "Kode G: Faktor Eksternal dan Non-Teknis" },
 ];
 
+const PANEL_TOUR_STEPS = [
+  {
+    target: "mode-switch",
+    title: "Jenis Input",
+    description:
+      "Pastikan mode Panel aktif untuk input per panel. Kalau input per roll atau meteran, pindah ke Kontinu.",
+  },
+  {
+    target: "header-summary",
+    title: "Data Header",
+    description:
+      "Cek operator, shift, mesin, design, status matching, dan potongan. Tekan kartu ini untuk mengubah header.",
+  },
+  {
+    target: "panel-info",
+    title: "Nomor Panel",
+    description:
+      "Nomor panel terisi otomatis dari potongan dan mesin. Setelah kirim, sistem menyiapkan nomor berikutnya.",
+  },
+  {
+    target: "pcs-detail",
+    title: "Detail PCS",
+    description:
+      "Centang kalau ada cacat atau kendala pada PCS. Setelah dicentang, pilih kategori dan minimal satu detail masalah.",
+  },
+  {
+    target: "pcs-detail",
+    title: "Timer Downtime",
+    description:
+      "Saat kendala dicentang, timer downtime muncul di bawah detail PCS. Mulai saat masalah terjadi dan stop saat mesin kembali jalan.",
+  },
+  {
+    target: "cut-panel",
+    title: "Potong Kain",
+    description:
+      "Centang ini hanya jika panel yang sedang diinput adalah panel terakhir dalam roll.",
+  },
+  {
+    target: "submit-panel",
+    title: "Kirim Laporan",
+    description:
+      "Kirim setelah semua data benar. Kalau offline, data akan masuk antrean sinkronisasi otomatis.",
+  },
+];
+
 const NEW_PROBLEMS: Record<string, string[]> = {
-  "A": [
-    "L1,L2,L3 Benang timbul putus", "Benang lolos", "Bolong corak",
-    "Benang narik/Kendor", "Benang Nyilang", "Perbaikan/Beset benang Dasar", "Benang Kejepit/Jebol/Kusut", "Jalur benang"
+  A: [
+    "L1,L2,L3 Benang timbul putus",
+    "Benang lolos",
+    "Bolong corak",
+    "Benang narik/Kendor",
+    "Benang Nyilang",
+    "Perbaikan/Beset benang Dasar",
+    "Benang Kejepit/Jebol/Kusut",
+    "Jalur benang",
   ],
-  "B": [
-    "Jarum pattern patah/bengkok", "Ganti Jacquard", "Ganti jarum Compoun Nedle, pattern",
-    "Ngampul", "Ganti dari scaloop ke non scaloop atau sebaliknya", "Ngegaris/Stopline", "Keluar Jarum",
-    "Ganti String bar", "Ganti PBO", "Pressan As beam kendor", "Tensi tensioner"
+  B: [
+    "Jarum pattern patah/bengkok",
+    "Ganti Jacquard",
+    "Ganti jarum Compoun Nedle, pattern",
+    "Ngampul",
+    "Ganti dari scaloop ke non scaloop atau sebaliknya",
+    "Ngegaris/Stopline",
+    "Keluar Jarum",
+    "Ganti String bar",
+    "Ganti PBO",
+    "Pressan As beam kendor",
+    "Tensi tensioner",
   ],
-  "C": [
-    "Loading design/Ganti Design", "Perbaikan corak/revisi", "Salah ganti design", "Error design",
-    "Proofing/PCB", "Ganti Pattern Disk", "Ganti pick"
+  C: [
+    "Loading design/Ganti Design",
+    "Perbaikan corak/revisi",
+    "Salah ganti design",
+    "Error design",
+    "Proofing/PCB",
+    "Ganti Pattern Disk",
+    "Ganti pick",
   ],
-  "D": [
-    "Ganti benang dasar L1/L2", "Salah ganti benang dasar", "Ganti benang Pattern Linner", "Ganti benang Pattern Heavy",
-    "Ganti benang Pattern Shadow", "Ganti benang pattern keseluruhan (L,H,S)", "salah ganti benang pattern", "Ngelancarin",
-    "Over Cone/Rewind", "Tunggu benang dasar dari warping", "Tunggu benang (benang belum datang)"
+  D: [
+    "Ganti benang dasar L1/L2",
+    "Salah ganti benang dasar",
+    "Ganti benang Pattern Linner",
+    "Ganti benang Pattern Heavy",
+    "Ganti benang Pattern Shadow",
+    "Ganti benang pattern keseluruhan (L,H,S)",
+    "salah ganti benang pattern",
+    "Ngelancarin",
+    "Over Cone/Rewind",
+    "Tunggu benang dasar dari warping",
+    "Tunggu benang (benang belum datang)",
   ],
-  "E": [
-    "Error Servo Drive", "Ganti motor servo", "Sensor Benang/Laser Stop",
-    "Perbaikan Eletrik lainnya", "Konsleting", "Perbaikan listrik"
+  E: [
+    "Error Servo Drive",
+    "Ganti motor servo",
+    "Sensor Benang/Laser Stop",
+    "Perbaikan Eletrik lainnya",
+    "Konsleting",
+    "Perbaikan listrik",
   ],
-  "F": [
-    "Perbaikan cilynder Angin", "Ganti Bellow", "Perbaikan gear/Take Up Roll", 
-    "Ganti rantai/pertensi", "Ganti Black grip roll", "Ganti Oli", "Pelumasan/greace pada mesin",
-    "Ganti Vanbelt", "Perawatan Panel Listrik", "Servis Overhaul"
+  F: [
+    "Perbaikan cilynder Angin",
+    "Ganti Bellow",
+    "Perbaikan gear/Take Up Roll",
+    "Ganti rantai/pertensi",
+    "Ganti Black grip roll",
+    "Ganti Oli",
+    "Pelumasan/greace pada mesin",
+    "Ganti Vanbelt",
+    "Perawatan Panel Listrik",
+    "Servis Overhaul",
   ],
-  "G": [
-    "Hari Libur", "Tidak ada order", "Tunggu info", "Demo", "Bencana/gempa/banjir", "Istirahat selama buka puasa", "Tunggu Sparepart", "Mati Listrik"
-  ]
+  G: [
+    "Hari Libur",
+    "Tidak ada order",
+    "Tunggu info",
+    "Demo",
+    "Bencana/gempa/banjir",
+    "Istirahat selama buka puasa",
+    "Tunggu Sparepart",
+    "Mati Listrik",
+  ],
 };
 
 // Client-side image compression helper
-const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.7): Promise<File> => {
+const compressImage = (
+  file: File,
+  maxWidth = 1200,
+  maxHeight = 1200,
+  quality = 0.7,
+): Promise<File> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -132,7 +282,7 @@ const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 
             }
           },
           "image/jpeg",
-          quality
+          quality,
         );
       };
       img.onerror = () => resolve(file);
@@ -155,13 +305,26 @@ type EmployeeFormProps = {
   isEdit?: boolean;
 };
 
-export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps = {}) {
+export default function EmployeeForm({
+  initialData,
+  isEdit,
+}: EmployeeFormProps = {}) {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successData, setSuccessData] = useState<ProductionFormInput & { id?: string } | null>(null);
+  const [successData, setSuccessData] = useState<
+    (ProductionFormInput & { id?: string }) | null
+  >(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLastPanel, setIsLastPanel] = useState(false);
-  
+  const [isTourOpen, setIsTourOpen] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const [tourRect, setTourRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
   // Photo States
   const [fotoBefore, setFotoBefore] = useState<File | null>(null);
   const [fotoAfter, setFotoAfter] = useState<File | null>(null);
@@ -179,12 +342,20 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   const [highlightPotonganKe, setHighlightPotonganKe] = useState(false);
 
   // States untuk upload foto
-  const [isUploading, setIsUploading] = useState<{ before: boolean; after: boolean }>({ before: false, after: false });
-  const [previews, setPreviews] = useState<{ before: string | null; after: string | null }>({ before: null, after: null });
+  const [isUploading, setIsUploading] = useState<{
+    before: boolean;
+    after: boolean;
+  }>({ before: false, after: false });
+  const [previews, setPreviews] = useState<{
+    before: string | null;
+    after: string | null;
+  }>({ before: null, after: null });
 
   // Timer State for Downtime
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerStartRef, setTimerStartRef] = useState<number | null>(null);
+  const [timerStopRef, setTimerStopRef] = useState<number | null>(null);
+  const [firstProblemTime, setFirstProblemTime] = useState<number | null>(null);
   const [liveTimerSeconds, setLiveTimerSeconds] = useState(0);
 
   useEffect(() => {
@@ -198,33 +369,103 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     return () => clearInterval(interval);
   }, [isTimerRunning, timerStartRef]);
 
+  useEffect(() => {
+    const startPanelTour = () => {
+      if (isEdit) return;
+      setTourStepIndex(0);
+      setIsTourOpen(true);
+    };
+
+    window.addEventListener("dji:start-panel-tour", startPanelTour);
+    return () =>
+      window.removeEventListener("dji:start-panel-tour", startPanelTour);
+  }, [isEdit]);
+
+  useEffect(() => {
+    if (!isTourOpen) return;
+
+    const currentStep = PANEL_TOUR_STEPS[tourStepIndex];
+    const element = document.querySelector(
+      `[data-tour="${currentStep.target}"]`,
+    );
+
+    const updateTourRect = () => {
+      if (!element) {
+        setTourRect(null);
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      setTourRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+
+    if (element) {
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    }
+
+    const timeoutId = window.setTimeout(updateTourRect, 220);
+    window.addEventListener("resize", updateTourRect);
+    window.addEventListener("scroll", updateTourRect, true);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("resize", updateTourRect);
+      window.removeEventListener("scroll", updateTourRect, true);
+    };
+  }, [isTourOpen, tourStepIndex]);
+
+  const closeTour = () => {
+    setIsTourOpen(false);
+    setTourStepIndex(0);
+  };
+
   const handleStartTimer = () => {
+    const now = Date.now();
     setIsTimerRunning(true);
-    setTimerStartRef(Date.now());
+    setTimerStartRef(now);
+    setTimerStopRef(null);
+    if (!firstProblemTime) {
+      setFirstProblemTime(now);
+    }
     setLiveTimerSeconds(0);
   };
 
   const handleStopTimer = () => {
     if (!isTimerRunning) return;
     setIsTimerRunning(false);
-    
-    // Calculate elapsed seconds
-    const elapsedMs = Date.now() - (timerStartRef || Date.now());
+
+    const now = Date.now();
+    const elapsedMs = now - (timerStartRef || now);
     const elapsedSecs = Math.ceil(elapsedMs / 1000);
-    
+
     const currentTotalStr = watch("totalDowntime");
     const currentTotal = parseInt(currentTotalStr || "0") || 0;
-    
+
     const newTotal = currentTotal + elapsedSecs;
-    setValue("totalDowntime", String(newTotal), { shouldValidate: true, shouldDirty: true });
-    
+    setValue("totalDowntime", String(newTotal), {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+
     setTimerStartRef(null);
+    setTimerStopRef(now);
     setLiveTimerSeconds(0);
   };
 
   const formatTimer = (totalSeconds: number) => {
-    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-    const s = (totalSeconds % 60).toString().padStart(2, '0');
+    const m = Math.floor(totalSeconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = (totalSeconds % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
 
@@ -233,30 +474,44 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     async function loadDbData() {
       try {
         const supabase = createClient();
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
+        if (
+          !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+          process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")
+        ) {
           return;
         }
 
-        const { data: opData } = await supabase.from("operators").select("id, nama_operator");
+        const { data: opData } = await supabase
+          .from("operators")
+          .select("id, nama_operator");
         if (opData && opData.length > 0) {
           // KITA GUNAKAN FALLBACK DULU KARENA MINTA SESUAI GAMBAR BARU (SHIFT A,B,C)
           // setOperators(opData.map((o: any) => ({ id: o.id, name: o.nama_operator })));
           setIsDbConnected(true);
         }
 
-        const { data: dsData } = await supabase.from("designs").select("id, nama_design");
+        const { data: dsData } = await supabase
+          .from("designs")
+          .select("id, nama_design");
         if (dsData && dsData.length > 0) {
-          setDesigns(dsData.map((d: any) => ({ id: d.id, name: d.nama_design })));
+          setDesigns(
+            dsData.map((d: any) => ({ id: d.id, name: d.nama_design })),
+          );
         }
 
-        const { data: gpData } = await supabase.from("groups").select("id, nama_grup");
+        const { data: gpData } = await supabase
+          .from("groups")
+          .select("id, nama_grup");
         if (gpData && gpData.length > 0) {
           setGroups(gpData.map((g: any) => ({ id: g.id, name: g.nama_grup })));
         }
       } catch (err) {
-        console.warn("Koneksi Supabase real gagal atau belum disemai, menggunakan data fallback dari Excel.", err);
+        console.warn(
+          "Koneksi Supabase real gagal atau belum disemai, menggunakan data fallback dari Excel.",
+          err,
+        );
       }
-    };
+    }
     loadDbData();
   }, []);
 
@@ -272,11 +527,11 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   } = useForm<ProductionFormInput>({
     resolver: zodResolver(productionFormSchema),
     defaultValues: {
-      operatorId: "3", 
+      operatorId: "3",
       groupId: "2",
       designId: "1",
       nomorMc: "",
-      tanggalProduksi: new Date().toISOString().split('T')[0],
+      tanggalProduksi: new Date().toISOString().split("T")[0],
       tanggalPotong: "",
       pick: "",
       noOrderBarang: "",
@@ -301,11 +556,10 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
           kategoriMasalah: [],
           detailMasalah: "",
           keteranganCacat: "",
-        }
-      ]
+        },
+      ],
     },
   });
-
 
   useEffect(() => {
     if (initialData && isEdit) {
@@ -314,7 +568,8 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
         groupId: String(initialData.group_id || ""),
         designId: String(initialData.design_id || ""),
         nomorMc: initialData.nomor_mc || "",
-        tanggalProduksi: initialData.tgl || new Date().toISOString().split('T')[0],
+        tanggalProduksi:
+          initialData.tgl || new Date().toISOString().split("T")[0],
         tanggalPotong: initialData.tanggal_potong || "",
         pick: initialData.pick || "",
         noOrderBarang: initialData.no_order_barang || "",
@@ -329,23 +584,28 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
         pic: initialData.pic || "",
         panelNo: String(initialData.panel_no || "1"),
         totalDowntime: String(initialData.total_downtime_detik || ""),
-        pcsData: initialData.details && initialData.details.length > 0 ? initialData.details.map((d: any) => ({
-          pcsIndex: String(d.pcs_index || "1"),
-          jmlHasilProduksi: String(d.jml_hasil_produksi || "1"),
-          indikatorStop: d.kategori_masalah ? true : false,
-          kategoriMasalah: d.kategori_masalah ? d.kategori_masalah.split(', ') : [],
-          detailMasalah: d.detail_masalah || "",
-          keteranganCacat: d.keterangan_cacat || "",
-        })) : [
-          {
-            pcsIndex: "1",
-            jmlHasilProduksi: "1",
-            indikatorStop: false,
-            kategoriMasalah: [],
-            detailMasalah: "",
-            keteranganCacat: "",
-          }
-        ]
+        pcsData:
+          initialData.details && initialData.details.length > 0
+            ? initialData.details.map((d: any) => ({
+                pcsIndex: String(d.pcs_index || "1"),
+                jmlHasilProduksi: String(d.jml_hasil_produksi || "1"),
+                indikatorStop: d.kategori_masalah ? true : false,
+                kategoriMasalah: d.kategori_masalah
+                  ? d.kategori_masalah.split(", ")
+                  : [],
+                detailMasalah: d.detail_masalah || "",
+                keteranganCacat: d.keterangan_cacat || "",
+              }))
+            : [
+                {
+                  pcsIndex: "1",
+                  jmlHasilProduksi: "1",
+                  indikatorStop: false,
+                  kategoriMasalah: [],
+                  detailMasalah: "",
+                  keteranganCacat: "",
+                },
+              ],
       });
       if (initialData.tanggal_potong) {
         setIsLastPanel(true);
@@ -354,10 +614,12 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   }, [initialData, isEdit, reset]);
 
   const watchGroupId = watch("groupId");
-  const selectedGroup = groups.find(g => g.id.toString() === watchGroupId);
+  const selectedGroup = groups.find((g) => g.id.toString() === watchGroupId);
   const activeShiftName = selectedGroup ? selectedGroup.name : "A";
 
-  const activeOperators = operators.filter((op: any) => op.shift === activeShiftName || !op.shift);
+  const activeOperators = operators.filter(
+    (op: any) => op.shift === activeShiftName || !op.shift,
+  );
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -368,7 +630,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   useEffect(() => {
     if (isEdit) return;
 
-    const savedDraft = localStorage.getItem('dji_form_draft_panel');
+    const savedDraft = localStorage.getItem("dji_form_draft_panel");
     if (savedDraft) {
       try {
         const parsed = JSON.parse(savedDraft);
@@ -380,22 +642,24 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       }
     }
 
-    const savedHeader = localStorage.getItem('dji_form_header');
+    const savedHeader = localStorage.getItem("dji_form_header");
     if (savedHeader) {
       try {
         const parsed = JSON.parse(savedHeader);
-        Object.keys(parsed).forEach(key => {
-          if (key === 'lastRollNo') {
+        Object.keys(parsed).forEach((key) => {
+          if (key === "lastRollNo") {
             const rollVal = parsed[key];
             if (rollVal) {
-              const currentPcs = [{
-                pcsIndex: "1",
-                jmlHasilProduksi: "1",
-                indikatorStop: false,
-                kategoriMasalah: [],
-                detailMasalah: "",
-                keteranganCacat: "",
-              }];
+              const currentPcs = [
+                {
+                  pcsIndex: "1",
+                  jmlHasilProduksi: "1",
+                  indikatorStop: false,
+                  kategoriMasalah: [],
+                  detailMasalah: "",
+                  keteranganCacat: "",
+                },
+              ];
               setValue("pcsData", currentPcs);
             }
           } else {
@@ -414,7 +678,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   useEffect(() => {
     if (isEdit) return;
     const subscription = watch((value) => {
-      localStorage.setItem('dji_form_draft_panel', JSON.stringify(value));
+      localStorage.setItem("dji_form_draft_panel", JSON.stringify(value));
     });
     return () => subscription.unsubscribe();
   }, [watch, isEdit]);
@@ -423,17 +687,24 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
   const watchNomorMc = watch("nomorMc");
   // Fetch the next panelNo when potonganKe or nomorMc changes
   useEffect(() => {
-    if (isEdit || !watchPotonganKe || isNaN(parseInt(watchPotonganKe)) || !watchNomorMc) {
+    if (
+      isEdit ||
+      !watchPotonganKe ||
+      isNaN(parseInt(watchPotonganKe)) ||
+      !watchNomorMc
+    ) {
       return;
     }
     const timeoutId = setTimeout(async () => {
       try {
-        const res = await getLastPanelNoByPotongan(parseInt(watchPotonganKe), watchNomorMc);
+        const res = await getLastPanelNoByPotongan(
+          parseInt(watchPotonganKe),
+          watchNomorMc,
+        );
         if (res.success && res.nextPanelNo) {
           setValue("panelNo", res.nextPanelNo.toString());
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     }, 600);
     return () => clearTimeout(timeoutId);
   }, [watchPotonganKe, watchNomorMc, setValue, isEdit]);
@@ -442,17 +713,35 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    let adjustedMsg = "";
+    if (timerStopRef && firstProblemTime) {
+      const now = Date.now();
+      const gapSeconds = (now - timerStopRef) / 1000;
+      if (gapSeconds > 20) {
+        const actualDowntime = Math.ceil((now - firstProblemTime) / 1000);
+        const oldDowntime = data.totalDowntime || "0";
+        data.totalDowntime = String(actualDowntime);
+        setValue("totalDowntime", String(actualDowntime), {
+          shouldValidate: true,
+          shouldDirty: true,
+        });
+        adjustedMsg = `Waktu downtime otomatis disesuaikan dari ${oldDowntime} detik menjadi ${actualDowntime} detik karena jeda pengiriman form lebih dari 20 detik.`;
+      }
+    }
+
     // Generate idempotency key
     data.idempotencyKey = crypto.randomUUID();
 
     // Check if operatorId is in activeOperators
-    const isValidOperator = activeOperators.some((op: any) => op.id.toString() === data.operatorId);
+    const isValidOperator = activeOperators.some(
+      (op: any) => op.id.toString() === data.operatorId,
+    );
     if (!isValidOperator) {
       setErrorMsg("Silakan pilih operator yang sesuai dengan shift.");
       setIsSubmitting(false);
       return;
     }
-    
+
     // Ambil nama operator dan simpan ke PIC
     data.pic = getOperatorName(data.operatorId) || "";
     data.grupName = getGroupName(data.groupId);
@@ -461,20 +750,23 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
 
     // Gabungkan detailMasalahMap ke spesifikMasalah, dan set detailMasalah ke nama kategori lengkap
     if (data.pcsData) {
-      data.pcsData.forEach(pcs => {
+      data.pcsData.forEach((pcs) => {
         if (pcs.indikatorStop && pcs.kategoriMasalah && pcs.detailMasalahMap) {
           const detailNames = pcs.kategoriMasalah
-            .map(cat => NEW_PROBLEM_CATEGORIES.find(c => c.id === cat)?.name || cat)
-            .join(', ');
-          
+            .map(
+              (cat) =>
+                NEW_PROBLEM_CATEGORIES.find((c) => c.id === cat)?.name || cat,
+            )
+            .join(", ");
+
           const combinedSpesifik = pcs.kategoriMasalah
-            .map(cat => {
+            .map((cat) => {
               const details = pcs.detailMasalahMap?.[cat];
-              return Array.isArray(details) ? details.join(', ') : details;
+              return Array.isArray(details) ? details.join(", ") : details;
             })
             .filter(Boolean)
-            .join(', ');
-            
+            .join(", ");
+
           pcs.detailMasalah = detailNames || null;
           pcs.spesifikMasalah = combinedSpesifik || null;
         }
@@ -516,14 +808,18 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       potonganKe: data.potonganKe,
       nextPanelNo, // we store the next available panel no
     };
-    localStorage.setItem('dji_form_header', JSON.stringify(headerDataToSave));
+    localStorage.setItem("dji_form_header", JSON.stringify(headerDataToSave));
 
     try {
       if (!navigator.onLine) {
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("employee", data);
-        localStorage.removeItem('dji_form_draft_panel');
-        setSuccessData({ ...data, isOfflineSaved: true } as any);
+        localStorage.removeItem("dji_form_draft_panel");
+        setSuccessData({
+          ...data,
+          isOfflineSaved: true,
+          autoAdjustedDowntimeMsg: adjustedMsg,
+        } as any);
         return;
       }
 
@@ -533,22 +829,34 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       } else {
         result = await createProductionReport(data);
       }
-      
+
       if (result.success) {
-        localStorage.removeItem('dji_form_draft_panel');
-        setSuccessData({ ...data, id: isEdit ? initialData.id : (result as any).productionId });
+        localStorage.removeItem("dji_form_draft_panel");
+        setSuccessData({
+          ...data,
+          id: isEdit ? initialData.id : (result as any).productionId,
+          autoAdjustedDowntimeMsg: adjustedMsg,
+        } as any);
       } else {
         setErrorMsg(result.error || "Gagal menyimpan laporan produksi rajut.");
       }
     } catch (err: any) {
-      if (err.message?.includes("fetch") || err.message?.includes("Network") || !navigator.onLine) {
-         const { addPendingPayload } = await import("@/lib/offline-store");
-         await addPendingPayload("employee", data);
-         localStorage.removeItem('dji_form_draft_panel');
-         setSuccessData({ ...data, isOfflineSaved: true } as any);
+      if (
+        err.message?.includes("fetch") ||
+        err.message?.includes("Network") ||
+        !navigator.onLine
+      ) {
+        const { addPendingPayload } = await import("@/lib/offline-store");
+        await addPendingPayload("employee", data);
+        localStorage.removeItem("dji_form_draft_panel");
+        setSuccessData({
+          ...data,
+          isOfflineSaved: true,
+          autoAdjustedDowntimeMsg: adjustedMsg,
+        } as any);
       } else {
-         console.error("Uncaught exception in onSubmit:", err);
-         setErrorMsg(`Terjadi kesalahan sistem: ${err.message || err}`);
+        console.error("Uncaught exception in onSubmit:", err);
+        setErrorMsg(`Terjadi kesalahan sistem: ${err.message || err}`);
       }
     } finally {
       setIsSubmitting(false);
@@ -557,8 +865,8 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
 
   const handleClearHeader = () => {
     if (window.confirm("Yakin ingin mereset/mengosongkan data Header?")) {
-      localStorage.removeItem('dji_form_header');
-      localStorage.removeItem('dji_form_draft_panel');
+      localStorage.removeItem("dji_form_header");
+      localStorage.removeItem("dji_form_draft_panel");
       reset({
         ...watch(), // Keep current panel inputs
         nomorMc: "",
@@ -575,14 +883,16 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
         potonganKe: "",
         panelNo: "1",
         totalDowntime: "",
-        pcsData: [{
-          pcsIndex: "1",
-          jmlHasilProduksi: "",
-          indikatorStop: false,
-          kategoriMasalah: [],
-          detailMasalah: "",
-          keteranganCacat: "",
-        }]
+        pcsData: [
+          {
+            pcsIndex: "1",
+            jmlHasilProduksi: "",
+            indikatorStop: false,
+            kategoriMasalah: [],
+            detailMasalah: "",
+            keteranganCacat: "",
+          },
+        ],
       });
       setIsLastPanel(false);
       setIsHeaderModalOpen(true);
@@ -595,17 +905,17 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       router.push("/history");
       return;
     }
-    
+
     const wasLastPanel = !!successData?.tanggalPotong;
 
     setSuccessData(null);
-    const savedHeader = localStorage.getItem('dji_form_header');
+    const savedHeader = localStorage.getItem("dji_form_header");
     let nextPanelNo = "1";
     if (savedHeader) {
       try {
         const parsed = JSON.parse(savedHeader);
         if (parsed.nextPanelNo) nextPanelNo = parsed.nextPanelNo;
-      } catch(e) {}
+      } catch (e) {}
     }
     const currentPcsData = watch("pcsData") || [];
     const newPcsData = currentPcsData.map((pcs, index) => ({
@@ -618,24 +928,37 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
     }));
 
     const currentPotongan = parseInt(watch("potonganKe") || "0");
-    const nextPotongan = wasLastPanel && !isNaN(currentPotongan) ? String(currentPotongan + 1) : watch("potonganKe");
+    const nextPotongan =
+      wasLastPanel && !isNaN(currentPotongan)
+        ? String(currentPotongan + 1)
+        : watch("potonganKe");
 
     reset({
       ...watch(),
       potonganKe: nextPotongan,
       panelNo: nextPanelNo,
-      pcsData: newPcsData.length > 0 ? newPcsData : [{
-        pcsIndex: "1",
-        jmlHasilProduksi: "1",
-        indikatorStop: false,
-        kategoriMasalah: [],
-        detailMasalah: "",
-        keteranganCacat: "",
-      }],
+      pcsData:
+        newPcsData.length > 0
+          ? newPcsData
+          : [
+              {
+                pcsIndex: "1",
+                jmlHasilProduksi: "1",
+                indikatorStop: false,
+                kategoriMasalah: [],
+                detailMasalah: "",
+                keteranganCacat: "",
+              },
+            ],
       totalDowntime: "",
       tanggalPotong: "",
     });
     setIsLastPanel(false);
+    setIsTimerRunning(false);
+    setTimerStartRef(null);
+    setTimerStopRef(null);
+    setFirstProblemTime(null);
+    setLiveTimerSeconds(0);
     setPreviews({ before: null, after: null });
 
     if (wasLastPanel) {
@@ -643,23 +966,48 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       setHighlightPotonganKe(true);
     }
   };
-  
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after') => {
+
+  const currentTourStep = PANEL_TOUR_STEPS[tourStepIndex];
+  const isLastTourStep = tourStepIndex === PANEL_TOUR_STEPS.length - 1;
+  const viewportHeight =
+    typeof window !== "undefined" ? window.innerHeight : 768;
+  const viewportWidth =
+    typeof window !== "undefined" ? window.innerWidth : 1024;
+  const tourCardTop = tourRect
+    ? Math.min(
+        Math.max(tourRect.top + tourRect.height + 16, 16),
+        Math.max(viewportHeight - 260, 16),
+      )
+    : 96;
+  const tourCardLeft = tourRect
+    ? Math.min(Math.max(tourRect.left, 16), Math.max(viewportWidth - 368, 16))
+    : 16;
+
+  const handlePhotoUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: "before" | "after",
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      setIsUploading(prev => ({ ...prev, [type]: true }));
+      setIsUploading((prev) => ({ ...prev, [type]: true }));
       setErrorMsg(null);
 
       const compressedFile = await compressImage(file);
       const objectUrl = URL.createObjectURL(compressedFile);
-      setPreviews(prev => ({ ...prev, [type]: objectUrl }));
+      setPreviews((prev) => ({ ...prev, [type]: objectUrl }));
 
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
-        await new Promise(r => setTimeout(r, 1000));
-        setValue(type === 'before' ? 'fotoBefore' : 'fotoAfter', `mock_url_${type}_${Date.now()}`);
-        setIsUploading(prev => ({ ...prev, [type]: false }));
+      if (
+        !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")
+      ) {
+        await new Promise((r) => setTimeout(r, 1000));
+        setValue(
+          type === "before" ? "fotoBefore" : "fotoAfter",
+          `mock_url_${type}_${Date.now()}`,
+        );
+        setIsUploading((prev) => ({ ...prev, [type]: false }));
         return;
       }
 
@@ -671,433 +1019,651 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
         throw new Error(uploadResult.error || "Gagal mengunggah foto.");
       }
 
-      setValue(type === 'before' ? 'fotoBefore' : 'fotoAfter', uploadResult.publicUrl);
+      setValue(
+        type === "before" ? "fotoBefore" : "fotoAfter",
+        uploadResult.publicUrl,
+      );
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       setErrorMsg(`Gagal mengunggah foto ${type}: ${errorMessage}`);
-      setPreviews(prev => ({ ...prev, [type]: null }));
+      setPreviews((prev) => ({ ...prev, [type]: null }));
     } finally {
-      setIsUploading(prev => ({ ...prev, [type]: false }));
+      setIsUploading((prev) => ({ ...prev, [type]: false }));
     }
   };
 
-  const removePhoto = (type: 'before' | 'after') => {
-    setPreviews(prev => ({ ...prev, [type]: null }));
-    setValue(type === 'before' ? 'fotoBefore' : 'fotoAfter', null);
+  const removePhoto = (type: "before" | "after") => {
+    setPreviews((prev) => ({ ...prev, [type]: null }));
+    setValue(type === "before" ? "fotoBefore" : "fotoAfter", null);
   };
 
-  const getOperatorName = (id: string) => operators.find(o => o.id.toString() === id)?.name || id;
-  const getGroupName = (id: string) => groups.find(g => g.id.toString() === id)?.name || `Grup ${id}`;
-  const getDesignName = (id: string) => designs.find(d => d.id.toString() === id)?.name || id;
+  const getOperatorName = (id: string) =>
+    operators.find((o) => o.id.toString() === id)?.name || id;
+  const getGroupName = (id: string) =>
+    groups.find((g) => g.id.toString() === id)?.name || `Grup ${id}`;
+  const getDesignName = (id: string) =>
+    designs.find((d) => d.id.toString() === id)?.name || id;
 
   return (
     <div className="w-full bg-gradient-to-br from-blue-50/40 via-white to-white border border-[#e9ecef] rounded-[24px] p-6 sm:p-8 shadow-[0_8px_30px_rgba(0,112,188,0.06)] text-slate-800 relative overflow-hidden">
       {/* Decorative background shape */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
-      
+
       <div className="relative z-10">
-      {/* Segmented Control for Mode Switching */}
-      <div className="flex bg-slate-100/80 p-1.5 rounded-2xl mb-8 border border-slate-200/60 shadow-inner">
-        <div className="flex-1 flex items-center justify-center py-3.5 rounded-xl bg-white shadow-sm border border-slate-200 text-[#0070bc] relative overflow-hidden group cursor-default">
-          <div className="absolute inset-0 bg-blue-50/50 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-          <div className="relative flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-              <Box className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col items-start">
-              <span className="text-sm font-black uppercase tracking-wider leading-none">Panel</span>
-              <span className="text-[10px] font-bold text-slate-400 mt-0.5">Input per Potongan</span>
-            </div>
-          </div>
-        </div>
-        <a href="/input-meter" className="flex-1 flex items-center justify-center py-3.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-white/60 transition-all cursor-pointer">
-          <div className="flex items-center gap-2.5 opacity-70 hover:opacity-100 transition-opacity">
-            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600">
-              <ClipboardList className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col items-start">
-              <span className="text-sm font-bold uppercase tracking-wider leading-none">Kontinu (Meteran)</span>
-              <span className="text-[10px] font-medium text-slate-400 mt-0.5">Input per Roll</span>
-            </div>
-          </div>
-        </a>
-      </div>
-      {/* Top Header */}
-      <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6 gap-4">
-        <div>
-          <h3 className="text-base font-bold text-slate-900">Form Input Produksi (Operator)</h3>
-          <p className="text-xs text-slate-400 font-normal mt-1">
-            Data Header akan otomatis tersimpan untuk panel berikutnya.
-          </p>
-        </div>
-        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-medium transition-colors ${isDbConnected
-          ? "bg-slate-50 text-slate-600 border-slate-200"
-          : "bg-amber-50 text-amber-700 border-amber-200"
-          }`}>
-          <Database className={`w-3 h-3 ${isDbConnected ? "text-slate-400" : "text-amber-500 animate-spin"}`} strokeWidth={2} />
-          {isDbConnected ? "Database Terhubung" : "Mode Offline"}
-        </div>
-      </div>
-
-
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-5 sm:p-6">
-          
-          <HeaderSummaryCard
-            operatorName={activeOperators.find(op => op.id.toString() === watch("operatorId"))?.name || ""}
-            shiftName={activeShiftName}
-            nomorMc={watch("nomorMc") || ""}
-            design={watch("designId") || ""}
-            statusMatching={watch("statusMatching") || ""}
-            potonganKe={watch("potonganKe")}
-            onEdit={() => setIsHeaderModalOpen(true)}
-          />
-
-          <ProductionHeaderModal
-            isOpen={isHeaderModalOpen}
-            onClose={() => {
-              setIsHeaderModalOpen(false);
-              setHighlightPotonganKe(false);
-            }}
-            register={register}
-            errors={errors}
-            watch={watch}
-            groups={groups}
-            operators={activeOperators}
-            activeShiftName={activeShiftName}
-            onClearHeader={handleClearHeader}
-            highlightPotonganKe={highlightPotonganKe}
-          />
-
-
-
-          {/* Data Panel Umum */}
-          <div className="mt-8 p-6 bg-slate-50 border-2 border-slate-200 rounded-2xl relative shadow-md">
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-slate-500 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md">
-              Info Panel Otomatis
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-3">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-2">
-                  No. Panel (PNL NO) Saat Ini
-                </label>
-                <input 
-                  type="text" 
-                  {...register("panelNo")} 
-                  className="h-12 px-5 rounded-xl bg-slate-100 border-2 border-slate-200 text-base font-bold text-slate-500 cursor-not-allowed outline-none transition-all shadow-inner" 
-                  placeholder="Terisi otomatis..." 
-                  readOnly
-                />
-                {errors.panelNo && <span className="text-red-500 text-[10px] font-bold">{errors.panelNo.message}</span>}
+        {/* Segmented Control for Mode Switching */}
+        <div
+          data-tour="mode-switch"
+          className="flex bg-slate-100/80 p-1.5 rounded-2xl mb-8 border border-slate-200/60 shadow-inner"
+        >
+          <div className="flex-1 flex items-center justify-center py-3.5 rounded-xl bg-white shadow-sm border border-slate-200 text-[#0070bc] relative overflow-hidden group cursor-default">
+            <div className="absolute inset-0 bg-blue-50/50 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+            <div className="relative flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                <Box className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-sm font-black uppercase tracking-wider leading-none">
+                  Panel
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 mt-0.5">
+                  Input per Potongan
+                </span>
               </div>
             </div>
           </div>
-
-          {/* ARRAY OF PCS */}
-          <div className="mt-8">
-            <div className="text-center mb-6">
-              <h4 className="text-sm font-bold text-slate-700">Detail per PCS</h4>
+          <a
+            href="/input-meter"
+            className="flex-1 flex items-center justify-center py-3.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-white/60 transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 opacity-70 hover:opacity-100 transition-opacity">
+              <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600">
+                <ClipboardList className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-sm font-bold uppercase tracking-wider leading-none">
+                  Kontinu (Meteran)
+                </span>
+                <span className="text-[10px] font-medium text-slate-400 mt-0.5">
+                  Input per Roll
+                </span>
+              </div>
             </div>
-
-            <div className="space-y-6">
-              {fields.map((field, index) => {
-                const watchIndikator = watch(`pcsData.${index}.indikatorStop` as any);
-                return (
-                  <div key={field.id} className="border-t-2 border-slate-200/60 relative pt-6 pb-2">
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-3 py-0.5 text-[10px] font-bold text-sky-500 uppercase tracking-widest border border-slate-200 rounded-full flex gap-3 items-center shadow-sm">
-                      <span>PCS Ke-{index + 1}</span>
-                      {fields.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => remove(index)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded-full transition-colors"
-                          title="Hapus PCS"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-1 gap-5 mt-4">
-                      {/* Hidden Jml Hasil Produksi */}
-                      <input type="hidden" {...register(`pcsData.${index}.jmlHasilProduksi` as const)} />
-                    </div>
-
-                    <div className={`mt-4 border rounded-xl overflow-hidden transition-all duration-300 ${watchIndikator ? 'border-red-200 bg-red-50/20' : 'border-slate-200 bg-slate-50/50'}`}>
-                      <label className="flex items-center justify-between p-4 cursor-pointer select-none">
-                        <div className="flex items-center gap-3">
-                          <input 
-                            type="checkbox" 
-                            {...register(`pcsData.${index}.indikatorStop` as const)} 
-                            onChange={(e) => {
-                              register(`pcsData.${index}.indikatorStop` as const).onChange(e);
-                              if (e.target.checked) {
-                                if (!isTimerRunning) handleStartTimer();
-                              } else {
-                                setTimeout(() => {
-                                  const currentPcsData = getValues("pcsData") || [];
-                                  if (!currentPcsData.some(p => p.indikatorStop)) {
-                                    if (isTimerRunning) {
-                                      setIsTimerRunning(false);
-                                      setTimerStartRef(null);
-                                      setLiveTimerSeconds(0);
-                                    }
-                                    setValue("totalDowntime", "");
-                                  }
-                                }, 10);
-                              }
-                            }}
-                            className="w-5 h-5 rounded text-red-600 focus:ring-red-500 border-slate-300 cursor-pointer" 
-                          />
-                          <div>
-                            <h5 className={`text-sm font-bold ${watchIndikator ? 'text-red-650' : 'text-slate-600'}`}>Terdapat Cacat / Kendala pada PCS ini?</h5>
-                          </div>
-                        </div>
-                      </label>
-
-                      {watchIndikator && (
-                        <div className="p-4 border-t border-red-100/50 space-y-4 animate-fadeIn">
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-bold text-red-600 uppercase">Kategori Masalah (Pilih lebih dari 1)</label>
-                            <div className="flex flex-col gap-2 mt-1">
-                              {NEW_PROBLEM_CATEGORIES.map(c => {
-                                const isChecked = watch(`pcsData.${index}.kategoriMasalah`)?.includes(c.id);
-                                return (
-                                  <div key={c.id} className="flex flex-col gap-2 p-3 bg-white border border-red-100 rounded-lg shadow-sm">
-                                    <label className="flex items-center gap-2 cursor-pointer hover:text-red-500 transition-colors">
-                                      <input 
-                                        type="checkbox" 
-                                        value={c.id} 
-                                        {...register(`pcsData.${index}.kategoriMasalah` as const)} 
-                                        className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500" 
-                                      />
-                                      <span className="text-xs font-bold text-slate-700">{c.name}</span>
-                                    </label>
-
-                                    {isChecked && (
-                                      <div className="pl-6 animate-fadeIn mt-2">
-                                        <div className="w-full rounded-md bg-white border border-red-200 overflow-hidden flex flex-col shadow-inner">
-                                          <div className="px-3 py-1.5 bg-slate-50 border-b border-red-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                            Pilih Detail Masalah
-                                          </div>
-                                          <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                                            {NEW_PROBLEMS[c.id]?.map(p => {
-                                              const currentSelections = watch(`pcsData.${index}.detailMasalahMap.${c.id}`) || [];
-                                              const isSelected = Array.isArray(currentSelections) ? currentSelections.includes(p) : currentSelections === p;
-                                              return (
-                                                <label 
-                                                  key={p} 
-                                                  className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${
-                                                    isSelected ? 'bg-red-50 text-red-700 font-bold' : 'hover:bg-slate-50 text-slate-600'
-                                                  }`}
-                                                >
-                                                  <input 
-                                                    type="checkbox"
-                                                    value={p}
-                                                    {...register(`pcsData.${index}.detailMasalahMap.${c.id}` as const)}
-                                                    className="hidden"
-                                                  />
-                                                  <span>{p}</span>
-                                                  {isSelected && <CheckCircle2 className="w-4 h-4 text-red-500 shrink-0 ml-2" />}
-                                                </label>
-                                              )
-                                            })}
-                                          </div>
-                                        </div>
-                                        {errors.pcsData?.[index]?.detailMasalahMap?.[c.id] && (
-                                          <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                                            {errors.pcsData[index]?.detailMasalahMap?.[c.id]?.message}
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            {errors.pcsData?.[index]?.kategoriMasalah && (
-                              <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                                {errors.pcsData[index]?.kategoriMasalah?.message}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="mt-6 flex justify-center">
-              <button
-                type="button"
-                onClick={() => append({
-                  pcsIndex: String(fields.length + 1),
-                  jmlHasilProduksi: "1",
-                  indikatorStop: false,
-                  kategoriMasalah: [],
-                  detailMasalah: "",
-                  keteranganCacat: "",
-                })}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition-all shadow-sm"
-              >
-                <Plus className="w-4 h-4 text-slate-400" />
-                Tambah PCS Baru
-              </button>
-            </div>
+          </a>
+        </div>
+        {/* Top Header */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-slate-100 pb-4 mb-6 gap-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">
+              Form Input Produksi
+            </h3>
+            <p className="text-xs text-slate-400 font-normal mt-1">
+              Data Header akan otomatis tersimpan untuk panel berikutnya.
+            </p>
+          </div>
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-medium transition-colors self-start sm:self-auto ${
+              isDbConnected
+                ? "bg-slate-50 text-slate-600 border-slate-200"
+                : "bg-amber-50 text-amber-700 border-amber-200"
+            }`}
+          >
+            <Database
+              className={`w-3 h-3 ${isDbConnected ? "text-slate-400" : "text-amber-500 animate-spin"}`}
+              strokeWidth={2}
+            />
+            {isDbConnected ? "Database Terhubung" : "Mode Offline"}
           </div>
         </div>
 
-        {/* Global Downtime Input */}
-        {watch("pcsData")?.some((pcs) => pcs.indikatorStop) && (
-          <div className="p-5 bg-orange-50 border border-orange-200 rounded-2xl shadow-sm mb-6">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-orange-800 uppercase flex items-center gap-2">
-                Total Estimasi Waktu Mesin Berhenti (Downtime)
-              </label>
-              <p className="text-[10px] text-orange-600">
-                Waktu henti mesin akan tercatat otomatis saat timer berjalan.
-              </p>
-              <div className="relative flex items-center gap-4 mt-2">
-                <div className="relative w-32 shrink-0">
-                  <input 
-                    type="number" 
-                    {...register("totalDowntime")} 
-                    className="w-full h-14 pl-4 pr-12 rounded-2xl bg-white/50 border-2 border-orange-200 text-xl font-black text-orange-700 focus:outline-none transition-all shadow-inner cursor-not-allowed" 
-                    placeholder="0" 
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-5 sm:p-6">
+            <div data-tour="header-summary">
+              <HeaderSummaryCard
+                operatorName={
+                  activeOperators.find(
+                    (op) => op.id.toString() === watch("operatorId"),
+                  )?.name || ""
+                }
+                shiftName={activeShiftName}
+                nomorMc={watch("nomorMc") || ""}
+                design={watch("designId") || ""}
+                statusMatching={watch("statusMatching") || ""}
+                potonganKe={watch("potonganKe")}
+                onEdit={() => setIsHeaderModalOpen(true)}
+              />
+            </div>
+
+            <ProductionHeaderModal
+              isOpen={isHeaderModalOpen}
+              onClose={() => {
+                setIsHeaderModalOpen(false);
+                setHighlightPotonganKe(false);
+              }}
+              register={register}
+              errors={errors}
+              watch={watch}
+              groups={groups}
+              operators={activeOperators}
+              activeShiftName={activeShiftName}
+              onClearHeader={handleClearHeader}
+              highlightPotonganKe={highlightPotonganKe}
+            />
+
+            {/* Data Panel Umum */}
+            <div
+              data-tour="panel-info"
+              className="mt-8 p-6 bg-slate-50 border-2 border-slate-200 rounded-2xl relative shadow-md"
+            >
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-slate-500 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md">
+                Info Panel Otomatis
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-3">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-2">
+                    No. Panel (PNL NO) Saat Ini
+                  </label>
+                  <input
+                    type="text"
+                    {...register("panelNo")}
+                    className="h-12 px-5 rounded-xl bg-slate-100 border-2 border-slate-200 text-base font-bold text-slate-500 cursor-not-allowed outline-none transition-all shadow-inner"
+                    placeholder="Terisi otomatis..."
                     readOnly
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-500 text-[10px] font-bold uppercase">Detik</span>
-                </div>
-                
-                {/* Timer Controls */}
-                <div className="flex-1">
-                  {!isTimerRunning ? (
-                    <button
-                      type="button"
-                      onClick={handleStartTimer}
-                      className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
-                    >
-                      <Play className="w-5 h-5 fill-current" />
-                      Mulai Timer
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleStopTimer}
-                      className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-red-500/20 animate-pulse active:scale-[0.98]"
-                    >
-                      <Square className="w-5 h-5 fill-current" />
-                      Stop ({formatTimer(liveTimerSeconds)})
-                    </button>
+                  {errors.panelNo && (
+                    <span className="text-red-500 text-[10px] font-bold">
+                      {errors.panelNo.message}
+                    </span>
                   )}
                 </div>
               </div>
-              {errors.totalDowntime && (
-                <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                  {errors.totalDowntime.message}
-                </span>
-              )}
+            </div>
+
+            {/* ARRAY OF PCS */}
+            <div data-tour="pcs-detail" className="mt-8">
+              <div className="text-center mb-6">
+                <h4 className="text-sm font-bold text-slate-700">
+                  Detail per PCS
+                </h4>
+              </div>
+
+              <div className="space-y-6">
+                {fields.map((field, index) => {
+                  const watchIndikator = watch(
+                    `pcsData.${index}.indikatorStop` as any,
+                  );
+                  return (
+                    <div
+                      key={field.id}
+                      className="border-t-2 border-slate-200/60 relative pt-6 pb-2"
+                    >
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-3 py-0.5 text-[10px] font-bold text-sky-500 uppercase tracking-widest border border-slate-200 rounded-full flex gap-3 items-center shadow-sm">
+                        <span>PCS Ke-{index + 1}</span>
+                        {fields.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => remove(index)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded-full transition-colors"
+                            title="Hapus PCS"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-1 gap-5 mt-4">
+                        {/* Hidden Jml Hasil Produksi */}
+                        <input
+                          type="hidden"
+                          {...register(
+                            `pcsData.${index}.jmlHasilProduksi` as const,
+                          )}
+                        />
+                      </div>
+
+                      <div
+                        className={`mt-4 border rounded-xl overflow-hidden transition-all duration-300 ${watchIndikator ? "border-red-200 bg-red-50/20" : "border-slate-200 bg-slate-50/50"}`}
+                      >
+                        <label className="flex items-center justify-between p-4 cursor-pointer select-none">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              {...register(
+                                `pcsData.${index}.indikatorStop` as const,
+                              )}
+                              onChange={(e) => {
+                                register(
+                                  `pcsData.${index}.indikatorStop` as const,
+                                ).onChange(e);
+                                if (e.target.checked) {
+                                  if (!isTimerRunning) handleStartTimer();
+                                } else {
+                                  setTimeout(() => {
+                                    const currentPcsData =
+                                      getValues("pcsData") || [];
+                                    if (
+                                      !currentPcsData.some(
+                                        (p) => p.indikatorStop,
+                                      )
+                                    ) {
+                                      setIsTimerRunning(false);
+                                      setTimerStartRef(null);
+                                      setTimerStopRef(null);
+                                      setFirstProblemTime(null);
+                                      setLiveTimerSeconds(0);
+                                      setValue("totalDowntime", "");
+                                    }
+                                  }, 10);
+                                }
+                              }}
+                              className="w-5 h-5 rounded text-red-600 focus:ring-red-500 border-slate-300 cursor-pointer"
+                            />
+                            <div>
+                              <h5
+                                className={`text-sm font-bold ${watchIndikator ? "text-red-650" : "text-slate-600"}`}
+                              >
+                                Terdapat Cacat / Kendala pada PCS ini?
+                              </h5>
+                            </div>
+                          </div>
+                        </label>
+
+                        {watchIndikator && (
+                          <div className="p-4 border-t border-red-100/50 space-y-4 animate-fadeIn">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[10px] font-bold text-red-600 uppercase">
+                                Kategori Masalah (Pilih lebih dari 1)
+                              </label>
+                              <div className="flex flex-col gap-2 mt-1">
+                                {NEW_PROBLEM_CATEGORIES.map((c) => {
+                                  const isChecked = watch(
+                                    `pcsData.${index}.kategoriMasalah`,
+                                  )?.includes(c.id);
+                                  return (
+                                    <div
+                                      key={c.id}
+                                      className="flex flex-col gap-2 p-3 bg-white border border-red-100 rounded-lg shadow-sm"
+                                    >
+                                      <label className="flex items-center gap-2 cursor-pointer hover:text-red-500 transition-colors">
+                                        <input
+                                          type="checkbox"
+                                          value={c.id}
+                                          {...register(
+                                            `pcsData.${index}.kategoriMasalah` as const,
+                                          )}
+                                          className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500"
+                                        />
+                                        <span className="text-xs font-bold text-slate-700">
+                                          {c.name}
+                                        </span>
+                                      </label>
+
+                                      {isChecked && (
+                                        <div className="pl-6 animate-fadeIn mt-2">
+                                          <div className="w-full rounded-md bg-white border border-red-200 overflow-hidden flex flex-col shadow-inner">
+                                            <div className="px-3 py-1.5 bg-slate-50 border-b border-red-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                              Pilih Detail Masalah
+                                            </div>
+                                            <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                                              {NEW_PROBLEMS[c.id]?.map((p) => {
+                                                const currentSelections =
+                                                  watch(
+                                                    `pcsData.${index}.detailMasalahMap.${c.id}`,
+                                                  ) || [];
+                                                const isSelected =
+                                                  Array.isArray(
+                                                    currentSelections,
+                                                  )
+                                                    ? currentSelections.includes(
+                                                        p,
+                                                      )
+                                                    : currentSelections === p;
+                                                return (
+                                                  <label
+                                                    key={p}
+                                                    className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${
+                                                      isSelected
+                                                        ? "bg-red-50 text-red-700 font-bold"
+                                                        : "hover:bg-slate-50 text-slate-600"
+                                                    }`}
+                                                  >
+                                                    <input
+                                                      type="checkbox"
+                                                      value={p}
+                                                      {...register(
+                                                        `pcsData.${index}.detailMasalahMap.${c.id}` as const,
+                                                      )}
+                                                      className="hidden"
+                                                    />
+                                                    <span>{p}</span>
+                                                    {isSelected && (
+                                                      <CheckCircle2 className="w-4 h-4 text-red-500 shrink-0 ml-2" />
+                                                    )}
+                                                  </label>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                          {errors.pcsData?.[index]
+                                            ?.detailMasalahMap?.[c.id] && (
+                                            <span className="text-red-500 text-[10px] font-bold mt-1 block">
+                                              {
+                                                errors.pcsData[index]
+                                                  ?.detailMasalahMap?.[c.id]
+                                                  ?.message
+                                              }
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {errors.pcsData?.[index]?.kategoriMasalah && (
+                                <span className="text-red-500 text-[10px] font-bold mt-1 block">
+                                  {
+                                    errors.pcsData[index]?.kategoriMasalah
+                                      ?.message
+                                  }
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() =>
+                    append({
+                      pcsIndex: String(fields.length + 1),
+                      jmlHasilProduksi: "1",
+                      indikatorStop: false,
+                      kategoriMasalah: [],
+                      detailMasalah: "",
+                      keteranganCacat: "",
+                    })
+                  }
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition-all shadow-sm"
+                >
+                  <Plus className="w-4 h-4 text-slate-400" />
+                  Tambah PCS Baru
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Global Downtime Input */}
+          {watch("pcsData")?.some((pcs) => pcs.indikatorStop) && (
+            <div
+              data-tour="downtime"
+              className="p-5 bg-orange-50 border border-orange-200 rounded-2xl shadow-sm mb-6"
+            >
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-orange-800 uppercase flex items-center gap-2">
+                  Total Estimasi Waktu Mesin Berhenti (Downtime)
+                </label>
+                <p className="text-[10px] text-orange-600">
+                  Waktu henti mesin akan tercatat otomatis saat timer berjalan.
+                </p>
+                <div className="relative flex items-center gap-4 mt-2">
+                  <div className="relative w-32 shrink-0">
+                    <input
+                      type="number"
+                      {...register("totalDowntime")}
+                      className="w-full h-14 pl-4 pr-12 rounded-2xl bg-white/50 border-2 border-orange-200 text-xl font-black text-orange-700 focus:outline-none transition-all shadow-inner cursor-not-allowed"
+                      placeholder="0"
+                      readOnly
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-500 text-[10px] font-bold uppercase">
+                      Detik
+                    </span>
+                  </div>
+
+                  {/* Timer Controls */}
+                  <div className="flex-1">
+                    {!isTimerRunning ? (
+                      <button
+                        type="button"
+                        onClick={handleStartTimer}
+                        className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
+                      >
+                        <Play className="w-5 h-5 fill-current" />
+                        Mulai Timer
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleStopTimer}
+                        className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-red-500/20 animate-pulse active:scale-[0.98]"
+                      >
+                        <Square className="w-5 h-5 fill-current" />
+                        Stop ({formatTimer(liveTimerSeconds)})
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {errors.totalDowntime && (
+                  <span className="text-red-500 text-[10px] font-bold mt-1 block">
+                    {errors.totalDowntime.message}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Potong Kain Toggle */}
+          <div
+            data-tour="cut-panel"
+            className={`p-5 border rounded-2xl transition-all duration-300 mb-6 ${isLastPanel ? "bg-sky-50 border-sky-300 shadow-sm" : "bg-slate-50 border-slate-200"}`}
+          >
+            <label className="flex items-center justify-between cursor-pointer select-none">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={isLastPanel}
+                  onChange={(e) => {
+                    setIsLastPanel(e.target.checked);
+                    if (e.target.checked) {
+                      setValue(
+                        "tanggalPotong",
+                        new Date().toISOString().split("T")[0],
+                      );
+                    } else {
+                      setValue("tanggalPotong", "");
+                    }
+                  }}
+                  className="w-5 h-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
+                />
+                <div>
+                  <h5
+                    className={`text-sm font-bold ${isLastPanel ? "text-sky-700" : "text-slate-600"}`}
+                  >
+                    Potong Kain (Ini Panel Terakhir dalam Roll)
+                  </h5>
+                </div>
+              </div>
+            </label>
+
+            {isLastPanel && (
+              <div className="mt-4 pt-4 border-t border-sky-200/60 animate-fadeIn">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-sky-600 uppercase">
+                    Tanggal Potong
+                  </label>
+                  <input
+                    type="date"
+                    {...register("tanggalPotong")}
+                    className="h-10 px-3 rounded-lg bg-white border border-sky-200 text-sm font-semibold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none shadow-sm"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Kirim Button */}
+          <button
+            data-tour="submit-panel"
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full h-12 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md"
+          >
+            {isSubmitting ? (
+              <>
+                <RefreshCw className="w-5 h-5 animate-spin" /> Menyimpan...
+              </>
+            ) : (
+              <>
+                <Save className="w-5 h-5" />{" "}
+                {isEdit ? "Simpan Perubahan" : "Kirim Laporan Panel"}
+              </>
+            )}
+          </button>
+        </form>
+
+        {isTourOpen && currentTourStep && (
+          <div className="fixed inset-0 z-[70]">
+            <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[1px]" />
+            {tourRect && (
+              <div
+                className="absolute rounded-2xl border-2 border-sky-300 bg-white/10 shadow-[0_0_0_9999px_rgba(15,23,42,0.45),0_0_0_6px_rgba(14,165,233,0.18)] transition-all duration-200 pointer-events-none"
+                style={{
+                  top: Math.max(tourRect.top - 8, 8),
+                  left: Math.max(tourRect.left - 8, 8),
+                  width: tourRect.width + 16,
+                  height: tourRect.height + 16,
+                }}
+              />
+            )}
+            <div
+              className="absolute w-[calc(100vw-2rem)] max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 p-5"
+              style={{ top: tourCardTop, left: tourCardLeft }}
+            >
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">
+                    Step {tourStepIndex + 1} dari {PANEL_TOUR_STEPS.length}
+                  </p>
+                  <h4 className="text-base font-black text-slate-900 mt-1">
+                    {currentTourStep.title}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeTour}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors shrink-0"
+                  aria-label="Tutup tour"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                {currentTourStep.description}
+              </p>
+              <div className="flex items-center gap-2 mt-5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTourStepIndex((step) => Math.max(step - 1, 0))
+                  }
+                  disabled={tourStepIndex === 0}
+                  className="h-10 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Kembali
+                </button>
+                <button
+                  type="button"
+                  onClick={
+                    isLastTourStep
+                      ? closeTour
+                      : () => setTourStepIndex((step) => step + 1)
+                  }
+                  className="flex-1 h-10 px-4 rounded-xl bg-[#0070bc] hover:bg-[#004777] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  {isLastTourStep ? "Selesai" : "Lanjut"}
+                  {!isLastTourStep && <ArrowRight className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Potong Kain Toggle */}
-        <div className={`p-5 border rounded-2xl transition-all duration-300 mb-6 ${isLastPanel ? 'bg-sky-50 border-sky-300 shadow-sm' : 'bg-slate-50 border-slate-200'}`}>
-          <label className="flex items-center justify-between cursor-pointer select-none">
-            <div className="flex items-center gap-3">
-              <input 
-                type="checkbox" 
-                checked={isLastPanel}
-                onChange={(e) => {
-                  setIsLastPanel(e.target.checked);
-                  if (e.target.checked) {
-                    setValue("tanggalPotong", new Date().toISOString().split('T')[0]);
-                  } else {
-                    setValue("tanggalPotong", "");
-                  }
-                }}
-                className="w-5 h-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer" 
-              />
-              <div>
-                <h5 className={`text-sm font-bold ${isLastPanel ? 'text-sky-700' : 'text-slate-600'}`}>
-                  Potong Kain (Ini Panel Terakhir dalam Roll)
-                </h5>
+        {/* Modal Sukses */}
+        {successData && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn"
+            onClick={handleCloseSuccess}
+          >
+            <div
+              className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl flex flex-col items-center animate-scaleIn text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
+                <CheckCircle2 className="w-8 h-8" />
               </div>
+              <h4 className="text-lg font-bold text-slate-800">
+                {(successData as any).isOfflineSaved
+                  ? "Tersimpan Offline"
+                  : "Laporan Berhasil Disimpan"}
+              </h4>
+              <p className="text-xs text-slate-500 mt-1 mb-5">
+                {(successData as any).isOfflineSaved
+                  ? `Data Panel #${successData.panelNo} antre dikirim otomatis saat sinyal pulih.`
+                  : `Data laporan untuk Panel #${successData.panelNo} (Potongan ${successData.potonganKe}) telah terekam.`}
+              </p>
+              {(successData as any).autoAdjustedDowntimeMsg && (
+                <div className="w-full mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left shadow-inner">
+                  <p className="text-[11px] font-bold text-amber-700 leading-snug">
+                    <AlertCircle className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
+                    {(successData as any).autoAdjustedDowntimeMsg}
+                  </p>
+                </div>
+              )}
+              <button
+                onClick={handleCloseSuccess}
+                className="w-full py-3 bg-[#0070bc] text-white font-bold rounded-xl active:scale-95 transition-all text-sm"
+              >
+                {isEdit ? "Kembali ke Riwayat" : "Input Panel Berikutnya"}
+              </button>
             </div>
-          </label>
+          </div>
+        )}
 
-          {isLastPanel && (
-            <div className="mt-4 pt-4 border-t border-sky-200/60 animate-fadeIn">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-sky-600 uppercase">Tanggal Potong</label>
-                <input 
-                  type="date" 
-                  {...register("tanggalPotong")} 
-                  className="h-10 px-3 rounded-lg bg-white border border-sky-200 text-sm font-semibold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none shadow-sm" 
-                />
+        {/* Modal Peringatan/Error */}
+        {errorMsg && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn"
+            onClick={() => setErrorMsg(null)}
+          >
+            <div
+              className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl flex flex-col items-center animate-scaleIn text-center relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="absolute top-0 left-0 right-0 h-1 bg-red-500"></div>
+              <div className="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4">
+                <AlertCircle className="w-8 h-8" />
               </div>
+              <h4 className="text-lg font-bold text-slate-800">Peringatan!</h4>
+              <p className="text-sm font-semibold text-slate-600 mt-2 mb-6 leading-relaxed">
+                {errorMsg}
+              </p>
+              <button
+                type="button"
+                onClick={() => setErrorMsg(null)}
+                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-95 transition-all text-sm"
+              >
+                Tutup & Perbaiki
+              </button>
             </div>
-          )}
-        </div>
-
-        {/* Kirim Button */}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full h-12 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md"
-        >
-          {isSubmitting ? (
-            <><RefreshCw className="w-5 h-5 animate-spin" /> Menyimpan...</>
-          ) : (
-            <><Save className="w-5 h-5" /> {isEdit ? "Simpan Perubahan" : "Kirim Laporan Panel"}</>
-          )}
-        </button>
-      </form>
-
-      {/* Modal Sukses */}
-      {successData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn" onClick={handleCloseSuccess}>
-          <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl flex flex-col items-center animate-scaleIn text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h4 className="text-lg font-bold text-slate-800">
-              {(successData as any).isOfflineSaved ? "Tersimpan Offline" : "Laporan Berhasil Disimpan"}
-            </h4>
-            <p className="text-xs text-slate-500 mt-1 mb-5">
-              {(successData as any).isOfflineSaved 
-                ? `Data Panel #${successData.panelNo} antre dikirim otomatis saat sinyal pulih.`
-                : `Data laporan untuk Panel #${successData.panelNo} (Potongan ${successData.potonganKe}) telah terekam.`}
-            </p>
-            <button onClick={handleCloseSuccess} className="w-full py-3 bg-[#0070bc] text-white font-bold rounded-xl active:scale-95 transition-all text-sm">
-              {isEdit ? "Kembali ke Riwayat" : "Input Panel Berikutnya"}
-            </button>
           </div>
-        </div>
-      )}
-
-      {/* Modal Peringatan/Error */}
-      {errorMsg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn" onClick={() => setErrorMsg(null)}>
-          <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl flex flex-col items-center animate-scaleIn text-center relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="absolute top-0 left-0 right-0 h-1 bg-red-500"></div>
-            <div className="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4">
-              <AlertCircle className="w-8 h-8" />
-            </div>
-            <h4 className="text-lg font-bold text-slate-800">Peringatan!</h4>
-            <p className="text-sm font-semibold text-slate-600 mt-2 mb-6 leading-relaxed">
-              {errorMsg}
-            </p>
-            <button type="button" onClick={() => setErrorMsg(null)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-95 transition-all text-sm">
-              Tutup & Perbaiki
-            </button>
-          </div>
-        </div>
-      )}
+        )}
       </div>
     </div>
   );
