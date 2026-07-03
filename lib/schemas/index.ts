@@ -64,7 +64,7 @@ export const productionFormSchemaBase = z.object({
       jmlHasilProduksi: z.string().optional().nullable(),
       indikatorStop: z.boolean().optional(),
       kategoriMasalah: z.array(z.string()).optional(),
-      detailMasalahMap: z.record(z.string(), z.string()).optional(),
+      detailMasalahMap: z.record(z.string(), z.array(z.string())).optional(),
       detailMasalah: z.string().optional().nullable(),
       spesifikMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
@@ -88,7 +88,7 @@ export const productionFormSchema = productionFormSchemaBase.superRefine((data, 
           });
         } else {
           pcs.kategoriMasalah.forEach((catId) => {
-            if (!pcs.detailMasalahMap || !pcs.detailMasalahMap[catId] || pcs.detailMasalahMap[catId].trim() === "") {
+            if (!pcs.detailMasalahMap || !pcs.detailMasalahMap[catId] || pcs.detailMasalahMap[catId].length === 0) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: `Wajib memilih Detail Masalah`,
@@ -124,7 +124,7 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
       jmlHasilProduksi: z.string().optional().nullable(),
       indikatorStop: z.boolean().optional(),
       kategoriMasalah: z.array(z.string()).optional(),
-      detailMasalahMap: z.record(z.string(), z.string()).optional(),
+      detailMasalahMap: z.record(z.string(), z.array(z.string())).optional(),
       detailMasalah: z.string().optional().nullable(),
       spesifikMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
@@ -143,6 +143,18 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
     });
   }
 
+  if (data.meterAwal && data.meterAkhir) {
+    const start = parseFloat(data.meterAwal);
+    const end = parseFloat(data.meterAkhir);
+    if (!isNaN(start) && !isNaN(end) && start > end) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Start Meter tidak boleh lebih besar dari Finish Meter",
+        path: ["meterAwal"],
+      });
+    }
+  }
+
   if (data.pcsData && data.pcsData.length > 0) {
     data.pcsData.forEach((pcs, index) => {
       if (pcs.indikatorStop) {
@@ -154,7 +166,7 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
           });
         } else {
           pcs.kategoriMasalah.forEach((catId) => {
-            if (!pcs.detailMasalahMap || !pcs.detailMasalahMap[catId] || pcs.detailMasalahMap[catId].trim() === "") {
+            if (!pcs.detailMasalahMap || !pcs.detailMasalahMap[catId] || pcs.detailMasalahMap[catId].length === 0) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: `Wajib memilih Detail Masalah`,

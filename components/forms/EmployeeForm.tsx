@@ -464,11 +464,14 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
       data.pcsData.forEach(pcs => {
         if (pcs.indikatorStop && pcs.kategoriMasalah && pcs.detailMasalahMap) {
           const detailNames = pcs.kategoriMasalah
-            .map(catId => NEW_PROBLEM_CATEGORIES.find(c => c.id === catId)?.name || catId)
+            .map(cat => NEW_PROBLEM_CATEGORIES.find(c => c.id === cat)?.name || cat)
             .join(', ');
           
           const combinedSpesifik = pcs.kategoriMasalah
-            .map(cat => pcs.detailMasalahMap?.[cat])
+            .map(cat => {
+              const details = pcs.detailMasalahMap?.[cat];
+              return Array.isArray(details) ? details.join(', ') : details;
+            })
             .filter(Boolean)
             .join(', ');
             
@@ -881,7 +884,8 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                                           </div>
                                           <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                             {NEW_PROBLEMS[c.id]?.map(p => {
-                                              const isSelected = watch(`pcsData.${index}.detailMasalahMap.${c.id}`) === p;
+                                              const currentSelections = watch(`pcsData.${index}.detailMasalahMap.${c.id}`) || [];
+                                              const isSelected = Array.isArray(currentSelections) ? currentSelections.includes(p) : currentSelections === p;
                                               return (
                                                 <label 
                                                   key={p} 
@@ -890,7 +894,7 @@ export default function EmployeeForm({ initialData, isEdit }: EmployeeFormProps 
                                                   }`}
                                                 >
                                                   <input 
-                                                    type="radio"
+                                                    type="checkbox"
                                                     value={p}
                                                     {...register(`pcsData.${index}.detailMasalahMap.${c.id}` as const)}
                                                     className="hidden"

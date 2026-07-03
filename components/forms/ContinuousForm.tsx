@@ -184,6 +184,8 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
   // Timer State for Downtime
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerStartRef, setTimerStartRef] = useState<number | null>(null);
+  const [timerStopRef, setTimerStopRef] = useState<number | null>(null);
+  const [firstProblemTime, setFirstProblemTime] = useState<number | null>(null);
   const [liveTimerSeconds, setLiveTimerSeconds] = useState(0);
 
   useEffect(() => {
@@ -199,7 +201,11 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
 
   const handleStartTimer = () => {
     setIsTimerRunning(true);
-    setTimerStartRef(Date.now());
+    const now = Date.now();
+    setTimerStartRef(now);
+    if (!firstProblemTime) {
+      setFirstProblemTime(now);
+    }
     setLiveTimerSeconds(0);
   };
 
@@ -207,8 +213,10 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
     if (!isTimerRunning) return;
     setIsTimerRunning(false);
     
+    const now = Date.now();
+    
     // Calculate elapsed seconds
-    const elapsedMs = Date.now() - (timerStartRef || Date.now());
+    const elapsedMs = now - (timerStartRef || now);
     const elapsedSecs = Math.ceil(elapsedMs / 1000);
     
     const currentTotalStr = watch("totalDowntime");
@@ -218,6 +226,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
     setValue("totalDowntime", String(newTotal), { shouldValidate: true, shouldDirty: true });
     
     setTimerStartRef(null);
+    setTimerStopRef(now);
     setLiveTimerSeconds(0);
   };
 
@@ -267,6 +276,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
     reset,
     control,
     getValues,
+    trigger,
     formState: { errors },
   } = useForm<ContinuousFormInput>({
     resolver: zodResolver(continuousFormSchema),
@@ -447,6 +457,19 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    let adjustedMsg = "";
+    if (timerStopRef && firstProblemTime) {
+      const now = Date.now();
+      const gapSeconds = (now - timerStopRef) / 1000;
+      if (gapSeconds > 20) {
+        const actualDowntime = Math.ceil((now - firstProblemTime) / 1000);
+        const oldDowntime = data.totalDowntime || "0";
+        data.totalDowntime = String(actualDowntime);
+        adjustedMsg = `Waktu downtime otomatis disesuaikan dari ${oldDowntime} detik menjadi ${actualDowntime} detik karena jeda pengiriman form lebih dari 20 detik.`;
+      }
+      setAdjustedMsg(adjustedMsg);
+    }
+
     // Generate idempotency key
     data.idempotencyKey = crypto.randomUUID();
 
@@ -469,11 +492,14 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
       data.pcsData.forEach(pcs => {
         if (pcs.indikatorStop && pcs.kategoriMasalah && pcs.detailMasalahMap) {
           const detailNames = pcs.kategoriMasalah
-            .map(catId => NEW_PROBLEM_CATEGORIES.find(c => c.id === catId)?.name || catId)
+            .map(cat => NEW_PROBLEM_CATEGORIES.find(c => c.id === cat)?.name || cat)
             .join(', ');
           
           const combinedSpesifik = pcs.kategoriMasalah
-            .map(cat => pcs.detailMasalahMap?.[cat])
+            .map(cat => {
+              const details = pcs.detailMasalahMap?.[cat];
+              return Array.isArray(details) ? details.join(', ') : details;
+            })
             .filter(Boolean)
             .join(', ');
             
@@ -517,7 +543,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("continuous", data);
         localStorage.removeItem('dji_form_draft_continuous');
-        setSuccessData({ ...data, isOfflineSaved: true } as any);
+        setSuccessData({ ...data, isOfflineSaved: true, autoAdjustedDowntimeMsg: adjustedMsg } as any);
         return;
       }
 
@@ -530,7 +556,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
       
       if (result.success) {
         localStorage.removeItem('dji_form_draft_continuous');
-        setSuccessData({ ...data, id: isEdit ? initialData.id : (result as any).productionId });
+        setSuccessData({ ...data, id: isEdit ? initialData.id : (result as any).productionId, autoAdjustedDowntimeMsg: adjustedMsg } as any);
       } else {
         setErrorMsg(result.error || "Gagal menyimpan laporan produksi rajut.");
       }
@@ -539,7 +565,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
          const { addPendingPayload } = await import("@/lib/offline-store");
          await addPendingPayload("continuous", data);
          localStorage.removeItem('dji_form_draft_continuous');
-         setSuccessData({ ...data, isOfflineSaved: true } as any);
+         setSuccessData({ ...data, isOfflineSaved: true, autoAdjustedDowntimeMsg: adjustedMsg } as any);
       } else {
          console.error("Uncaught exception in onSubmit:", err);
          setErrorMsg(`Terjadi kesalahan sistem: ${err.message || err}`);
@@ -875,7 +901,8 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
                                           </div>
                                           <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                             {NEW_PROBLEMS[c.id]?.map(p => {
-                                              const isSelected = watch(`pcsData.${index}.detailMasalahMap.${c.id}`) === p;
+                                              const currentSelections = watch(`pcsData.${index}.detailMasalahMap.${c.id}`) || [];
+                                              const isSelected = Array.isArray(currentSelections) ? currentSelections.includes(p) : currentSelections === p;
                                               return (
                                                 <label 
                                                   key={p} 
@@ -884,7 +911,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
                                                   }`}
                                                 >
                                                   <input 
-                                                    type="radio"
+                                                    type="checkbox"
                                                     value={p}
                                                     {...register(`pcsData.${index}.detailMasalahMap.${c.id}` as const)}
                                                     className="hidden"
@@ -1042,36 +1069,49 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
 
           {isLastRoll && (
             <div className="mt-4 pt-4 border-t border-emerald-200/60 animate-fadeIn">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-emerald-600 uppercase">Tanggal Potong</label>
-                <input 
-                  type="date" 
-                  {...register("tanggalPotong")} 
-                  className="h-10 px-3 rounded-lg bg-white border border-emerald-200 text-sm font-semibold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none shadow-sm" 
-                />
+              <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="flex flex-col gap-1 flex-1">
+                  <label className="text-[10px] font-bold text-emerald-600 uppercase">Tanggal Potong</label>
+                  <input 
+                    type="date" 
+                    {...register("tanggalPotong")} 
+                    className="h-10 px-3 rounded-lg bg-white border border-emerald-200 text-sm font-semibold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none shadow-sm" 
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMeterModalOpen(true)}
+                  className="flex-[2] h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Save className="w-4 h-4" /> Lanjut Isi Total Produksi (Meteran)
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Kirim Button */}
-        <button
-          type="button"
-          onClick={() => {
-            // Karena ini tombol kirim form cacat, kosongkan meterAkhir agar validasi skema tetap masuk akal
-            setValue("meterAwal", "");
-            setValue("meterAkhir", "");
-            handleSubmit(onSubmit)();
-          }}
-          disabled={isSubmitting}
-          className="w-full h-12 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md"
-        >
-          {isSubmitting ? (
-            <><RefreshCw className="w-5 h-5 animate-spin" /> Menyimpan...</>
-          ) : (
-            <><Save className="w-5 h-5" /> {isEdit ? "Simpan Perubahan Cacat" : "Kirim Laporan Titik Cacat"}</>
-          )}
-        </button>
+        {/* Buttons Action */}
+        <div className="flex flex-col gap-4 mt-6">
+
+          {/* Kirim Laporan Cacat Button */}
+          <button
+            type="button"
+            onClick={() => {
+              // Karena ini tombol kirim form cacat, kosongkan meterAkhir agar validasi skema tetap masuk akal
+              setValue("meterAwal", "");
+              setValue("meterAkhir", "");
+              handleSubmit(onSubmit)();
+            }}
+            disabled={isSubmitting}
+            className={`w-full h-12 rounded-xl active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md ${isLastRoll ? 'bg-slate-400 hover:bg-slate-500' : 'bg-[#0070bc] hover:bg-[#004777]'}`}
+          >
+            {isSubmitting ? (
+              <><RefreshCw className="w-5 h-5 animate-spin" /> Menyimpan...</>
+            ) : (
+              <><Save className="w-5 h-5" /> {isEdit ? "Simpan Perubahan Cacat" : "Kirim Laporan Titik Cacat"}</>
+            )}
+          </button>
+        </div>
 
         {/* Modal Pop-up Meteran */}
         {isMeterModalOpen && (
@@ -1099,6 +1139,7 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-600 uppercase">Start Meter</label>
                   <input type="number" step="any" onWheel={(e) => (e.target as HTMLElement).blur()} {...register("meterAwal")} className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none transition-all" placeholder="Contoh: 100" />
+                  {errors.meterAwal && <span className="text-red-500 text-[10px] font-bold mt-0.5">{errors.meterAwal.message}</span>}
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-600 uppercase">Finish Meter</label>
@@ -1121,7 +1162,10 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
                 </button>
                 <button 
                   type="button" 
-                  onClick={() => {
+                  onClick={async () => {
+                    const isValid = await trigger(["meterAwal", "meterAkhir"]);
+                    if (!isValid) return; // Prevent closing and show errors
+
                     setIsMeterModalOpen(false);
                     // Kita bisa hapus semua list pcs karena mereka cuman mau lapor meteran
                     // Ini trik supaya tidak kecampur dengan form titik cacat kosong
@@ -1159,6 +1203,14 @@ export default function ContinuousForm({ initialData, isEdit }: ContinuousFormPr
                 ? `Data Potongan ke-${successData.potonganKe} antre dikirim otomatis saat sinyal pulih.`
                 : `Data laporan untuk Potongan ke-${successData.potonganKe} telah terekam.`}
             </p>
+            {(successData as any).autoAdjustedDowntimeMsg && (
+              <div className="w-full mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left shadow-inner">
+                <p className="text-[11px] font-bold text-amber-700 leading-snug">
+                  <AlertCircle className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
+                  {(successData as any).autoAdjustedDowntimeMsg}
+                </p>
+              </div>
+            )}
             <button onClick={handleCloseSuccess} className="w-full py-3 bg-[#0070bc] text-white font-bold rounded-xl active:scale-95 transition-all text-sm">
               {isEdit ? "Kembali ke Riwayat" : "Input Panel Berikutnya"}
             </button>
