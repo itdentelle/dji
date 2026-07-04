@@ -1327,7 +1327,7 @@ export default function ContinuousForm({
           className="space-y-4"
         >
           <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-4 sm:p-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-stretch">
               <div data-tour="meter-header-summary" className="w-full">
                 <HeaderSummaryCard
                   operatorName={
