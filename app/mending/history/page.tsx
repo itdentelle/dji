@@ -489,20 +489,17 @@ export default function MendingHistoryPage() {
                           <td className="px-6 py-4 text-center">
                             <div className="text-sm font-bold text-slate-800 flex flex-wrap items-center justify-center gap-3">
                               {gradeA > 0 && (
-                                <span className="flex items-center gap-1.5">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />{" "}
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 text-emerald-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
                                   A: {gradeA}
                                 </span>
                               )}
                               {gradeB > 0 && (
-                                <span className="flex items-center gap-1.5">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />{" "}
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 text-amber-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
                                   B: {gradeB}
                                 </span>
                               )}
                               {gradeBS > 0 && (
-                                <span className="flex items-center gap-1.5">
-                                  <XCircle className="w-4 h-4 text-rose-500" />{" "}
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 text-rose-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
                                   BS: {gradeBS}
                                 </span>
                               )}

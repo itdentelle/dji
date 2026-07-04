@@ -384,7 +384,6 @@ export default function EmployeeHistoryPage() {
             <RefreshCw className="w-6 h-6 text-[#0070bc]" />
             Riwayat Input Produksi
           </h1>
-          
         </div>
         <button
           type="button"
@@ -1120,12 +1119,13 @@ export default function EmployeeHistoryPage() {
                                     </span>
                                   </div>
                                 </div>
-                                {pcs.detail_masalah && (
+                                {(pcs.spesifik_masalah ||
+                                  pcs.detail_masalah) && (
                                   <div className="pl-6 text-xs text-slate-600">
                                     <span className="font-semibold">
-                                      Detail:
+                                      Spesifik:
                                     </span>{" "}
-                                    {pcs.detail_masalah}
+                                    {pcs.spesifik_masalah || pcs.detail_masalah}
                                   </div>
                                 )}
                                 {pcs.keterangan_cacat && (

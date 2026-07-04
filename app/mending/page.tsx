@@ -169,16 +169,41 @@ export default function MendingPage() {
     new Set(allDetails.map((d) => d.pcs_index)),
   ).sort((a, b) => a - b);
 
-  // Filter details by selected PCS
-  const detailsToDisplay = allDetails.filter(
-    (d) => String(d.pcs_index) === selectedPcsIndex,
-  );
+  // Filter details by selected PCS and sort panels/rolls in natural order
+  const detailsToDisplay = allDetails
+    .filter((d) => String(d.pcs_index) === selectedPcsIndex)
+    .sort((a, b) => {
+      const panelA = a.production_headers?.panel_no;
+      const panelB = b.production_headers?.panel_no;
+
+      if (panelA === "METERAN" && panelB === "METERAN") {
+        const meterA = parseFloat(a.meter_kain ?? "");
+        const meterB = parseFloat(b.meter_kain ?? "");
+        return (isNaN(meterA) ? 0 : meterA) - (isNaN(meterB) ? 0 : meterB);
+      }
+      if (panelA === "METERAN") return 1;
+      if (panelB === "METERAN") return -1;
+
+      const numA = parseInt(panelA, 10);
+      const numB = parseInt(panelB, 10);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+
+      return String(panelA || "").localeCompare(
+        String(panelB || ""),
+        undefined,
+        {
+          numeric: true,
+        },
+      );
+    });
 
   const handleSelectGrade = (detailId: string, grade: string) => {
     setSelections((prev) => ({ ...prev, [detailId]: grade }));
   };
 
-  // Auto-assign Grade A for Ceklis items when PCS changes
+  // Auto-assign Grade A for items that were inspected as normal when PCS changes
   useEffect(() => {
     if (!selectedPcsIndex) return;
     const itemsForPcs = allDetails.filter(
@@ -408,91 +433,103 @@ export default function MendingPage() {
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
                       <th className="px-6 py-4">Nomor Panel/Roll</th>
-                      <th className="px-6 py-4">Hasil Inspeksi</th>
+                      <th className="px-6 py-4">Grade</th>
                       <th className="px-6 py-4">Status / Masalah</th>
                       <th className="px-6 py-4 text-center">Detail</th>
                       <th className="px-6 py-4 text-center">Hasil Mending</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                    {detailsToDisplay.map((item) => (
-                      <tr
-                        key={item.id}
-                        className={`hover:bg-slate-50/50 transition-colors ${item.final_inspection_id === 1 ? "bg-emerald-50/30" : ""}`}
-                      >
-                        <td className="px-6 py-4">
-                          <div className="inline-flex items-center justify-center min-w-[2rem] h-8 px-3 rounded-lg bg-slate-100 text-slate-700 font-bold">
-                            {item.production_headers?.panel_no === "METERAN"
-                              ? `Mesin ${item.production_headers?.nomor_mc}`
-                              : `Panel ${item.production_headers?.panel_no}`}
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-wider">
-                            {item.production_headers?.pic ||
-                              item.production_headers?.operators
-                                ?.nama_operator ||
-                              "Anonim"}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {item.final_inspection_id === 1 ? (
-                            <div className="inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">
-                              ✓ Ceklis
+                    {detailsToDisplay.map((item) => {
+                      const selectedGrade = selections[item.id];
+
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`hover:bg-slate-50/50 transition-colors ${item.final_inspection_id === 1 ? "bg-emerald-50/30" : ""}`}
+                        >
+                          <td className="px-6 py-4">
+                            <div className="inline-flex items-center justify-center min-w-[2rem] h-8 px-3 rounded-lg bg-slate-100 text-slate-700 font-bold">
+                              {item.production_headers?.panel_no === "METERAN"
+                                ? `Mesin ${item.production_headers?.nomor_mc}`
+                                : `Panel ${item.production_headers?.panel_no}`}
                             </div>
-                          ) : (
-                            <div className="inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700">
-                              ✕ Silang
+                            <div className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-wider">
+                              {item.production_headers?.pic ||
+                                item.production_headers?.operators
+                                  ?.nama_operator ||
+                                "Anonim"}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div
-                            className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                              !item.indikator_stop
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-rose-100 text-rose-700"
-                            }`}
-                          >
-                            {!item.indikator_stop ? "Normal" : "Bermasalah"}
-                          </div>
-                          {item.kategori_masalah && (
-                            <div className="text-[11px] text-rose-600 mt-1.5 font-medium max-w-xs leading-relaxed">
-                              {item.kategori_masalah} - {item.detail_masalah}
+                          </td>
+                          <td className="px-6 py-4">
+                            {selectedGrade ? (
+                              <div
+                                className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                                  selectedGrade === "A"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : selectedGrade === "B"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-rose-100 text-rose-700"
+                                }`}
+                              >
+                                Grade {selectedGrade}
+                              </div>
+                            ) : (
+                              <div className="inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500">
+                                Belum Grade
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div
+                              className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                                !item.indikator_stop
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-rose-100 text-rose-700"
+                              }`}
+                            >
+                              {!item.indikator_stop ? "Normal" : "Bermasalah"}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => handleOpenDetail(item.header_id)}
-                            className="p-2 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm group"
-                            title="Lihat Detail Produksi"
-                          >
-                            <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                          </button>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-center gap-2">
+                            {item.kategori_masalah && (
+                              <div className="text-[11px] text-rose-600 mt-1.5 font-medium max-w-xs leading-relaxed">
+                                {item.kategori_masalah} - {item.detail_masalah}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center">
                             <button
-                              onClick={() => handleSelectGrade(item.id, "A")}
-                              className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "A" ? "border-emerald-500 bg-emerald-50 text-emerald-700 scale-105" : "border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500"}`}
+                              onClick={() => handleOpenDetail(item.header_id)}
+                              className="p-2 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm group"
+                              title="Lihat Detail Produksi"
                             >
-                              Grade A
+                              <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
                             </button>
-                            <button
-                              onClick={() => handleSelectGrade(item.id, "B")}
-                              className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "B" ? "border-amber-500 bg-amber-50 text-amber-700 scale-105" : "border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-500"}`}
-                            >
-                              Grade B
-                            </button>
-                            <button
-                              onClick={() => handleSelectGrade(item.id, "BS")}
-                              className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "BS" ? "border-rose-500 bg-rose-50 text-rose-700 scale-105" : "border-slate-200 text-slate-400 hover:border-rose-300 hover:text-rose-500"}`}
-                            >
-                              Grade BS
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleSelectGrade(item.id, "A")}
+                                className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "A" ? "border-emerald-500 bg-emerald-50 text-emerald-700 scale-105" : "border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500"}`}
+                              >
+                                Grade A
+                              </button>
+                              <button
+                                onClick={() => handleSelectGrade(item.id, "B")}
+                                className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "B" ? "border-amber-500 bg-amber-50 text-amber-700 scale-105" : "border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-500"}`}
+                              >
+                                Grade B
+                              </button>
+                              <button
+                                onClick={() => handleSelectGrade(item.id, "BS")}
+                                className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "BS" ? "border-rose-500 bg-rose-50 text-rose-700 scale-105" : "border-slate-200 text-slate-400 hover:border-rose-300 hover:text-rose-500"}`}
+                              >
+                                Grade BS
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

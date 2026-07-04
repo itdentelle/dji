@@ -34,6 +34,7 @@ import {
   Timer,
   ArrowLeft,
   ArrowRight,
+  Scissors,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
@@ -335,7 +336,6 @@ export default function EmployeeForm({
   const [operators, setOperators] = useState(FALLBACK_OPERATORS);
   const [designs, setDesigns] = useState(FALLBACK_DESIGNS);
   const [groups, setGroups] = useState(FALLBACK_GROUPS);
-  const [isDbConnected, setIsDbConnected] = useState(false);
 
   // Accordion UI State
   const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
@@ -487,7 +487,6 @@ export default function EmployeeForm({
         if (opData && opData.length > 0) {
           // KITA GUNAKAN FALLBACK DULU KARENA MINTA SESUAI GAMBAR BARU (SHIFT A,B,C)
           // setOperators(opData.map((o: any) => ({ id: o.id, name: o.nama_operator })));
-          setIsDbConnected(true);
         }
 
         const { data: dsData } = await supabase
@@ -787,13 +786,19 @@ export default function EmployeeForm({
       }
     }
 
+    const isCutSubmit = !isEdit && !!data.tanggalPotong;
+    const submitData: ProductionFormInput = isCutSubmit
+      ? { ...data, panelNo: "" }
+      : data;
+    const nextPanelNoForSave = isCutSubmit ? "1" : nextPanelNo;
+
     const headerDataToSave = {
       operatorId: data.operatorId,
       groupId: data.groupId,
       designId: data.designId,
       nomorMc: data.nomorMc,
       tanggalProduksi: data.tanggalProduksi,
-      tanggalPotong: data.tanggalPotong,
+      tanggalPotong: "",
       pick: data.pick,
       noOrderBarang: data.noOrderBarang,
       noCustomer: data.noCustomer,
@@ -806,28 +811,29 @@ export default function EmployeeForm({
       rpm: data.rpm,
       pic: data.pic,
       potonganKe: data.potonganKe,
-      nextPanelNo, // we store the next available panel no
+      nextPanelNo: nextPanelNoForSave, // we store the next available panel no
     };
     localStorage.setItem("dji_form_header", JSON.stringify(headerDataToSave));
 
     try {
       if (!navigator.onLine) {
         const { addPendingPayload } = await import("@/lib/offline-store");
-        await addPendingPayload("employee", data);
+        await addPendingPayload("employee", submitData);
         localStorage.removeItem("dji_form_draft_panel");
         setSuccessData({
           ...data,
           isOfflineSaved: true,
           autoAdjustedDowntimeMsg: adjustedMsg,
+          isCutSubmit,
         } as any);
         return;
       }
 
       let result;
       if (isEdit && initialData?.id) {
-        result = await updateProductionReport(initialData.id, data);
+        result = await updateProductionReport(initialData.id, submitData);
       } else {
-        result = await createProductionReport(data);
+        result = await createProductionReport(submitData);
       }
 
       if (result.success) {
@@ -836,6 +842,7 @@ export default function EmployeeForm({
           ...data,
           id: isEdit ? initialData.id : (result as any).productionId,
           autoAdjustedDowntimeMsg: adjustedMsg,
+          isCutSubmit,
         } as any);
       } else {
         setErrorMsg(result.error || "Gagal menyimpan laporan produksi rajut.");
@@ -847,12 +854,13 @@ export default function EmployeeForm({
         !navigator.onLine
       ) {
         const { addPendingPayload } = await import("@/lib/offline-store");
-        await addPendingPayload("employee", data);
+        await addPendingPayload("employee", submitData);
         localStorage.removeItem("dji_form_draft_panel");
         setSuccessData({
           ...data,
           isOfflineSaved: true,
           autoAdjustedDowntimeMsg: adjustedMsg,
+          isCutSubmit,
         } as any);
       } else {
         console.error("Uncaught exception in onSubmit:", err);
@@ -1063,10 +1071,7 @@ export default function EmployeeForm({
               </div>
               <div className="flex flex-col items-start">
                 <span className="text-sm font-black uppercase tracking-wider leading-none">
-                  Panel
-                </span>
-                <span className="text-[10px] font-bold text-slate-400 mt-0.5">
-                  Input per Potongan
+                  PANEL
                 </span>
               </div>
             </div>
@@ -1081,10 +1086,7 @@ export default function EmployeeForm({
               </div>
               <div className="flex flex-col items-start">
                 <span className="text-sm font-bold uppercase tracking-wider leading-none">
-                  Kontinu (Meteran)
-                </span>
-                <span className="text-[10px] font-medium text-slate-400 mt-0.5">
-                  Input per Roll
+                  METER
                 </span>
               </div>
             </div>
@@ -1100,78 +1102,63 @@ export default function EmployeeForm({
               Data Header akan otomatis tersimpan untuk panel berikutnya.
             </p>
           </div>
-          <div
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-medium transition-colors self-start sm:self-auto ${
-              isDbConnected
-                ? "bg-slate-50 text-slate-600 border-slate-200"
-                : "bg-amber-50 text-amber-700 border-amber-200"
-            }`}
-          >
-            <Database
-              className={`w-3 h-3 ${isDbConnected ? "text-slate-400" : "text-amber-500 animate-spin"}`}
-              strokeWidth={2}
-            />
-            {isDbConnected ? "Database Terhubung" : "Mode Offline"}
-          </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-5 sm:p-6">
-            <div data-tour="header-summary">
-              <HeaderSummaryCard
-                operatorName={
-                  activeOperators.find(
-                    (op) => op.id.toString() === watch("operatorId"),
-                  )?.name || ""
-                }
-                shiftName={activeShiftName}
-                nomorMc={watch("nomorMc") || ""}
-                design={watch("designId") || ""}
-                statusMatching={watch("statusMatching") || ""}
-                potonganKe={watch("potonganKe")}
-                onEdit={() => setIsHeaderModalOpen(true)}
-              />
-            </div>
-
-            <ProductionHeaderModal
-              isOpen={isHeaderModalOpen}
-              onClose={() => {
-                setIsHeaderModalOpen(false);
-                setHighlightPotonganKe(false);
-              }}
-              register={register}
-              errors={errors}
-              watch={watch}
-              groups={groups}
-              operators={activeOperators}
-              activeShiftName={activeShiftName}
-              onClearHeader={handleClearHeader}
-              highlightPotonganKe={highlightPotonganKe}
-            />
-
-            {/* Data Panel Umum */}
-            <div
-              data-tour="panel-info"
-              className="mt-8 p-6 bg-slate-50 border-2 border-slate-200 rounded-2xl relative shadow-md"
-            >
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-slate-500 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md">
-                Info Panel Otomatis
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-4 sm:p-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+              <div data-tour="header-summary" className="w-full">
+                <HeaderSummaryCard
+                  operatorName={
+                    activeOperators.find(
+                      (op) => op.id.toString() === watch("operatorId"),
+                    )?.name || ""
+                  }
+                  shiftName={activeShiftName}
+                  nomorMc={watch("nomorMc") || ""}
+                  design={watch("designId") || ""}
+                  statusMatching={watch("statusMatching") || ""}
+                  potonganKe={watch("potonganKe")}
+                  onEdit={() => setIsHeaderModalOpen(true)}
+                  showEditButton
+                  showEditButtonPlacement="bottom"
+                />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-3">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-2">
-                    No. Panel (PNL NO) Saat Ini
-                  </label>
-                  <input
-                    type="text"
-                    {...register("panelNo")}
-                    className="h-12 px-5 rounded-xl bg-slate-100 border-2 border-slate-200 text-base font-bold text-slate-500 cursor-not-allowed outline-none transition-all shadow-inner"
-                    placeholder="Terisi otomatis..."
-                    readOnly
-                  />
+              <ProductionHeaderModal
+                isOpen={isHeaderModalOpen}
+                onClose={() => {
+                  setIsHeaderModalOpen(false);
+                  setHighlightPotonganKe(false);
+                }}
+                register={register}
+                errors={errors}
+                watch={watch}
+                groups={groups}
+                operators={activeOperators}
+                activeShiftName={activeShiftName}
+                onClearHeader={handleClearHeader}
+                highlightPotonganKe={highlightPotonganKe}
+              />
+
+              {/* Data Panel Umum */}
+              <div
+                data-tour="panel-info"
+                className="w-full min-h-full p-6 bg-slate-50 border-2 border-slate-200 rounded-2xl relative shadow-md flex flex-col justify-center"
+              >
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-slate-600 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md">
+                  Info Panel Otomatis
+                </div>
+
+                <div className="mt-3 flex flex-col items-center justify-center">
+                  <input type="hidden" {...register("panelNo")} />
+                  <div className="w-full flex items-center justify-center pt-3">
+                    <div className="h-32 w-full max-w-lg flex items-center justify-center rounded-xl bg-white border-2 border-slate-200 text-6xl font-extrabold text-slate-700 shadow-inner">
+                      {String(watch("panelNo") || "-")}
+                    </div>
+                  </div>
                   {errors.panelNo && (
-                    <span className="text-red-500 text-[10px] font-bold">
+                    <span className="text-red-500 text-[10px] font-bold mt-2">
                       {errors.panelNo.message}
                     </span>
                   )}
@@ -1485,10 +1472,14 @@ export default function EmployeeForm({
                   <h5
                     className={`text-sm font-bold ${isLastPanel ? "text-sky-700" : "text-slate-600"}`}
                   >
-                    Potong Kain (Ini Panel Terakhir dalam Roll)
+                    Potong Kain
                   </h5>
                 </div>
               </div>
+              <Scissors
+                className={`w-5 h-5 shrink-0 ${isLastPanel ? "text-sky-600" : "text-slate-400"}`}
+                style={{ transform: "scaleX(-1)" }}
+              />
             </label>
 
             {isLastPanel && (
@@ -1528,70 +1519,8 @@ export default function EmployeeForm({
         </form>
 
         {isTourOpen && currentTourStep && (
-          <div className="fixed inset-0 z-[70]">
-            <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[1px]" />
-            {tourRect && (
-              <div
-                className="absolute rounded-2xl border-2 border-sky-300 bg-white/10 shadow-[0_0_0_9999px_rgba(15,23,42,0.45),0_0_0_6px_rgba(14,165,233,0.18)] transition-all duration-200 pointer-events-none"
-                style={{
-                  top: Math.max(tourRect.top - 8, 8),
-                  left: Math.max(tourRect.left - 8, 8),
-                  width: tourRect.width + 16,
-                  height: tourRect.height + 16,
-                }}
-              />
-            )}
-            <div
-              className="absolute w-[calc(100vw-2rem)] max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 p-5"
-              style={{ top: tourCardTop, left: tourCardLeft }}
-            >
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">
-                    Step {tourStepIndex + 1} dari {PANEL_TOUR_STEPS.length}
-                  </p>
-                  <h4 className="text-base font-black text-slate-900 mt-1">
-                    {currentTourStep.title}
-                  </h4>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeTour}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors shrink-0"
-                  aria-label="Tutup tour"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                {currentTourStep.description}
-              </p>
-              <div className="flex items-center gap-2 mt-5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setTourStepIndex((step) => Math.max(step - 1, 0))
-                  }
-                  disabled={tourStepIndex === 0}
-                  className="h-10 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Kembali
-                </button>
-                <button
-                  type="button"
-                  onClick={
-                    isLastTourStep
-                      ? closeTour
-                      : () => setTourStepIndex((step) => step + 1)
-                  }
-                  className="flex-1 h-10 px-4 rounded-xl bg-[#0070bc] hover:bg-[#004777] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  {isLastTourStep ? "Selesai" : "Lanjut"}
-                  {!isLastTourStep && <ArrowRight className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
+          <div className="fixed inset-0 z-[70]" onClick={closeTour}>
+            <div className="absolute inset-0 bg-slate-950/55" />
           </div>
         )}
 
@@ -1614,9 +1543,13 @@ export default function EmployeeForm({
                   : "Laporan Berhasil Disimpan"}
               </h4>
               <p className="text-xs text-slate-500 mt-1 mb-5">
-                {(successData as any).isOfflineSaved
-                  ? `Data Panel #${successData.panelNo} antre dikirim otomatis saat sinyal pulih.`
-                  : `Data laporan untuk Panel #${successData.panelNo} (Potongan ${successData.potonganKe}) telah terekam.`}
+                {(successData as any).isCutSubmit
+                  ? (successData as any).isOfflineSaved
+                    ? `Data potong kain Potongan ${successData.potonganKe} antre dikirim otomatis saat sinyal pulih.`
+                    : `Potong kain untuk Potongan ${successData.potonganKe} berhasil diupdate tanpa membuat baris panel baru.`
+                  : (successData as any).isOfflineSaved
+                    ? `Data Panel #${successData.panelNo} antre dikirim otomatis saat sinyal pulih.`
+                    : `Data laporan untuk Panel #${successData.panelNo} (Potongan ${successData.potonganKe}) telah terekam.`}
               </p>
               {(successData as any).autoAdjustedDowntimeMsg && (
                 <div className="w-full mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left shadow-inner">

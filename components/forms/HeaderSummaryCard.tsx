@@ -1,5 +1,12 @@
 import React from "react";
-import { Settings2, User, Box, FileText, CheckCircle2, Factory } from "lucide-react";
+import {
+  Settings2,
+  User,
+  Box,
+  FileText,
+  CheckCircle2,
+  Factory,
+} from "lucide-react";
 
 interface HeaderSummaryCardProps {
   operatorName: string;
@@ -9,6 +16,8 @@ interface HeaderSummaryCardProps {
   onEdit: () => void;
   statusMatching: string;
   potonganKe?: string | number;
+  showEditButton?: boolean;
+  showEditButtonPlacement?: "right" | "bottom";
 }
 
 export default function HeaderSummaryCard({
@@ -19,18 +28,111 @@ export default function HeaderSummaryCard({
   onEdit,
   statusMatching,
   potonganKe,
+  showEditButton = true,
+  showEditButtonPlacement = "right",
 }: HeaderSummaryCardProps) {
+  const isBottom = showEditButton && showEditButtonPlacement === "bottom";
+
+  if (isBottom) {
+    return (
+      <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden mb-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2">
+          <div className="flex items-center gap-3 p-4 sm:p-5 bg-sky-50/80">
+            <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+              <Factory className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider">
+                Mesin & Desain
+              </span>
+              <p className="text-base font-black text-slate-900 leading-tight truncate">
+                {nomorMc || "Belum dipilih"} / {design || "-"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 sm:p-5 bg-emerald-50/70">
+            <div
+              className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${statusMatching === "OK" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
+            >
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                Status Matching
+              </span>
+              <p
+                className={`text-base font-black leading-tight truncate ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
+              >
+                {statusMatching || "-"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 sm:p-5 bg-slate-50/80">
+            <div className="w-12 h-12 rounded-full bg-sky-50 text-slate-600 flex items-center justify-center shrink-0">
+              <User className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                Operator (Grup {shiftName})
+              </span>
+              <p className="text-base font-black text-slate-900 leading-tight truncate">
+                {operatorName || "Belum dipilih"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 sm:p-5 bg-indigo-50/70">
+            <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+              <Box className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                Potongan Ke
+              </span>
+              <p className="text-base font-black text-slate-900 leading-tight truncate">
+                {potonganKe || "-"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {showEditButton && (
+          <div className="px-4 py-3 bg-white flex justify-center">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex min-w-56 items-center justify-center gap-2 px-6 py-3 bg-white hover:bg-sky-50 text-sky-600 border border-sky-200 hover:border-sky-300 rounded-xl font-bold text-sm transition-colors shadow-sm"
+            >
+              <Settings2 className="w-5 h-5" />
+              Ubah Header
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-gradient-to-r from-sky-50 to-white border border-sky-100 rounded-2xl p-4 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div className="flex flex-wrap items-center gap-4 md:gap-8 flex-1">
+    <div
+      className={`bg-sky-50/80 border border-sky-100 rounded-2xl p-5 sm:p-6 shadow-sm mb-0 ${
+        isBottom
+          ? "flex flex-col items-stretch gap-3"
+          : "flex flex-col lg:flex-row lg:items-center justify-between gap-5"
+      }`}
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 flex-1">
         {/* Mesin & Desain */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-            <Factory className="w-5 h-5" />
+          <div className="w-14 h-14 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+            <Factory className="w-6 h-6" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider">Mesin & Desain</span>
-            <span className="text-sm font-black text-slate-800 leading-tight">
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider">
+              Mesin & Desain
+            </span>
+            <span className="text-xl font-black text-slate-900 leading-tight truncate">
               {nomorMc || "Belum dipilih"} / {design || "-"}
             </span>
           </div>
@@ -38,12 +140,14 @@ export default function HeaderSummaryCard({
 
         {/* Operator */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-            <User className="w-5 h-5" />
+          <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+            <User className="w-6 h-6" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operator (Grup {shiftName})</span>
-            <span className="text-sm font-black text-slate-800 leading-tight">
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Operator (Grup {shiftName})
+            </span>
+            <span className="text-xl font-black text-slate-900 leading-tight truncate">
               {operatorName || "Belum dipilih"}
             </span>
           </div>
@@ -51,12 +155,18 @@ export default function HeaderSummaryCard({
 
         {/* Status */}
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${statusMatching === "OK" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}>
-            <CheckCircle2 className="w-5 h-5" />
+          <div
+            className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${statusMatching === "OK" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
+          >
+            <CheckCircle2 className="w-6 h-6" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status Matching</span>
-            <span className={`text-sm font-black leading-tight ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Status Matching
+            </span>
+            <span
+              className={`text-xl font-black leading-tight truncate ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
+            >
               {statusMatching || "-"}
             </span>
           </div>
@@ -65,12 +175,14 @@ export default function HeaderSummaryCard({
         {/* Potongan Ke */}
         {potonganKe && (
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-              <Box className="w-5 h-5" />
+            <div className="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+              <Box className="w-6 h-6" />
             </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Potongan Ke</span>
-              <span className="text-sm font-black text-slate-800 leading-tight">
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Potongan Ke
+              </span>
+              <span className="text-xl font-black text-slate-900 leading-tight truncate">
                 {potonganKe}
               </span>
             </div>
@@ -78,15 +190,30 @@ export default function HeaderSummaryCard({
         )}
       </div>
 
-      {/* Edit Button */}
-      <button
-        type="button"
-        onClick={onEdit}
-        className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white hover:bg-sky-50 text-sky-600 border border-sky-200 hover:border-sky-300 rounded-xl font-bold text-xs transition-colors shrink-0 shadow-sm"
-      >
-        <Settings2 className="w-4 h-4" />
-        Ubah Header
-      </button>
+      {/* Edit Button (optional) */}
+      {showEditButton && !isBottom && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex min-w-52 items-center justify-center gap-2 px-6 py-4 bg-white hover:bg-sky-50 text-sky-600 border border-sky-200 hover:border-sky-300 rounded-xl font-bold text-base transition-colors shrink-0 shadow-sm"
+        >
+          <Settings2 className="w-5 h-5" />
+          Ubah Header
+        </button>
+      )}
+
+      {showEditButton && isBottom && (
+        <div className="mt-2 flex justify-center">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-white hover:bg-sky-50 text-sky-600 border border-sky-200 hover:border-sky-300 rounded-xl font-bold text-sm transition-colors shadow-sm"
+          >
+            <Settings2 className="w-5 h-5" />
+            Ubah Header
+          </button>
+        </div>
+      )}
     </div>
   );
 }

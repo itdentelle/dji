@@ -76,7 +76,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
       course: validated.course || null,
       rpm: validated.rpm ? parseInt(validated.rpm) : null,
       potongan_ke: validated.potonganKe ? parseInt(validated.potonganKe) : null,
-      panel_no: validated.panelNo,
+      panel_no: validated.panelNo || null,
       pcs: pcsTarget,
       tanggal_potong: validated.tanggalPotong || null,
       pick: validated.pick || null,
@@ -147,6 +147,77 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
           }
         } catch (err) {
           console.error("Gagal mendapatkan PIC nama:", err);
+        }
+
+        const isCutOnlySubmit = !!validated.tanggalPotong && !validated.panelNo;
+
+        if (isCutOnlySubmit) {
+          if (!validated.nomorMc || !potonganKeNum) {
+            return { success: false, error: "Mesin dan Potongan wajib diisi untuk potong kain." };
+          }
+
+          const { data: previousHeaders, error: previousHeadersError } = await supabase
+            .from("production_headers")
+            .select("*, production_details(*)")
+            .eq("nomor_mc", validated.nomorMc)
+            .eq("potongan_ke", potonganKeNum);
+
+          if (previousHeadersError) {
+            throw new Error("Gagal mencari data panel untuk potong kain: " + previousHeadersError.message);
+          }
+
+          if (!previousHeaders || previousHeaders.length === 0) {
+            return {
+              success: false,
+              error: `Belum ada data panel untuk Mesin ${validated.nomorMc} Potongan ${potonganKeNum}. Potong kain hanya bisa update data yang sudah ada.`,
+            };
+          }
+
+          const { error: cutUpdateError } = await supabase
+            .from("production_headers")
+            .update({ tanggal_potong: validated.tanggalPotong })
+            .eq("nomor_mc", validated.nomorMc)
+            .eq("potongan_ke", potonganKeNum);
+
+          if (cutUpdateError) {
+            throw new Error("Gagal menyimpan tanggal potong: " + cutUpdateError.message);
+          }
+
+          const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+          if (sheetUrl) {
+            type CutSheetHeader = {
+              id?: string | null;
+              production_details?: { pcs_index?: string | number | null }[];
+            };
+            const massPayload: {
+              id_header: string;
+              pcs_index: string | number;
+              tanggal_potong: string;
+            }[] = [];
+
+            for (const h of previousHeaders as CutSheetHeader[]) {
+              const details = h.production_details || [];
+              for (const detail of details) {
+                massPayload.push({
+                  id_header: h.id || "",
+                  pcs_index: detail.pcs_index || "",
+                  tanggal_potong: validated.tanggalPotong || "",
+                });
+              }
+            }
+
+            if (massPayload.length > 0) {
+              fetch(sheetUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "update", data: massPayload }),
+              }).catch((err) =>
+                console.error("Gagal sinkron tanggal potong Google Sheets:", err),
+              );
+            }
+          }
+
+          return { success: true };
         }
 
         // Cek duplikasi potongan_ke dan panel_no
@@ -241,7 +312,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             "Grup": validated.grupName || validated.groupId || "",
             "Design": validated.designName || validated.designId || "",
             "Status Matching": validated.statusMatching || "",
-            "Panel": validated.panelNo || "",
+            "Panel": validated.tanggalPotong ? "" : validated.panelNo || "",
             "Potongan Ke": validated.potonganKe || "",
             "No Order": validated.noOrderBarang || "",
             "No Customer": validated.noCustomer || "",
@@ -280,6 +351,17 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
       }
     }
 
+
+    if (validated.tanggalPotong && !validated.panelNo) {
+      console.log("Mock Mode: Berhasil mensimulasikan update potong kain", {
+        tanggalPotong: validated.tanggalPotong,
+        nomorMc: validated.nomorMc,
+        potonganKe: validated.potonganKe,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return { success: true };
+    }
+
     // 3. Fallback/Mock Mode jika database belum dikonfigurasi (Demo aman)
     console.log("Mock Mode: Berhasil mensimulasikan penyimpanan produksi rajut", {
       headerId,
@@ -303,7 +385,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         "Operator": validated.pic || validated.operatorId?.[0] || "",
         "Grup": validated.grupName || validated.groupId || "",
         "Design": validated.designName || validated.designId || "",
-        "Panel": validated.panelNo || "",
+        "Panel": validated.tanggalPotong ? "" : validated.panelNo || "",
         "Potongan Ke": validated.potonganKe || "",
         "No Order": validated.noOrderBarang || "",
         "No Customer": validated.noCustomer || "",

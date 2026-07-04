@@ -54,8 +54,11 @@ export const productionFormSchemaBase = z.object({
     .regex(/^\d+$/, "Nomor potongan harus berupa angka positif"),
   panelNo: z
     .string()
-    .min(1, "Nomor Panel harus diisi")
-    .regex(/^\d+$/, "Nomor panel harus berupa angka positif"),
+    .optional()
+    .nullable()
+    .refine((val) => !val || /^\d+$/.test(val), {
+      message: "Nomor panel harus berupa angka positif",
+    }),
   course: z.string().optional().nullable(),
   pic: z.string().max(100, "Nama PIC maksimal 100 karakter").optional().nullable(),
   
@@ -84,6 +87,14 @@ export const productionFormSchemaBase = z.object({
 
 export const productionFormSchema = productionFormSchemaBase.superRefine((data, ctx) => {
   const hasMasalah = data.pcsData && data.pcsData.some(pcs => pcs.indikatorStop);
+
+  if (!data.tanggalPotong && (!data.panelNo || data.panelNo.trim() === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Nomor Panel harus diisi",
+      path: ["panelNo"],
+    });
+  }
 
   if (data.pcsData && data.pcsData.length > 0) {
     data.pcsData.forEach((pcs, index) => {
@@ -126,6 +137,7 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
   meterAwal: z.string().optional().nullable(),
   meterAkhir: z.string().optional().nullable(),
   hasilProduksiMeter: z.string().optional().nullable(),
+  targetMeter: z.string().optional().nullable(),
   pcsData: z.array(
     z.object({
       pcsIndex: z.string(),
@@ -141,7 +153,8 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
     })
   ),
 }).superRefine((data, ctx) => {
-  const hasMeter = data.meterAkhir && data.meterAkhir.trim() !== "";
+  const hasMeter = (data.meterAkhir && data.meterAkhir.trim() !== "") || 
+                   (data.hasilProduksiMeter && data.hasilProduksiMeter.trim() !== "");
   const hasMasalah = data.pcsData && data.pcsData.some(pcs => pcs.indikatorStop);
   if (!hasMeter && !hasMasalah) {
     ctx.addIssue({
@@ -154,12 +167,20 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
   if (data.meterAwal && data.meterAkhir) {
     const start = parseFloat(data.meterAwal);
     const end = parseFloat(data.meterAkhir);
-    if (!isNaN(start) && !isNaN(end) && start > end) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Start Meter tidak boleh lebih besar dari Finish Meter",
-        path: ["meterAwal"],
-      });
+    if (!isNaN(start) && !isNaN(end)) {
+      if (data.nomorMc === "T2A" && start < end) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Angka Finish Meter (Counter Mesin) tidak boleh lebih besar dari Target Produksi",
+          path: ["meterAkhir"],
+        });
+      } else if (data.nomorMc !== "T2A" && start > end) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Start Meter tidak boleh lebih besar dari Finish Meter",
+          path: ["meterAwal"],
+        });
+      }
     }
   }
 

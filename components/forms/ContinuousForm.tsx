@@ -5,13 +5,12 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { continuousFormSchema, ContinuousFormInput } from "@/lib/schemas";
 import { useAuth } from "@/lib/auth-context";
-import {
-  uploadProductionPhoto,
-  getLastPanelNoByPotongan,
-} from "@/actions/employee-actions";
+import { uploadProductionPhoto } from "@/actions/employee-actions";
 import {
   submitContinuousReport,
   updateContinuousReport,
+  getLastMeterStartByBatch,
+  getOriginalT2ATarget,
 } from "@/actions/continuous-actions";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -36,6 +35,8 @@ import {
   Timer,
   ArrowLeft,
   ArrowRight,
+  Send,
+  Scissors,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
@@ -307,6 +308,23 @@ type ContinuousFormProps = {
   isEdit?: boolean;
 };
 
+function parseFormMeterValue(value: string | null | undefined): number | null {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return null;
+  }
+  const num = parseFloat(String(value));
+  return Number.isFinite(num) ? num : null;
+}
+
+function getJakartaDateString() {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 export default function ContinuousForm({
   initialData,
   isEdit,
@@ -332,10 +350,10 @@ export default function ContinuousForm({
   const [operators, setOperators] = useState(FALLBACK_OPERATORS);
   const [designs, setDesigns] = useState(FALLBACK_DESIGNS);
   const [groups, setGroups] = useState(FALLBACK_GROUPS);
-  const [isDbConnected, setIsDbConnected] = useState(false);
 
   // Accordion UI State
   const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
+  const [highlightPotonganKe, setHighlightPotonganKe] = useState(false);
 
   // Pop-up Modal State
   const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
@@ -350,6 +368,10 @@ export default function ContinuousForm({
     before: string | null;
     after: string | null;
   }>({ before: null, after: null });
+  const [isMeterAwalLocked, setIsMeterAwalLocked] = useState(true);
+  const [originalT2ATarget, setOriginalT2ATarget] = useState<number | null>(
+    null,
+  );
 
   // Timer State for Downtime
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -489,7 +511,6 @@ export default function ContinuousForm({
         if (opData && opData.length > 0) {
           // KITA GUNAKAN FALLBACK DULU KARENA MINTA SESUAI GAMBAR BARU (SHIFT A,B,C)
           // setOperators(opData.map((o: any) => ({ id: o.id, name: o.nama_operator })));
-          setIsDbConnected(true);
         }
 
         const { data: dsData } = await supabase
@@ -553,6 +574,7 @@ export default function ContinuousForm({
       meterAwal: "",
       meterAkhir: "",
       hasilProduksiMeter: "",
+      targetMeter: "",
       pcsData: [
         {
           pcsIndex: "1",
@@ -593,6 +615,9 @@ export default function ContinuousForm({
         meterAwal: String(initialData.meter_awal || ""),
         meterAkhir: String(initialData.meter_akhir || ""),
         hasilProduksiMeter: String(initialData.total_produksi_meter || ""),
+        targetMeter: initialData.target_meter
+          ? String(initialData.target_meter)
+          : "",
         pcsData:
           initialData.details && initialData.details.length > 0
             ? initialData.details.map((d: any) => ({
@@ -639,16 +664,136 @@ export default function ContinuousForm({
   // Auto calculate total hasil produksi meter
   const watchMeterAwal = watch("meterAwal");
   const watchMeterAkhir = watch("meterAkhir");
+  const watchNomorMc = watch("nomorMc");
+  const watchPotonganKe = watch("potonganKe");
 
   useEffect(() => {
     if (watchMeterAwal && watchMeterAkhir) {
       const awal = parseFloat(watchMeterAwal);
       const akhir = parseFloat(watchMeterAkhir);
       if (!isNaN(awal) && !isNaN(akhir)) {
-        setValue("hasilProduksiMeter", String(Math.abs(akhir - awal)));
+        if (watchNomorMc === "T2A") {
+          setValue("hasilProduksiMeter", String(Math.max(awal - akhir, 0)));
+        } else {
+          setValue("hasilProduksiMeter", String(Math.max(akhir - awal, 0)));
+        }
       }
+    } else if (!watchMeterAkhir) {
+      setValue("hasilProduksiMeter", "");
     }
-  }, [watchMeterAwal, watchMeterAkhir, setValue]);
+  }, [watchMeterAwal, watchMeterAkhir, watchNomorMc, setValue]);
+
+  const refreshAutomaticMeterStart = async () => {
+    if (isEdit) return;
+
+    const nomorMc = getValues("nomorMc");
+    const potonganKe = getValues("potonganKe");
+    if (!nomorMc || !potonganKe) {
+      setValue("meterAwal", "");
+      return;
+    }
+
+    const result = await getLastMeterStartByBatch({
+      nomorMc,
+      potonganKe,
+    });
+
+    const nextMeterStart = result.success
+      ? String(result.meterStart ?? 0)
+      : "0";
+
+    const nextMeterStartNum = result.success ? (result.meterStart ?? 0) : 0;
+    const nomorMcStr = getValues("nomorMc");
+
+    if (nomorMcStr === "T2A") {
+      if (nextMeterStartNum > 0) {
+        // Continuing same roll from previous shift — lock with previous remaining
+        setValue("meterAwal", String(nextMeterStartNum), {
+          shouldDirty: false,
+          shouldValidate: Boolean(getValues("meterAkhir")),
+        });
+        setIsMeterAwalLocked(true);
+        // Fetch original target for display
+        getOriginalT2ATarget({
+          nomorMc: nomorMcStr,
+          potonganKe: getValues("potonganKe"),
+        }).then((res) => {
+          if (res.success && res.originalTarget)
+            setOriginalT2ATarget(res.originalTarget);
+        });
+      } else {
+        // New roll or after cut — let user type target
+        setIsMeterAwalLocked(false);
+        setOriginalT2ATarget(null);
+      }
+    } else {
+      setValue("meterAwal", nextMeterStart, {
+        shouldDirty: false,
+        shouldValidate: Boolean(getValues("meterAkhir")),
+      });
+      setIsMeterAwalLocked(true);
+    }
+  };
+
+  useEffect(() => {
+    if (isEdit) return;
+
+    if (!watchNomorMc || !watchPotonganKe || isNaN(parseInt(watchPotonganKe))) {
+      return;
+    }
+
+    let isActive = true;
+    const timeoutId = setTimeout(async () => {
+      if (!isActive) return;
+
+      // Skip logic for T2A if it's a new roll, handled below
+
+      const result = await getLastMeterStartByBatch({
+        nomorMc: watchNomorMc,
+        potonganKe: watchPotonganKe,
+      });
+
+      if (!isActive) return;
+      const nextMeterStartNum = result.success ? (result.meterStart ?? 0) : 0;
+      const nextMeterStartStr = String(nextMeterStartNum);
+
+      if (watchNomorMc === "T2A") {
+        if (nextMeterStartNum > 0) {
+          setValue("meterAwal", nextMeterStartStr, {
+            shouldDirty: false,
+            shouldValidate: Boolean(watchMeterAkhir),
+          });
+          setIsMeterAwalLocked(true);
+          // Fetch original target for display
+          getOriginalT2ATarget({
+            nomorMc: watchNomorMc,
+            potonganKe: watchPotonganKe,
+          }).then((res) => {
+            if (isActive && res.success && res.originalTarget)
+              setOriginalT2ATarget(res.originalTarget);
+          });
+        } else {
+          setIsMeterAwalLocked(false);
+          setOriginalT2ATarget(null);
+          // If the user hasn't typed anything yet, ensure it's empty
+          if (!watchMeterAwal) {
+            setValue("meterAwal", "", { shouldDirty: false });
+          }
+        }
+      } else {
+        setValue("meterAwal", nextMeterStartStr, {
+          shouldDirty: false,
+          shouldValidate: Boolean(watchMeterAkhir),
+        });
+        setIsMeterAwalLocked(true);
+      }
+    }, 600); // Add 600ms delay mirip getLastPanelNoByPotongan
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeoutId);
+    };
+  }, [isEdit, watchMeterAkhir, watchNomorMc, watchPotonganKe, setValue]);
 
   // Load Draft or Header Data dari LocalStorage
   useEffect(() => {
@@ -688,6 +833,12 @@ export default function ContinuousForm({
               ];
               setValue("pcsData", currentPcs);
             }
+          } else if (key === "tanggalPotong") {
+            // Hindari tanggal potong lama terbawa ke submit berikutnya.
+            setValue("tanggalPotong", "");
+          } else if (key === "meterAwal") {
+            // Jangan set meterAwal di sini - biarkan watchNomorMc/potonganKe effect fetch dari database
+            // Ini memastikan selalu ambil nilai terbaru dari database sesuai dengan mesin dan potongan
           } else {
             setValue(key as keyof ContinuousFormInput, parsed[key]);
           }
@@ -708,6 +859,32 @@ export default function ContinuousForm({
     });
     return () => subscription.unsubscribe();
   }, [watch, isEdit]);
+
+  // Handler for form validation failures — extracts readable error messages
+  const onInvalid = (fieldErrors: any) => {
+    // Extract the first error message from nested errors
+    const extractMessage = (obj: any): string | null => {
+      if (!obj) return null;
+      if (typeof obj === "string") return obj;
+      if (obj.message && typeof obj.message === "string") return obj.message;
+      if (Array.isArray(obj)) {
+        for (const item of obj) {
+          const msg = extractMessage(item);
+          if (msg) return msg;
+        }
+      }
+      if (typeof obj === "object") {
+        for (const key of Object.keys(obj)) {
+          const msg = extractMessage(obj[key]);
+          if (msg) return msg;
+        }
+      }
+      return null;
+    };
+
+    const msg = extractMessage(fieldErrors);
+    setErrorMsg(msg || "Terdapat kesalahan validasi. Silakan periksa form.");
+  };
 
   const onSubmit = async (data: ContinuousFormInput) => {
     setIsSubmitting(true);
@@ -748,6 +925,35 @@ export default function ContinuousForm({
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;
 
+    const meterAkhirNum = parseFormMeterValue(data.meterAkhir);
+    const isT2ACutSubmit = data.nomorMc === "T2A" && meterAkhirNum === 0;
+    const effectiveIsLastRoll = isLastRoll || isT2ACutSubmit;
+
+    if (isT2ACutSubmit) {
+      setIsLastRoll(true);
+    }
+
+    const effectiveTanggalPotong = effectiveIsLastRoll
+      ? data.tanggalPotong || getJakartaDateString()
+      : "";
+    data.tanggalPotong = effectiveTanggalPotong;
+
+    // T2A: meterAwal = Target, meterAkhir = Counter reading, total calculated on backend
+    const isT2A = data.nomorMc === "T2A";
+    if (isT2A && !isT2ACutSubmit) {
+      if (
+        !data.meterAwal ||
+        data.meterAwal.toString().trim() === "" ||
+        data.meterAwal === "0"
+      ) {
+        setErrorMsg(
+          "Untuk mesin T2A, masukkan Target Produksi terlebih dahulu.",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     // Gabungkan detailMasalahMap ke spesifikMasalah, dan set detailMasalah ke nama kategori lengkap
     if (data.pcsData) {
       data.pcsData.forEach((pcs) => {
@@ -783,7 +989,7 @@ export default function ContinuousForm({
       designId: data.designId,
       nomorMc: data.nomorMc,
       tanggalProduksi: data.tanggalProduksi,
-      tanggalPotong: data.tanggalPotong,
+      tanggalPotong: effectiveTanggalPotong,
       pick: data.pick,
       noOrderBarang: data.noOrderBarang,
       noCustomer: data.noCustomer,
@@ -796,9 +1002,14 @@ export default function ContinuousForm({
       rpm: data.rpm,
       pic: data.pic,
       potonganKe: data.potonganKe,
-      meterAwal: data.meterAwal,
-      meterAkhir: data.meterAkhir,
-      hasilProduksiMeter: data.hasilProduksiMeter,
+      meterAwal:
+        data.meterAkhir && !effectiveIsLastRoll
+          ? data.meterAkhir
+          : effectiveIsLastRoll
+            ? ""
+            : data.meterAwal,
+      meterAkhir: "",
+      hasilProduksiMeter: "",
       lastRollNo: lastRollNo,
     };
     localStorage.setItem("dji_form_header", JSON.stringify(headerDataToSave));
@@ -812,6 +1023,7 @@ export default function ContinuousForm({
           ...data,
           isOfflineSaved: true,
           autoAdjustedDowntimeMsg: adjustedMsg,
+          isCutSubmit: isT2ACutSubmit,
         } as any);
         return;
       }
@@ -829,6 +1041,7 @@ export default function ContinuousForm({
           ...data,
           id: isEdit ? initialData.id : (result as any).productionId,
           autoAdjustedDowntimeMsg: adjustedMsg,
+          isCutSubmit: isT2ACutSubmit,
         } as any);
       } else {
         setErrorMsg(result.error || "Gagal menyimpan laporan produksi rajut.");
@@ -846,6 +1059,7 @@ export default function ContinuousForm({
           ...data,
           isOfflineSaved: true,
           autoAdjustedDowntimeMsg: adjustedMsg,
+          isCutSubmit: isT2ACutSubmit,
         } as any);
       } else {
         console.error("Uncaught exception in onSubmit:", err);
@@ -901,6 +1115,7 @@ export default function ContinuousForm({
       router.push("/history");
       return;
     }
+    const wasLastRoll = isLastRoll;
     setSuccessData(null);
     const savedHeader = localStorage.getItem("dji_form_header");
     let nextPanelNo = "1";
@@ -922,8 +1137,15 @@ export default function ContinuousForm({
       keteranganCacat: "",
     }));
 
+    const currentPotongan = parseInt(watch("potonganKe") || "0", 10);
+    const nextPotongan =
+      wasLastRoll && !isNaN(currentPotongan)
+        ? String(currentPotongan + 1)
+        : watch("potonganKe");
+
     reset({
       ...watch(),
+      potonganKe: nextPotongan,
 
       pcsData:
         newPcsData.length > 0
@@ -941,9 +1163,11 @@ export default function ContinuousForm({
               },
             ],
       totalDowntime: "",
-      meterAwal: "",
+      meterAwal: wasLastRoll && watch("nomorMc") === "T2A" ? "" : "",
       meterAkhir: "",
       hasilProduksiMeter: "",
+      tanggalPotong: "",
+      targetMeter: wasLastRoll ? "" : watch("targetMeter"),
     });
     setIsLastRoll(false);
     setIsTimerRunning(false);
@@ -952,6 +1176,11 @@ export default function ContinuousForm({
     setFirstProblemTime(null);
     setLiveTimerSeconds(0);
     setPreviews({ before: null, after: null });
+
+    if (wasLastRoll) {
+      setIsHeaderModalOpen(true);
+      setHighlightPotonganKe(true);
+    }
   };
 
   const handlePhotoUpload = async (
@@ -1051,11 +1280,8 @@ export default function ContinuousForm({
                 <Box className="w-4 h-4" />
               </div>
               <div className="flex flex-col items-start">
-                <span className="text-sm font-bold uppercase tracking-wider leading-none">
-                  Panel
-                </span>
-                <span className="text-[10px] font-medium text-slate-400 mt-0.5">
-                  Input per Potongan
+                <span className="text-sm font-black uppercase tracking-wider leading-none">
+                  PANEL
                 </span>
               </div>
             </div>
@@ -1068,10 +1294,7 @@ export default function ContinuousForm({
               </div>
               <div className="flex flex-col items-start">
                 <span className="text-sm font-black uppercase tracking-wider leading-none">
-                  Kontinu (Meteran)
-                </span>
-                <span className="text-[10px] font-bold text-slate-400 mt-0.5">
-                  Input per Roll
+                  METER
                 </span>
               </div>
             </div>
@@ -1087,19 +1310,6 @@ export default function ContinuousForm({
               Data Header akan otomatis tersimpan untuk panel berikutnya.
             </p>
           </div>
-          <div
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-medium transition-colors self-start sm:self-auto ${
-              isDbConnected
-                ? "bg-slate-50 text-slate-600 border-slate-200"
-                : "bg-amber-50 text-amber-700 border-amber-200"
-            }`}
-          >
-            <Database
-              className={`w-3 h-3 ${isDbConnected ? "text-slate-400" : "text-amber-500 animate-spin"}`}
-              strokeWidth={2}
-            />
-            {isDbConnected ? "Database Terhubung" : "Mode Offline"}
-          </div>
         </div>
 
         {errorMsg && (
@@ -1112,59 +1322,86 @@ export default function ContinuousForm({
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-5 sm:p-6">
-            {/* Tombol Pemicu Pop-up Meteran */}
-            <div
-              data-tour="meter-final-report"
-              className="bg-emerald-50/80 border border-emerald-200 shadow-sm rounded-[20px] p-5 sm:p-6 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4"
-            >
-              <div>
-                <h4 className="text-sm font-bold text-emerald-800">
-                  Laporan Hasil Akhir (Shift / Roll)
-                </h4>
-                <p className="text-[10px] text-emerald-600 mt-1">
-                  Gunakan tombol di samping jika gulungan telah dipotong atau
-                  shift selesai.
-                </p>
+        <form
+          onSubmit={handleSubmit(onSubmit, onInvalid)}
+          className="space-y-4"
+        >
+          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-4 sm:p-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+              <div data-tour="meter-header-summary" className="w-full">
+                <HeaderSummaryCard
+                  operatorName={
+                    activeOperators.find(
+                      (op) => op.id.toString() === watch("operatorId"),
+                    )?.name || ""
+                  }
+                  shiftName={activeShiftName}
+                  nomorMc={watch("nomorMc") || ""}
+                  design={watch("designId") || ""}
+                  statusMatching={watch("statusMatching") || ""}
+                  potonganKe={watch("potonganKe")}
+                  onEdit={() => {
+                    setIsHeaderModalOpen(true);
+                    setHighlightPotonganKe(false);
+                  }}
+                  showEditButton
+                  showEditButtonPlacement="bottom"
+                />
               </div>
-              <button
-                type="button"
-                onClick={() => setIsMeterModalOpen(true)}
-                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-              >
-                <FileText className="w-4 h-4" />
-                Lapor Meteran Akhir
-              </button>
-            </div>
 
-            <div data-tour="meter-header-summary">
-              <HeaderSummaryCard
-                operatorName={
-                  activeOperators.find(
-                    (op) => op.id.toString() === watch("operatorId"),
-                  )?.name || ""
-                }
-                shiftName={activeShiftName}
-                nomorMc={watch("nomorMc") || ""}
-                design={watch("designId") || ""}
-                statusMatching={watch("statusMatching") || ""}
-                potonganKe={watch("potonganKe")}
-                onEdit={() => setIsHeaderModalOpen(true)}
+              <ProductionHeaderModal
+                isOpen={isHeaderModalOpen}
+                onClose={() => {
+                  setIsHeaderModalOpen(false);
+                  setHighlightPotonganKe(false);
+                }}
+                register={register}
+                errors={errors}
+                watch={watch}
+                groups={groups}
+                operators={activeOperators}
+                activeShiftName={activeShiftName}
+                onClearHeader={handleClearHeader}
+                highlightPotonganKe={highlightPotonganKe}
               />
-            </div>
 
-            <ProductionHeaderModal
-              isOpen={isHeaderModalOpen}
-              onClose={() => setIsHeaderModalOpen(false)}
-              register={register}
-              errors={errors}
-              watch={watch}
-              groups={groups}
-              operators={activeOperators}
-              activeShiftName={activeShiftName}
-              onClearHeader={handleClearHeader}
-            />
+              {/* Tombol Pemicu Pop-up Meteran */}
+              <div
+                data-tour="meter-final-report"
+                className="w-full min-h-full p-6 bg-emerald-50/80 border-2 border-emerald-200 rounded-2xl relative shadow-md flex flex-col justify-center gap-5"
+              >
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-emerald-600 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md whitespace-nowrap">
+                  {watch("nomorMc") === "T2A"
+                    ? "Laporan Meter"
+                    : "Laporan Hasil Akhir"}
+                </div>
+
+                <div className="mt-3 flex flex-col items-center justify-center text-center gap-4">
+                  <div>
+                    <h4 className="text-lg font-black text-emerald-900">
+                      {watch("nomorMc") === "T2A"
+                        ? "Laporan Meter"
+                        : "Laporan Hasil Akhir (Shift / Roll)"}
+                    </h4>
+                    <p className="text-xs text-emerald-700 mt-2 max-w-sm mx-auto">
+                      {watch("nomorMc") === "T2A"
+                        ? "Gunakan tombol di bawah untuk melaporkan meter produksi."
+                        : "Gunakan tombol di bawah jika gulungan telah dipotong atau shift selesai."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMeterModalOpen(true)}
+                    className="w-full max-w-xs px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2.5"
+                  >
+                    <FileText className="w-5 h-5" />
+                    {watch("nomorMc") === "T2A"
+                      ? "Lapor Meter"
+                      : "Lapor Meteran Akhir"}
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* ARRAY OF PCS */}
             <div data-tour="meter-pcs-detail" className="mt-8">
@@ -1509,10 +1746,13 @@ export default function ContinuousForm({
                   <h5
                     className={`text-sm font-bold ${isLastRoll ? "text-emerald-700" : "text-slate-600"}`}
                   >
-                    Potong Kain (Ini Potongan Terakhir dalam Roll)
+                    Potong Kain
                   </h5>
                 </div>
               </div>
+              <Scissors
+                className={`w-5 h-5 shrink-0 scale-x-[-1] ${isLastRoll ? "text-emerald-600" : "text-slate-400"}`}
+              />
             </label>
 
             {isLastRoll && (
@@ -1530,7 +1770,10 @@ export default function ContinuousForm({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsMeterModalOpen(true)}
+                    onClick={async () => {
+                      await refreshAutomaticMeterStart();
+                      setIsMeterModalOpen(true);
+                    }}
                     className="flex-[2] h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
                   >
                     <Save className="w-4 h-4" /> Lanjut Isi Total Produksi
@@ -1551,7 +1794,7 @@ export default function ContinuousForm({
                 // Karena ini tombol kirim form cacat, kosongkan meterAkhir agar validasi skema tetap masuk akal
                 setValue("meterAwal", "");
                 setValue("meterAkhir", "");
-                handleSubmit(onSubmit)();
+                handleSubmit(onSubmit, onInvalid)();
               }}
               disabled={isSubmitting}
               className={`w-full h-12 rounded-xl active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md ${isLastRoll ? "bg-slate-400 hover:bg-slate-500" : "bg-[#0070bc] hover:bg-[#004777]"}`}
@@ -1609,97 +1852,287 @@ export default function ContinuousForm({
                 </div>
 
                 <div className="space-y-4 relative z-10">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-slate-600 uppercase">
-                      Start Meter
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      onWheel={(e) => (e.target as HTMLElement).blur()}
-                      {...register("meterAwal")}
-                      className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
-                      placeholder="Contoh: 100"
-                    />
-                    {errors.meterAwal && (
-                      <span className="text-red-500 text-[10px] font-bold mt-0.5">
-                        {errors.meterAwal.message}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-slate-600 uppercase">
-                      Finish Meter
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      onWheel={(e) => (e.target as HTMLElement).blur()}
-                      {...register("meterAkhir")}
-                      className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
-                      placeholder="Contoh: 250"
-                    />
-                    {errors.meterAkhir && (
-                      <span className="text-red-500 text-[10px] font-bold mt-0.5">
-                        {errors.meterAkhir.message}
-                      </span>
-                    )}
-                  </div>
+                  {/* T2A: target-first flow */}
+                  {watch("nomorMc") === "T2A" ? (
+                    <div className="space-y-3">
+                      {/* Info Target Produksi Awal (saat lanjutan shift) */}
+                      {isMeterAwalLocked && originalT2ATarget !== null && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                            <ClipboardList className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-blue-800 uppercase">
+                              Target Produksi Awal
+                            </p>
+                            <p className="text-base font-black text-blue-700">
+                              {originalT2ATarget} m
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-slate-600 uppercase">
+                          {isMeterAwalLocked
+                            ? "Start Meter"
+                            : "Target Produksi (meter)"}
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          onWheel={(e) => (e.target as HTMLElement).blur()}
+                          {...register("meterAwal")}
+                          readOnly={isMeterAwalLocked}
+                          className={`h-12 px-4 rounded-xl border text-base font-semibold outline-none transition-all ${
+                            isMeterAwalLocked
+                              ? "bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed"
+                              : "bg-white border-slate-200 focus:border-emerald-400"
+                          }`}
+                          placeholder="Contoh: 600"
+                        />
+                        {isMeterAwalLocked && (
+                          <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                            Dilanjutkan dari sisa meter shift sebelumnya.
+                          </p>
+                        )}
+                      </div>
 
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mt-2">
-                    <label className="text-[10px] font-bold text-emerald-800 uppercase flex justify-between items-center mb-1">
-                      <span>Total Hasil Produksi</span>
-                      <span className="text-[9px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded font-black uppercase">
-                        Auto Calculate
-                      </span>
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      onWheel={(e) => (e.target as HTMLElement).blur()}
-                      {...register("hasilProduksiMeter")}
-                      className="w-full h-12 px-4 rounded-xl bg-white border border-emerald-300 text-lg font-black text-emerald-700 focus:border-emerald-500 outline-none shadow-sm text-right"
-                      placeholder="0"
-                    />
-                  </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-slate-600 uppercase">
+                          Finish Meter (Counter Mesin)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          onWheel={(e) => (e.target as HTMLElement).blur()}
+                          {...register("meterAkhir")}
+                          className="h-12 px-4 rounded-xl bg-white border border-slate-200 text-base font-semibold focus:border-emerald-400 outline-none transition-all text-right"
+                          placeholder="Masukkan angka di mesin saat ini"
+                        />
+                      </div>
+
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                        <label className="text-[10px] font-bold text-emerald-800 uppercase flex justify-between items-center mb-1">
+                          <span>Total Produksi</span>
+                        </label>
+                        <div className="text-right text-lg font-black text-emerald-700">
+                          {(() => {
+                            const akhirStr = watch("meterAkhir");
+                            if (!akhirStr || akhirStr.trim() === "")
+                              return "0 m";
+                            const t =
+                              parseFloat(watch("meterAwal") || "0") || 0;
+                            const p = parseFloat(akhirStr) || 0;
+                            const rem = Math.max(t - p, 0);
+                            return `${rem} m`;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-slate-600 uppercase">
+                          Start Meter Otomatis
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          onWheel={(e) => (e.target as HTMLElement).blur()}
+                          {...register("meterAwal")}
+                          readOnly
+                          className="h-12 px-4 rounded-xl bg-slate-100 border border-slate-200 text-base font-semibold text-slate-700 outline-none transition-all cursor-not-allowed"
+                          placeholder="Otomatis dari finish terakhir"
+                        />
+                        <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                          Potongan baru mulai dari 0. Jika shift sebelumnya
+                          belum potong kain, nilai ini mengikuti finish meter
+                          terakhir.
+                        </p>
+                        {errors.meterAwal && (
+                          <span className="text-red-500 text-[10px] font-bold mt-0.5">
+                            {errors.meterAwal.message}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-slate-600 uppercase">
+                          Finish Meter
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          onWheel={(e) => (e.target as HTMLElement).blur()}
+                          {...register("meterAkhir")}
+                          className="h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-base font-semibold focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
+                          placeholder="Contoh: 250"
+                        />
+                        {errors.meterAkhir && (
+                          <span className="text-red-500 text-[10px] font-bold mt-0.5">
+                            {errors.meterAkhir.message}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mt-2">
+                        <label className="text-[10px] font-bold text-emerald-800 uppercase flex justify-between items-center mb-1">
+                          <span>Total Hasil Produksi</span>
+                          <span className="text-[9px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded font-black uppercase">
+                            Auto Calculate
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          onWheel={(e) => (e.target as HTMLElement).blur()}
+                          {...register("hasilProduksiMeter")}
+                          className="w-full h-12 px-4 rounded-xl bg-white border border-emerald-300 text-lg font-black text-emerald-700 focus:border-emerald-500 outline-none shadow-sm text-right"
+                          placeholder="0"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex gap-3 mt-8 relative z-10">
-                  <button
-                    type="button"
-                    onClick={() => setIsMeterModalOpen(false)}
-                    className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-colors text-sm"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const isValid = await trigger([
-                        "meterAwal",
-                        "meterAkhir",
-                      ]);
-                      if (!isValid) return; // Prevent closing and show errors
+                  {/* T2A potongan baru: Simpan (blue) + Kirim (green) sejajar */}
+                  {watch("nomorMc") === "T2A" && !isMeterAwalLocked ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = watch("meterAwal");
+                          if (
+                            !target ||
+                            target.trim() === "" ||
+                            target === "0"
+                          ) {
+                            setErrorMsg(
+                              "Masukkan Target Produksi terlebih dahulu.",
+                            );
+                            return;
+                          }
+                          localStorage.setItem(
+                            "dji_form_draft_continuous",
+                            JSON.stringify(watch()),
+                          );
+                          setIsMeterModalOpen(false);
+                          setErrorMsg(null);
+                          setSuccessData({ isTargetSaved: true } as any);
+                        }}
+                        className="flex-1 py-3.5 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white font-bold rounded-xl transition-all shadow-md shadow-blue-500/20 flex justify-center items-center gap-2 text-sm"
+                      >
+                        <Save className="w-4 h-4" />
+                        Simpan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await refreshAutomaticMeterStart();
+                          const isValid = await trigger([
+                            "meterAwal",
+                            "meterAkhir",
+                          ]);
+                          if (!isValid) return;
 
-                      setIsMeterModalOpen(false);
-                      // Kita bisa hapus semua list pcs karena mereka cuman mau lapor meteran
-                      // Ini trik supaya tidak kecampur dengan form titik cacat kosong
-                      const currentPcs = watch("pcsData");
-                      if (currentPcs && currentPcs.length === 0) {
-                        // Do nothing, valid
-                      }
-                      handleSubmit(onSubmit)();
-                    }}
-                    disabled={isSubmitting}
-                    className="flex-[2] py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold rounded-xl transition-all shadow-md shadow-emerald-500/20 flex justify-center items-center gap-2 text-sm"
-                  >
-                    {isSubmitting ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    Simpan & Kirim Meteran
-                  </button>
+                          const currentMc = watch("nomorMc");
+                          const currentMeterAkhir = parseFloat(
+                            watch("meterAkhir") || "0",
+                          );
+                          if (currentMc === "T2A" && currentMeterAkhir === 0) {
+                            setIsLastRoll(true);
+                            setValue(
+                              "tanggalPotong",
+                              getJakartaDateString(),
+                            );
+                          }
+
+                          const currentPcs = watch("pcsData") || [];
+                          const cleanPcs = currentPcs.map((pcs) => ({
+                            ...pcs,
+                            indikatorStop: false,
+                            kategoriMasalah: [],
+                            detailMasalahMap: undefined,
+                            detailMasalah: "",
+                            spesifikMasalah: "",
+                            keteranganCacat: "",
+                          }));
+                          setValue("pcsData", cleanPcs);
+                          setValue("totalDowntime", "");
+
+                          setIsMeterModalOpen(false);
+                          handleSubmit(onSubmit, onInvalid)();
+                        }}
+                        disabled={isSubmitting}
+                        className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold rounded-xl transition-all shadow-md shadow-emerald-500/20 flex justify-center items-center gap-2 text-sm"
+                      >
+                        {isSubmitting ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                        Kirim
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsMeterModalOpen(false)}
+                        className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-colors text-sm"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await refreshAutomaticMeterStart();
+                          const isValid = await trigger([
+                            "meterAwal",
+                            "meterAkhir",
+                          ]);
+                          if (!isValid) return;
+
+                          const currentMc = watch("nomorMc");
+                          const currentMeterAkhir = parseFloat(
+                            watch("meterAkhir") || "0",
+                          );
+                          if (currentMc === "T2A" && currentMeterAkhir === 0) {
+                            setIsLastRoll(true);
+                            setValue(
+                              "tanggalPotong",
+                              getJakartaDateString(),
+                            );
+                          }
+
+                          const currentPcs = watch("pcsData") || [];
+                          const cleanPcs = currentPcs.map((pcs) => ({
+                            ...pcs,
+                            indikatorStop: false,
+                            kategoriMasalah: [],
+                            detailMasalahMap: undefined,
+                            detailMasalah: "",
+                            spesifikMasalah: "",
+                            keteranganCacat: "",
+                          }));
+                          setValue("pcsData", cleanPcs);
+                          setValue("totalDowntime", "");
+
+                          setIsMeterModalOpen(false);
+                          handleSubmit(onSubmit, onInvalid)();
+                        }}
+                        disabled={isSubmitting}
+                        className="flex-[2] py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold rounded-xl transition-all shadow-md shadow-emerald-500/20 flex justify-center items-center gap-2 text-sm"
+                      >
+                        {isSubmitting ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Save className="w-4 h-4" />
+                        )}
+                        Simpan & Kirim Meteran
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1781,30 +2214,55 @@ export default function ContinuousForm({
               <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h4 className="text-lg font-bold text-slate-800">
-                {(successData as any).isOfflineSaved
-                  ? "Tersimpan Offline"
-                  : "Laporan Berhasil Disimpan"}
-              </h4>
-              <p className="text-xs text-slate-500 mt-1 mb-5">
-                {(successData as any).isOfflineSaved
-                  ? `Data Potongan ke-${successData.potonganKe} antre dikirim otomatis saat sinyal pulih.`
-                  : `Data laporan untuk Potongan ke-${successData.potonganKe} telah terekam.`}
-              </p>
-              {(successData as any).autoAdjustedDowntimeMsg && (
-                <div className="w-full mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left shadow-inner">
-                  <p className="text-[11px] font-bold text-amber-700 leading-snug">
-                    <AlertCircle className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
-                    {(successData as any).autoAdjustedDowntimeMsg}
+
+              {(successData as any).isTargetSaved ? (
+                <>
+                  <h4 className="text-lg font-bold text-slate-800">
+                    Target Tersimpan
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 mb-5">
+                    Target Produksi {watch("meterAwal")} meter telah disimpan
+                    untuk potongan ke-{watch("potonganKe")}.
                   </p>
-                </div>
+                  <button
+                    onClick={() => setSuccessData(null)}
+                    className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl active:scale-95 transition-all text-sm"
+                  >
+                    OK
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h4 className="text-lg font-bold text-slate-800">
+                    {(successData as any).isOfflineSaved
+                      ? "Tersimpan Offline"
+                      : "Laporan Berhasil Disimpan"}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 mb-5">
+                    {(successData as any).isOfflineSaved
+                      ? (successData as any).isCutSubmit
+                        ? `Tanggal potong Potongan ke-${successData.potonganKe} antre dikirim otomatis saat sinyal pulih.`
+                        : `Data Potongan ke-${successData.potonganKe} antre dikirim otomatis saat sinyal pulih.`
+                      : (successData as any).isCutSubmit
+                        ? `Laporan meteran Potongan ke-${successData.potonganKe} terekam. Tanggal potong juga diupdate pada semua data sebelumnya.`
+                        : `Data laporan untuk Potongan ke-${successData.potonganKe} telah terekam.`}
+                  </p>
+                  {(successData as any).autoAdjustedDowntimeMsg && (
+                    <div className="w-full mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left shadow-inner">
+                      <p className="text-[11px] font-bold text-amber-700 leading-snug">
+                        <AlertCircle className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
+                        {(successData as any).autoAdjustedDowntimeMsg}
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleCloseSuccess}
+                    className="w-full py-3 bg-[#0070bc] text-white font-bold rounded-xl active:scale-95 transition-all text-sm"
+                  >
+                    {isEdit ? "Kembali ke Riwayat" : "Input Masalah Berikutnya"}
+                  </button>
+                </>
               )}
-              <button
-                onClick={handleCloseSuccess}
-                className="w-full py-3 bg-[#0070bc] text-white font-bold rounded-xl active:scale-95 transition-all text-sm"
-              >
-                {isEdit ? "Kembali ke Riwayat" : "Input Masalah Berikutnya"}
-              </button>
             </div>
           </div>
         )}

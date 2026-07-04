@@ -868,58 +868,105 @@ export default function DashboardPage() {
 
   // Leaderboard data hook (Top/Bottom Performers)
   const leaderboard = useMemo(() => {
-    // 1. Top Operators (ranked by total unique panels)
-    const operatorMap: Record<string, { headers: Set<string>; group: string }> =
-      {};
-    dateFilteredTransactions.forEach((item) => {
-      if (item.is_production && item.header_id) {
-        if (!operatorMap[item.nama_operator]) {
-          operatorMap[item.nama_operator] = {
-            headers: new Set(),
-            group: item.group || "Tanpa Group",
-          };
-        }
-        operatorMap[item.nama_operator].headers.add(item.header_id);
+    const isMeterMode = metricMode === "METER";
+    const leaderboardData = dateFilteredTransactions.filter((item) => {
+      if (!item.is_production || !item.header_id) return false;
+      const isMeter = (item.hasil_meter || 0) > 0 || (item.posisi_meter || 0) > 0;
+      return isMeterMode ? isMeter : !isMeter;
+    });
+
+    // 1. Top Operators, mengikuti mode Panel/Meteran.
+    const operatorMap: Record<
+      string,
+      { headers: Set<string>; meterHeaders: Map<string, number>; group: string }
+    > = {};
+    leaderboardData.forEach((item) => {
+      if (!operatorMap[item.nama_operator]) {
+        operatorMap[item.nama_operator] = {
+          headers: new Set(),
+          meterHeaders: new Map(),
+          group: item.group || "Tanpa Group",
+        };
       }
+
+      operatorMap[item.nama_operator].headers.add(item.header_id);
+      operatorMap[item.nama_operator].meterHeaders.set(
+        item.header_id,
+        Math.max(
+          operatorMap[item.nama_operator].meterHeaders.get(item.header_id) || 0,
+          parseFloat(item.hasil_meter as any) || 0,
+        ),
+      );
     });
     const topOperators = Object.entries(operatorMap)
-      .map(([name, data]) => ({
-        name,
-        pcs: data.headers.size,
-        group: data.group,
-      }))
-      .sort((a, b) => b.pcs - a.pcs)
+      .map(([name, data]) => {
+        const meter = Array.from(data.meterHeaders.values()).reduce(
+          (sum, value) => sum + value,
+          0,
+        );
+        return {
+          name,
+          value: isMeterMode ? meter : data.headers.size,
+          pcs: data.headers.size,
+          meter,
+          group: data.group,
+        };
+      })
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
-    // 2. Top Machines (ranked by total unique panels)
+    // 2. Top Machines, mengikuti mode Panel/Meteran.
     const machineMap: Record<
       string,
-      { headers: Set<string>; downtimeHeaders: Map<string, number> }
-    > = {};
-    dateFilteredTransactions.forEach((item) => {
-      if (item.is_production && item.header_id) {
-        if (!machineMap[item.mesin_id]) {
-          machineMap[item.mesin_id] = {
-            headers: new Set(),
-            downtimeHeaders: new Map(),
-          };
-        }
-        machineMap[item.mesin_id].headers.add(item.header_id);
-        machineMap[item.mesin_id].downtimeHeaders.set(
-          item.header_id,
-          item.total_downtime_detik || 0,
-        );
+      {
+        headers: Set<string>;
+        meterHeaders: Map<string, number>;
+        downtimeHeaders: Map<string, number>;
       }
+    > = {};
+    leaderboardData.forEach((item) => {
+      if (!machineMap[item.mesin_id]) {
+        machineMap[item.mesin_id] = {
+          headers: new Set(),
+          meterHeaders: new Map(),
+          downtimeHeaders: new Map(),
+        };
+      }
+
+      machineMap[item.mesin_id].headers.add(item.header_id);
+      machineMap[item.mesin_id].meterHeaders.set(
+        item.header_id,
+        Math.max(
+          machineMap[item.mesin_id].meterHeaders.get(item.header_id) || 0,
+          parseFloat(item.hasil_meter as any) || 0,
+        ),
+      );
+      machineMap[item.mesin_id].downtimeHeaders.set(
+        item.header_id,
+        item.total_downtime_detik || 0,
+      );
     });
     const topMachines = Object.entries(machineMap)
       .map(([id, data]) => {
+        const meter = Array.from(data.meterHeaders.values()).reduce(
+          (sum, value) => sum + value,
+          0,
+        );
         const downtime = Array.from(data.downtimeHeaders.values()).reduce(
           (sum, val) => sum + val,
           0,
         );
-        return { id, pcs: data.headers.size, downtime };
+        return {
+          id,
+          value: isMeterMode ? meter : data.headers.size,
+          pcs: data.headers.size,
+          meter,
+          downtime,
+        };
       })
-      .sort((a, b) => b.pcs - a.pcs)
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
     // 3. Critical Machines (ranked by total Recheck counts or downtime)
@@ -927,22 +974,20 @@ export default function DashboardPage() {
       string,
       { defects: number; downtimeHeaders: Map<string, number> }
     > = {};
-    dateFilteredTransactions.forEach((item) => {
+    leaderboardData.forEach((item) => {
       if (!criticalMachineMap[item.mesin_id]) {
         criticalMachineMap[item.mesin_id] = {
           defects: 0,
           downtimeHeaders: new Map(),
         };
       }
-      if (item.status_qc === "Recheck" && item.is_production) {
+      if (item.status_qc === "Recheck") {
         criticalMachineMap[item.mesin_id].defects += 1;
       }
-      if (item.header_id) {
-        criticalMachineMap[item.mesin_id].downtimeHeaders.set(
-          item.header_id,
-          item.total_downtime_detik || 0,
-        );
-      }
+      criticalMachineMap[item.mesin_id].downtimeHeaders.set(
+        item.header_id,
+        item.total_downtime_detik || 0,
+      );
     });
     const criticalMachines = Object.entries(criticalMachineMap)
       .map(([id, data]) => {
@@ -957,7 +1002,7 @@ export default function DashboardPage() {
       .slice(0, 5);
 
     return { topOperators, topMachines, criticalMachines };
-  }, [dateFilteredTransactions]);
+  }, [dateFilteredTransactions, metricMode]);
 
   // Pareto Chart State and Hook for Quality Problems
   const [paretoMode, setParetoMode] = useState<"COUNT" | "DURATION">("COUNT");
@@ -4310,7 +4355,7 @@ export default function DashboardPage() {
                     </h3>
                   </div>
                   <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 uppercase">
-                    Hasil Panel
+                    {metricMode === "METER" ? "Hasil Meter" : "Hasil Panel"}
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -4344,7 +4389,9 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <span className="text-xs font-black text-slate-800">
-                          {op.pcs.toLocaleString()} panel
+                          {metricMode === "METER"
+                            ? `${op.meter.toLocaleString()} meter`
+                            : `${op.pcs.toLocaleString()} panel`}
                         </span>
                       </div>
                     ))
@@ -4370,7 +4417,7 @@ export default function DashboardPage() {
                     </h3>
                   </div>
                   <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 uppercase">
-                    Hasil Panel
+                    {metricMode === "METER" ? "Hasil Meter" : "Hasil Panel"}
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -4396,7 +4443,9 @@ export default function DashboardPage() {
                         </div>
                         <div className="text-right">
                           <span className="text-xs font-black text-slate-800">
-                            {m.pcs.toLocaleString()} panel
+                            {metricMode === "METER"
+                              ? `${m.meter.toLocaleString()} meter`
+                              : `${m.pcs.toLocaleString()} panel`}
                           </span>
                         </div>
                       </div>

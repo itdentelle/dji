@@ -1,12 +1,37 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { HelpCircle } from "lucide-react";
 import EmployeeForm from "@/components/forms/EmployeeForm";
 import { useAuth } from "@/lib/auth-context";
+import { createClient } from "@/lib/supabase/client";
 
 export default function EmployeeInputPage() {
   const { user } = useAuth();
+  const [isDbConnected, setIsDbConnected] = useState(false);
+
+  useEffect(() => {
+    async function checkDb() {
+      try {
+        const supabase = createClient();
+        if (
+          !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+          process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")
+        ) {
+          setIsDbConnected(false);
+          return;
+        }
+        const { error } = await supabase
+          .from("operators")
+          .select("id")
+          .limit(1);
+        setIsDbConnected(!error);
+      } catch (err) {
+        setIsDbConnected(false);
+      }
+    }
+    checkDb();
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col items-center animate-fadeIn py-8 px-4 w-full">
@@ -50,16 +75,21 @@ export default function EmployeeInputPage() {
           </button>
 
           {/* Active Session Pill */}
-          <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm text-xs text-slate-600 font-medium">
-            <span className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.6)] animate-pulse" />
-            <span>
-              Sesi:{" "}
-              <strong className="font-bold text-[#0070bc]">
-                {user?.fullName.replace(" (Demo)", "")}
-              </strong>
-            </span>
-            <span className="text-[9px] font-bold text-slate-500 bg-slate-100 rounded-md px-1.5 py-0.5 uppercase ml-1">
-              {user?.role}
+          <div className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm text-xs text-slate-600 font-medium">
+            <span
+              className={`w-2 h-2 rounded-full ${isDbConnected ? "bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.6)] animate-pulse" : "bg-slate-400"}`}
+            />
+            {isDbConnected ? (
+              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-[10px] font-bold bg-white text-[#0070bc]">
+                Live Database
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-[10px] font-bold bg-white text-slate-500">
+                Mock Data (Demo)
+              </span>
+            )}
+            <span className="font-bold text-[#0070bc] ml-2">
+              {user?.fullName.replace(" (Demo)", "")}
             </span>
           </div>
         </div>

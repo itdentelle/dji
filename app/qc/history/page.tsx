@@ -164,7 +164,7 @@ export default function QCHistoryPage() {
           <RefreshCw className="w-6 h-6 text-[#0070bc]" />
           Riwayat Inspeksi QC
         </h1>
-        
+
         <button
           type="button"
           onClick={() => setIsTourOpen(true)}
@@ -486,17 +486,17 @@ export default function QCHistoryPage() {
                               {group.inspeksi_silang === 0 ? (
                                 <span className="flex items-center gap-1.5">
                                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                  ALL OK
+                                  Normal
                                 </span>
                               ) : (
                                 <>
                                   <span className="flex items-center gap-1.5">
                                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                    {group.inspeksi_ceklis}
+                                    {group.inspeksi_ceklis} Normal
                                   </span>
                                   <span className="flex items-center gap-1.5">
                                     <XCircle className="w-4 h-4 text-rose-500" />
-                                    {group.inspeksi_silang}
+                                    {group.inspeksi_silang} Cacat
                                   </span>
                                 </>
                               )}
