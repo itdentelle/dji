@@ -1061,7 +1061,7 @@ export default function EmployeeForm({
         {/* Segmented Control for Mode Switching */}
         <div
           data-tour="mode-switch"
-          className="flex w-full md:w-[400px] mx-auto bg-slate-100/80 p-1.5 rounded-2xl mb-8 border border-slate-200/60 shadow-inner"
+          className="flex w-full bg-slate-100/80 p-1.5 rounded-2xl mb-8 border border-slate-200/60 shadow-inner"
         >
           <div className="flex-1 flex items-center justify-center py-3.5 rounded-xl bg-white shadow-sm border border-slate-200 text-[#0070bc] relative overflow-hidden group cursor-default">
             <div className="absolute inset-0 bg-blue-50/50 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
