@@ -37,64 +37,54 @@ export default function HeaderSummaryCard({
     return (
       <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden mb-0">
         <div className="grid grid-cols-1 sm:grid-cols-2">
-          <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 lg:p-5 bg-sky-50/80">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-              <Factory className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className="block text-[9px] sm:text-[10px] font-bold text-sky-600 uppercase tracking-wider truncate">
+          <div className="p-2.5 sm:p-3 lg:p-5 bg-sky-50/80">
+            <div className="flex items-center gap-1 mb-0.5">
+              <Factory className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-sky-600 shrink-0" />
+              <span className="text-[9px] lg:text-[10px] font-bold text-sky-600 uppercase tracking-wider">
                 Mesin & Desain
               </span>
-              <p className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate">
-                {nomorMc || "Belum dipilih"} / {design || "-"}
-              </p>
             </div>
+            <p className="text-xs sm:text-sm lg:text-base font-black text-slate-900 leading-tight break-words">
+              {nomorMc || "Belum dipilih"} / {design || "-"}
+            </p>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 lg:p-5 bg-emerald-50/70">
-            <div
-              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 ${statusMatching === "OK" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
-            >
-              <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className="block text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider truncate">
+          <div className="p-2.5 sm:p-3 lg:p-5 bg-emerald-50/70">
+            <div className="flex items-center gap-1 mb-0.5">
+              <CheckCircle2 className={`w-3 h-3 lg:w-3.5 lg:h-3.5 shrink-0 ${statusMatching === "OK" ? "text-emerald-600" : "text-rose-600"}`} />
+              <span className="text-[9px] lg:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                 Status Matching
               </span>
-              <p
-                className={`text-sm sm:text-base font-black leading-tight truncate ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
-              >
-                {statusMatching || "-"}
-              </p>
             </div>
+            <p
+              className={`text-xs sm:text-sm lg:text-base font-black leading-tight break-words ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
+            >
+              {statusMatching || "-"}
+            </p>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 lg:p-5 bg-slate-50/80">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-50 text-slate-600 flex items-center justify-center shrink-0">
-              <User className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className="block text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-wider truncate">
-                Operator (Grup {shiftName})
+          <div className="p-2.5 sm:p-3 lg:p-5 bg-slate-50/80">
+            <div className="flex items-center gap-1 mb-0.5">
+              <User className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-slate-600 shrink-0" />
+              <span className="text-[9px] lg:text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                Operator ({shiftName})
               </span>
-              <p className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate">
-                {operatorName || "Belum dipilih"}
-              </p>
             </div>
+            <p className="text-xs sm:text-sm lg:text-base font-black text-slate-900 leading-tight break-words">
+              {operatorName || "Belum dipilih"}
+            </p>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 lg:p-5 bg-indigo-50/70">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-              <Box className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className="block text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider truncate">
+          <div className="p-2.5 sm:p-3 lg:p-5 bg-indigo-50/70">
+            <div className="flex items-center gap-1 mb-0.5">
+              <Box className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-indigo-600 shrink-0" />
+              <span className="text-[9px] lg:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                 Potongan Ke
               </span>
-              <p className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate">
-                {potonganKe || "-"}
-              </p>
             </div>
+            <p className="text-xs sm:text-sm lg:text-base font-black text-slate-900 leading-tight break-words">
+              {potonganKe || "-"}
+            </p>
           </div>
         </div>
 
@@ -145,7 +135,7 @@ export default function HeaderSummaryCard({
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Operator (Grup {shiftName})
+              Operator ({shiftName})
             </span>
             <span className="text-xl font-black text-slate-900 leading-tight truncate">
               {operatorName || "Belum dipilih"}
