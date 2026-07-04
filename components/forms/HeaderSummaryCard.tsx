@@ -37,61 +37,61 @@ export default function HeaderSummaryCard({
     return (
       <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden mb-0">
         <div className="grid grid-cols-1 sm:grid-cols-2">
-          <div className="flex items-center gap-3 p-4 sm:p-5 bg-sky-50/80">
-            <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-              <Factory className="w-6 h-6" />
+          <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 lg:p-5 bg-sky-50/80">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+              <Factory className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider">
+            <div className="min-w-0 flex-1">
+              <span className="block text-[9px] sm:text-[10px] font-bold text-sky-600 uppercase tracking-wider truncate">
                 Mesin & Desain
               </span>
-              <p className="text-base font-black text-slate-900 leading-tight truncate">
+              <p className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate">
                 {nomorMc || "Belum dipilih"} / {design || "-"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-4 sm:p-5 bg-emerald-50/70">
+          <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 lg:p-5 bg-emerald-50/70">
             <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${statusMatching === "OK" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 ${statusMatching === "OK" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
             >
-              <CheckCircle2 className="w-6 h-6" />
+              <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+            <div className="min-w-0 flex-1">
+              <span className="block text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider truncate">
                 Status Matching
               </span>
               <p
-                className={`text-base font-black leading-tight truncate ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
+                className={`text-sm sm:text-base font-black leading-tight truncate ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
               >
                 {statusMatching || "-"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-4 sm:p-5 bg-slate-50/80">
-            <div className="w-12 h-12 rounded-full bg-sky-50 text-slate-600 flex items-center justify-center shrink-0">
-              <User className="w-6 h-6" />
+          <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 lg:p-5 bg-slate-50/80">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-50 text-slate-600 flex items-center justify-center shrink-0">
+              <User className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+            <div className="min-w-0 flex-1">
+              <span className="block text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-wider truncate">
                 Operator (Grup {shiftName})
               </span>
-              <p className="text-base font-black text-slate-900 leading-tight truncate">
+              <p className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate">
                 {operatorName || "Belum dipilih"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-4 sm:p-5 bg-indigo-50/70">
-            <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-              <Box className="w-6 h-6" />
+          <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 lg:p-5 bg-indigo-50/70">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+              <Box className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+            <div className="min-w-0 flex-1">
+              <span className="block text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider truncate">
                 Potongan Ke
               </span>
-              <p className="text-base font-black text-slate-900 leading-tight truncate">
+              <p className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate">
                 {potonganKe || "-"}
               </p>
             </div>
