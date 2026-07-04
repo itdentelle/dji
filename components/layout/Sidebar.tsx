@@ -211,9 +211,9 @@ function SidebarInner({
   };
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-[#f0f2f5] text-slate-800 lg:border lg:border-[#dbe1eb] lg:rounded-[32px] lg:shadow-[0_8px_30px_rgba(0,0,0,0.02)] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#f0f2f5] text-slate-800 md:border md:border-[#dbe1eb] md:rounded-[32px] md:shadow-[0_8px_30px_rgba(0,0,0,0.02)] overflow-hidden">
       {/* Brand Logo Area */}
-      <div className="h-20 flex items-center px-5 lg:group-hover:px-6 border-b border-[#dbe1eb] gap-3 transition-all duration-300">
+      <div className="h-20 flex items-center px-5 md:group-hover:px-6 border-b border-[#dbe1eb] gap-3 transition-all duration-300">
         <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0 transition-all duration-500 md:group-hover:scale-110 overflow-hidden shadow-xs">
           <img
             src="/assets/dji-logo.png"
@@ -221,7 +221,7 @@ function SidebarInner({
             className="w-6 h-6 object-contain"
           />
         </div>
-        <div className="flex flex-col whitespace-nowrap transition-all duration-300 lg:opacity-0 lg:w-0 lg:group-hover:opacity-100 lg:group-hover:w-auto overflow-hidden">
+        <div className="flex flex-col whitespace-nowrap transition-all duration-300 md:opacity-0 md:w-0 md:group-hover:opacity-100 md:group-hover:w-auto overflow-hidden">
           <span className="font-extrabold tracking-tight text-slate-900 leading-tight text-base">
             DJI
           </span>
@@ -264,21 +264,21 @@ function SidebarInner({
                   })()}
                   {/* Label — hidden in collapsed desktop sidebar */}
                   <span
-                    className={`whitespace-nowrap text-[11px] font-extrabold tracking-wider uppercase transition-all duration-300 lg:opacity-0 lg:w-0 lg:group-hover:opacity-100 lg:group-hover:w-auto overflow-hidden ${hasActiveChild ? "text-[#0070bc]" : ""}`}
+                    className={`whitespace-nowrap text-[11px] font-extrabold tracking-wider uppercase transition-all duration-300 md:opacity-0 md:w-0 md:group-hover:opacity-100 md:group-hover:w-auto overflow-hidden ${hasActiveChild ? "text-[#0070bc]" : ""}`}
                   >
                     {group.label}
                   </span>
                 </div>
                 {/* Chevron */}
                 <ChevronDown
-                  className={`w-3.5 h-3.5 shrink-0 transition-all duration-300 lg:opacity-0 lg:group-hover:opacity-100
+                  className={`w-3.5 h-3.5 shrink-0 transition-all duration-300 md:opacity-0 md:group-hover:opacity-100
                     ${isGroupOpen ? "rotate-180" : "rotate-0"}`}
                 />
               </button>
 
               {/* Group Items — hidden in collapsed desktop, shown on hover */}
               <div
-                className={`overflow-hidden transition-all duration-300 ease-in-out lg:hidden lg:group-hover:block ${isGroupOpen ? "max-h-96 opacity-100 mt-0.5" : "max-h-0 opacity-0"}`}
+                className={`overflow-hidden transition-all duration-300 ease-in-out md:hidden md:group-hover:block ${isGroupOpen ? "max-h-96 opacity-100 mt-0.5" : "max-h-0 opacity-0"}`}
               >
                 <nav className="space-y-0.5 pl-4 border-l-2 border-slate-200/80 ml-5 mb-1">
                   {visibleItems.map((item: any) => {
@@ -299,7 +299,7 @@ function SidebarInner({
                         <Icon
                           className={`w-4 h-4 shrink-0 transition-transform group-hover/item:scale-105 ${isActive ? "text-[#0070bc]" : "text-slate-400"}`}
                         />
-                        <span className="whitespace-nowrap transition-all duration-300 lg:opacity-0 lg:w-0 lg:group-hover:opacity-100 lg:group-hover:w-auto overflow-hidden">
+                        <span className="whitespace-nowrap transition-all duration-300 md:opacity-0 md:w-0 md:group-hover:opacity-100 md:group-hover:w-auto overflow-hidden">
                           {item.name}
                         </span>
                       </Link>
@@ -313,7 +313,7 @@ function SidebarInner({
 
         {/* Divider */}
         {filteredGeneralItems.length > 0 && (
-          <div className="h-px bg-slate-200/80 mx-2 my-2 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-300" />
+          <div className="h-px bg-slate-200/80 mx-2 my-2 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300" />
         )}
 
         {/* General Items */}
@@ -336,7 +336,7 @@ function SidebarInner({
                 <Icon
                   className={`w-5 h-5 shrink-0 transition-transform group-hover/item:scale-105 ${isActive ? "text-[#0070bc]" : "text-slate-400"}`}
                 />
-                <span className="whitespace-nowrap transition-all duration-300 lg:opacity-0 lg:w-0 lg:group-hover:opacity-100 lg:group-hover:w-auto overflow-hidden">
+                <span className="whitespace-nowrap transition-all duration-300 md:opacity-0 md:w-0 md:group-hover:opacity-100 md:group-hover:w-auto overflow-hidden">
                   {item.name}
                 </span>
               </Link>
@@ -349,7 +349,7 @@ function SidebarInner({
             className="w-full flex items-center gap-4 px-3.5 h-10 rounded-2xl text-xs sm:text-sm font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50/80 transition-all duration-200 cursor-pointer group/logout"
           >
             <LogOut className="w-5 h-5 text-slate-400 group-hover/logout:text-red-500 shrink-0 transition-transform duration-200 group-hover/logout:translate-x-0.5" />
-            <span className="whitespace-nowrap transition-all duration-300 lg:opacity-0 lg:w-0 lg:group-hover:opacity-100 lg:group-hover:w-auto overflow-hidden">
+            <span className="whitespace-nowrap transition-all duration-300 md:opacity-0 md:w-0 md:group-hover:opacity-100 md:group-hover:w-auto overflow-hidden">
               Logout
             </span>
           </button>
@@ -361,12 +361,12 @@ function SidebarInner({
   return (
     <>
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden lg:flex flex-col w-20 hover:w-64 h-[calc(100vh-2rem)] fixed top-4 left-4 z-30 transition-all duration-300 ease-in-out group">
+      <aside className="hidden md:flex flex-col w-20 hover:w-64 h-[calc(100vh-2rem)] fixed top-4 left-4 z-30 transition-all duration-300 ease-in-out group">
         {SidebarContent()}
       </aside>
 
       {/* MOBILE HEADER */}
-      <header className="lg:hidden h-16 w-full fixed top-0 left-0 bg-white border-b border-[#e9ecef] shadow-xs z-30 flex items-center justify-between px-4">
+      <header className="md:hidden h-16 w-full fixed top-0 left-0 bg-white border-b border-[#e9ecef] shadow-xs z-30 flex items-center justify-between px-4">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
             <img
@@ -397,13 +397,13 @@ function SidebarInner({
       {isMobileOpen && (
         <div
           onClick={() => setIsMobileOpen(false)}
-          className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-xs z-30 animate-fadeIn"
+          className="md:hidden fixed inset-0 bg-black/40 backdrop-blur-xs z-30 animate-fadeIn"
         />
       )}
 
       {/* MOBILE DRAWER SIDEBAR */}
       <div
-        className={`lg:hidden fixed inset-y-0 left-0 w-64 h-full z-40 transform transition-transform duration-300 ease-out bg-[#f0f2f5] ${
+        className={`md:hidden fixed inset-y-0 left-0 w-64 h-full z-40 transform transition-transform duration-300 ease-out bg-[#f0f2f5] ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

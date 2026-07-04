@@ -1327,7 +1327,7 @@ export default function ContinuousForm({
           className="space-y-4"
         >
           <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-4 sm:p-5">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
               <div data-tour="meter-header-summary" className="w-full">
                 <HeaderSummaryCard
                   operatorName={
@@ -1368,7 +1368,7 @@ export default function ContinuousForm({
               {/* Tombol Pemicu Pop-up Meteran */}
               <div
                 data-tour="meter-final-report"
-                className="w-full min-h-full p-6 bg-emerald-50/80 border-2 border-emerald-200 rounded-2xl relative shadow-md flex flex-col justify-center gap-5"
+                className="w-full min-h-full p-6 bg-emerald-50/80 border-2 border-emerald-200 rounded-2xl relative shadow-md flex flex-col justify-center"
               >
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-emerald-600 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md whitespace-nowrap">
                   {watch("nomorMc") === "T2A"
@@ -1441,7 +1441,7 @@ export default function ContinuousForm({
                             `pcsData.${index}.jmlHasilProduksi` as const,
                           )}
                         />
-                        <div className="flex flex-col gap-1 w-full sm:w-1/2">
+                        <div className="flex flex-col gap-1 w-full">
                           <label className="text-[10px] font-semibold text-slate-500 uppercase">
                             Posisi Meter Kain
                           </label>
@@ -1757,7 +1757,7 @@ export default function ContinuousForm({
 
             {isLastRoll && (
               <div className="mt-4 pt-4 border-t border-emerald-200/60 animate-fadeIn">
-                <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="flex flex-col md:flex-row md:items-end gap-4">
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[10px] font-bold text-emerald-600 uppercase">
                       Tanggal Potong

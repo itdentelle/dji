@@ -9,13 +9,13 @@ export default function EmployeeLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-white text-slate-800 flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-white text-slate-800 flex flex-col md:flex-row">
       {/* Sidebar Navigation */}
       <Sidebar />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col lg:pl-28 pt-16 lg:pt-0">
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto flex flex-col">
+      <div className="flex-1 flex flex-col md:pl-28 pt-16 md:pt-0">
+        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto flex flex-col">
           {children}
         </main>
       </div>
