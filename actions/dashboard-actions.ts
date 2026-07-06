@@ -61,12 +61,33 @@ export async function getRealProductionsData(): Promise<{
       throw error;
     }
 
+    // Query 2: Get created_by_name from production_headers for these headers
+    const headerIds = Array.from(new Set((data || []).map((item: any) => item.header_id).filter(Boolean)));
+    const headerMap = new Map<string, string>();
+    
+    if (headerIds.length > 0) {
+      const { data: headersData, error: headersError } = await supabase
+        .from("production_headers")
+        .select("id, created_by_name, pic")
+        .in("id", headerIds);
+        
+      if (!headersError && headersData) {
+        headersData.forEach((h: any) => {
+          const fallbackName = h.created_by_name || h.pic;
+          if (fallbackName) {
+            headerMap.set(String(h.id), fallbackName);
+          }
+        });
+      }
+    }
+
     const mappedData: RealProductionItem[] = (data || []).map((item: any) => {
       const isProduction = (item.hasil_pcs || 0) > 0 || (item.posisi_meter || 0) > 0 || (item.hasil_meter || 0) > 0;
       
       const mesinId = item.mesin_id || `KNIT-001`;
       
-      const actualOperator = item.created_by_name || item.pic || item.nama_operator || "Operator Unknown";
+      const headerFallback = headerMap.get(String(item.header_id));
+      const actualOperator = headerFallback || item.created_by_name || item.pic || item.nama_operator || "Operator Unknown";
       
       return {
         id: item.id || `header_${item.header_id}_${Math.random().toString().slice(2, 8)}`,

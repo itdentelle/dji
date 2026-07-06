@@ -421,13 +421,15 @@ export default function DashboardPage() {
     }
 
     if (activeEmployeeName) {
-      // Check if the comma-separated string contains the active employee name
-      result = result.filter((item) =>
-        item.nama_operator
+      // Check if the comma-separated string contains the active employee name (case-insensitive)
+      const targetName = activeEmployeeName.toLowerCase();
+      result = result.filter((item) => {
+        if (!item.nama_operator) return false;
+        return item.nama_operator
           .split(",")
-          .map((n) => n.trim())
-          .includes(activeEmployeeName),
-      );
+          .map((n) => n.trim().toLowerCase())
+          .includes(targetName);
+      });
     }
 
     return result;
