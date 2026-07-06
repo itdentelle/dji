@@ -296,6 +296,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
         indikator_stop: pcsItem.indikatorStop || false,
         kategori_masalah: kategoriStr,
         detail_masalah: pcsItem.detailMasalah || null,
+        spesifik_masalah: pcsItem.spesifikMasalah || null,
         keterangan_cacat: pcsItem.keteranganCacat || null,
         meter_kain: pcsItem.meterKain || null,
         roll_no: pcsItem.rollNo || null,
