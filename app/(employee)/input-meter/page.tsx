@@ -36,7 +36,7 @@ export default function ContinuousInputPage() {
   return (
     <div className="flex-1 flex flex-col items-center animate-fadeIn py-8 px-4 w-full">
       {/* Title Header Card */}
-      <div className="w-full bg-white border border-[#e9ecef] rounded-[24px] p-6 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5 relative z-10 mb-6">
+      <div className="w-full bg-white border border-[#e9ecef] rounded-[24px] p-6 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 relative z-10 mb-6">
         <div className="flex flex-col gap-2 relative z-10">
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex flex-wrap items-center gap-3 leading-tight">
             <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
