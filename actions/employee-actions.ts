@@ -297,56 +297,8 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
           }
         }
 
-        // C. Trigger Sinkronisasi Google Sheets (secara asinkron, tidak memblokir return)
-        const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
-        if (sheetUrl) {
-          const payload = detailData.map((detail: any) => ({
-            "ID Laporan": headerId,
-            "Tanggal Produksi": tgl || "",
-            "Tanggal & Jam": tanggalJam,
-            "Tanggal Potong": validated.tanggalPotong || "",
-            "Mesin": validated.nomorMc || "",
-            "Pick": validated.pick || "",
-            "Course": validated.course || "",
-            "RPM": validated.rpm || "",
-            "Operator": validated.pic || validated.operatorId?.[0] || "",
-            "Grup": validated.grupName || validated.groupId || "",
-            "Design": validated.designName || validated.designId || "",
-            "Status Matching": validated.statusMatching || "",
-            "Panel": validated.tanggalPotong ? "" : validated.panelNo || "",
-            "Potongan Ke": validated.potonganKe || "",
-            "No Order": validated.noOrderBarang || "",
-            "No Customer": validated.noCustomer || "",
-            "Total Downtime (Detik)": totalDowntimeNum || 0,
-            "Meter Awal": "",
-            "Meter Akhir": "",
-            "Total Produksi Meter": "",
-            "PCS Ke": detail.pcs_index || "",
-            "Hasil PCS": detail.jml_hasil_produksi || 0,
-            "Meter Kain": detail.meter_kain || "",
-            "Roll No": detail.roll_no || "",
-            "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
-            "Kategori Masalah": detail.kategori_masalah || "",
-            "Detail Masalah": detail.detail_masalah || "",
-            "Spesifik Masalah": detail.spesifik_masalah || "",
-            "Keterangan Cacat": detail.keterangan_cacat || "",
-            "Penanggung Jawab": headerData.created_by_name || ""
-          }));
-
-          try {
-            const res = await fetch(sheetUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-              const client = await createClient();
-              await client.from("production_headers").update({ is_synced_to_sheet: true }).eq("id", headerId);
-            }
-          } catch (err) {
-            console.error("Gagal sinkron Google Sheets:", err);
-          }
-        }
+        // C. Google Sheets sync is now handled exclusively by the background auto-sync cron job
+        // to ensure lightning fast UX and prevent duplicate data race conditions.
 
         return { success: true, productionId: headerId };
       } catch (dbErr: any) {

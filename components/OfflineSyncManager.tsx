@@ -42,7 +42,7 @@ export default function OfflineSyncManager() {
       if (navigator.onLine) {
         autoSyncSheets();
       }
-    }, 60000); // 60 detik
+    }, 30000); // 30 detik
 
     return () => {
       window.removeEventListener("online", handleOnline);
