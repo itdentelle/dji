@@ -289,7 +289,7 @@ export async function submitMending(params: {
       
       const detailRecords = (detailRecordsRaw || []) as any[];
 
-      const sheetUrl = process.env.GOOGLE_SHEET_URL;
+      const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
       if (sheetUrl && detailRecords && detailRecords.length > 0) {
         const payloadData = params.details.map(d => {
           const dbRecord = detailRecords.find((r: any) => r.id === d.detailId);

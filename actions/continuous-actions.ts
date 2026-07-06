@@ -154,7 +154,7 @@ async function applyT2ACutDateUpdate(
     throw new Error("Gagal menyimpan tanggal potong: " + cutUpdateError.message);
   }
 
-  const sheetUrl = process.env.GOOGLE_SHEET_URL;
+  const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
   if (sheetUrl && previousHeaders.length > 0) {
     type CutSheetHeader = {
       id?: string | null;
@@ -386,7 +386,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
     }
 
     // Fallback/Mock Mode Trigger Google Sheets
-    const sheetUrlMock = process.env.GOOGLE_SHEET_URL;
+    const sheetUrlMock = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
     if (sheetUrlMock) {
       const payloadMock = detailData.map((detail: any) => ({
         "ID Laporan": headerId,
@@ -535,7 +535,7 @@ export async function updateContinuousReport(
 
       if (insertError) throw new Error(insertError.message);
 
-      const sheetUrl = process.env.GOOGLE_SHEET_URL;
+      const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
       if (sheetUrl) {
         const payload = detailData.map((detail: any) => ({
           "ID Laporan": headerId,

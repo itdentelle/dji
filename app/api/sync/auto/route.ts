@@ -33,7 +33,7 @@ export async function POST() {
     }
 
     let successCount = 0;
-    const sheetUrl = process.env.GOOGLE_SHEET_URL;
+    const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
 
     if (!sheetUrl) {
       return NextResponse.json({ error: "Google Sheet URL tidak disetting" }, { status: 500 });
