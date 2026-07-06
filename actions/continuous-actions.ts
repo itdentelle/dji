@@ -277,7 +277,8 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       meter_akhir: finishMeterNum,
       total_produksi_meter: totalProduksiMeter,
       idempotency_key: validated.idempotencyKey || null,
-      created_by_name: null as string | null,
+      created_by_name: validated.created_by_name || null,
+      pic: validated.pic || null,
     };
 
     const detailData = validated.pcsData.map((pcsItem) => {
@@ -468,6 +469,8 @@ export async function updateContinuousReport(
         pcs: data.pcsData?.length || 0,
         tanggal_potong: data.tanggalPotong || null,
         pick: data.pick || null,
+        pic: data.pic || null,
+        created_by_name: data.created_by_name || null,
         no_order_barang: data.noOrderBarang || null,
         no_customer: data.noCustomer || null,
         jenis_benang_dasar: data.jenisBenangDasar || null,
