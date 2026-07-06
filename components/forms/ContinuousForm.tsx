@@ -1792,7 +1792,9 @@ export default function ContinuousForm({
               type="button"
               onClick={() => {
                 // Karena ini tombol kirim form cacat, kosongkan meterAkhir agar validasi skema tetap masuk akal
-                setValue("meterAwal", "");
+                if (watch("nomorMc") !== "T2A") {
+                  setValue("meterAwal", "");
+                }
                 setValue("meterAkhir", "");
                 handleSubmit(onSubmit, onInvalid)();
               }}
