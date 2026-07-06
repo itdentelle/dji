@@ -1763,7 +1763,7 @@ export default function ContinuousForm({
                     <input
                       type="date"
                       {...register("tanggalPotong")}
-                      className="h-10 px-3 rounded-lg bg-white border border-emerald-200 text-sm font-semibold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none shadow-sm"
+                      className="h-12 px-4 rounded-xl bg-white border border-emerald-200 text-sm font-semibold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none shadow-sm"
                     />
                   </div>
                   <button
@@ -1772,9 +1772,9 @@ export default function ContinuousForm({
                       await refreshAutomaticMeterStart();
                       setIsMeterModalOpen(true);
                     }}
-                    className="flex-[2] h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
+                    className="flex-[2] h-12 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm md:text-base font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <Save className="w-4 h-4" /> Lanjut Isi Total Produksi
+                    <Save className="w-5 h-5" /> Lanjut Isi Total Produksi
                     (Meteran)
                   </button>
                 </div>
