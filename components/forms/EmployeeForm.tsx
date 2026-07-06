@@ -714,6 +714,30 @@ export default function EmployeeForm({
     return () => clearTimeout(timeoutId);
   }, [watchPotonganKe, watchNomorMc, setValue, isEdit]);
 
+  const onInvalid = (fieldErrors: any) => {
+    const extractMessage = (obj: any): string | null => {
+      if (!obj) return null;
+      if (typeof obj === "string") return obj;
+      if (obj.message && typeof obj.message === "string") return obj.message;
+      if (Array.isArray(obj)) {
+        for (const item of obj) {
+          const msg = extractMessage(item);
+          if (msg) return msg;
+        }
+      }
+      if (typeof obj === "object") {
+        for (const key of Object.keys(obj)) {
+          const msg = extractMessage(obj[key]);
+          if (msg) return msg;
+        }
+      }
+      return null;
+    };
+
+    const msg = extractMessage(fieldErrors);
+    setErrorMsg(msg || "Terdapat kesalahan validasi. Silakan periksa form.");
+  };
+
   const onSubmit = async (data: ProductionFormInput) => {
     setIsSubmitting(true);
     setErrorMsg(null);
@@ -1107,7 +1131,7 @@ export default function EmployeeForm({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
           <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-3 sm:p-4 lg:p-5">
             <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-3 sm:gap-4 lg:gap-5 items-stretch">
               <div data-tour="header-summary" className="w-full">
