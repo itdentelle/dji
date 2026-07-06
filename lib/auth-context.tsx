@@ -13,6 +13,7 @@ export interface User {
   employeeId: string;
   role: UserRole;
   email?: string;
+  forcePasswordChange?: boolean;
 }
 
 interface AuthContextType {
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             fullName: profile.full_name,
             employeeId: profile.employee_id,
             role: profile.role as UserRole,
+            forcePasswordChange: profile.force_password_change,
           };
           setUser(authUser);
           setIsLoggedIn(true);
@@ -92,6 +94,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 router.push("/mending");
               } else {
                 router.push("/");
+              }
+              
+              // Cek jika butuh ganti password
+              if (result?.success && result?.data?.force_password_change) {
+                router.push("/change-password");
               }
             }
           }

@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function LoginForm() {
   const { login, isLoading } = useAuth();
-  const [email, setEmail] = useState<string>("");
+  const [nip, setNip] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
@@ -14,13 +14,14 @@ export default function LoginForm() {
     if (isLoading) return;
     setError(null);
     
-    if (!email || !password) {
-      setError("Email dan password wajib diisi.");
+    if (!nip || !password) {
+      setError("NIP dan password wajib diisi.");
       return;
     }
 
     try {
-      const result = await login(email, password);
+      const loginEmail = nip.includes("@") ? nip : `${nip}@dji.local`;
+      const result = await login(loginEmail, password);
       if (!result.success) {
         setError(result.error || "Gagal masuk.");
       }
@@ -45,13 +46,13 @@ export default function LoginForm() {
       {/* Form */}
       <form onSubmit={handleSubmit} className="w-full flex flex-col gap-5">
         <div className="flex flex-col gap-2">
-          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">Email Akses</label>
+          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">No Induk Pegawai (NIP)</label>
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            value={nip}
+            onChange={(e) => setNip(e.target.value)}
             disabled={isLoading}
-            placeholder="nama@dji.com"
+            placeholder="Misal: EMP-001"
             className="w-full h-12.5 rounded-2xl bg-white/80 border border-slate-200 px-4 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-4 focus:ring-[#0070bc]/15 focus:border-[#0070bc] transition-all"
           />
         </div>

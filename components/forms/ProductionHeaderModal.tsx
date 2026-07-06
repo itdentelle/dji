@@ -1,5 +1,6 @@
 import React from "react";
 import { X, Save, Settings2, Trash2 } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import { UseFormRegister, FieldErrors, UseFormWatch } from "react-hook-form";
 import { ProductionFormInput } from "@/lib/schemas";
 
@@ -28,6 +29,8 @@ export default function ProductionHeaderModal({
   onClearHeader,
   highlightPotonganKe
 }: ProductionHeaderModalProps) {
+  const { user } = useAuth();
+  
   if (!isOpen) return null;
 
   return (
@@ -71,21 +74,10 @@ export default function ProductionHeaderModal({
             
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nama Operator (Shift {activeShiftName}) *</label>
-              <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white custom-scrollbar shadow-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 px-1">
-                  {operators.length > 0 ? (
-                    operators.map((op: any) => (
-                      <label key={op.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-sky-50 p-2 rounded-md transition-colors border border-transparent hover:border-sky-100">
-                        <input type="radio" value={op.id.toString()} {...register("operatorId")} className="w-4 h-4 text-sky-500 border-slate-300 focus:ring-sky-400" />
-                        <span className="truncate">{op.name}</span>
-                      </label>
-                    ))
-                  ) : (
-                    <div className="col-span-full text-xs text-slate-400 italic py-2 text-center">Tidak ada operator di shift ini</div>
-                  )}
-                </div>
+              <div className="h-11 px-4 rounded-xl bg-slate-100 border border-slate-200 text-sm font-bold text-slate-500 flex items-center shadow-inner cursor-not-allowed">
+                {user?.fullName || "Memuat..."}
               </div>
-              {errors.operatorId && <span className="text-red-500 text-[10px] font-bold">{errors.operatorId.message as string}</span>}
+              <input type="hidden" value="AUTO" {...register("operatorId")} />
             </div>
           </div>
 

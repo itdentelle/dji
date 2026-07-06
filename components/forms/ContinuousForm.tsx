@@ -914,18 +914,8 @@ export default function ContinuousForm({
     // Gunakan idempotency key dari ref yang stabil
     data.idempotencyKey = idempotencyKeyRef.current;
 
-    // Check if operatorId is in activeOperators
-    const isValidOperator = activeOperators.some(
-      (op: any) => op.id.toString() === data.operatorId,
-    );
-    if (!isValidOperator) {
-      setErrorMsg("Silakan pilih operator yang sesuai dengan shift.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Ambil nama operator dan simpan ke PIC
-    data.pic = getOperatorName(data.operatorId) || "";
+    // Ambil nama operator dan simpan ke PIC (dari auth context)
+    data.pic = user?.fullName || "";
     data.grupName = getGroupName(data.groupId);
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;
@@ -1341,11 +1331,7 @@ export default function ContinuousForm({
             <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-3 sm:gap-4 lg:gap-5 items-stretch">
               <div data-tour="meter-header-summary" className="w-full">
                 <HeaderSummaryCard
-                  operatorName={
-                    activeOperators.find(
-                      (op) => op.id.toString() === watch("operatorId"),
-                    )?.name || ""
-                  }
+                  operatorName={user?.fullName || ""}
                   shiftName={activeShiftName}
                   nomorMc={watch("nomorMc") || ""}
                   design={watch("designId") || ""}

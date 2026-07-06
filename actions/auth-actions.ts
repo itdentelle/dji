@@ -89,3 +89,33 @@ export async function logoutSession(): Promise<void> {
   cookieStore.delete("mock_session");
   cookieStore.delete("mock_role");
 }
+
+export async function updatePasswordAndProfile(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Missing Supabase credentials");
+    }
+
+    // Use service role client to update profile
+    const { createClient } = await import("@supabase/supabase-js");
+    const adminSupabase = createClient(supabaseUrl, supabaseKey);
+
+    const { error } = await adminSupabase
+      .from("user_profiles")
+      .update({ force_password_change: false })
+      .eq("id", userId);
+
+    if (error) {
+      console.error("Error updating user profile:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Exception in updatePasswordAndProfile:", err);
+    return { success: false, error: err.message };
+  }
+}
