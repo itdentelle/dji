@@ -687,8 +687,9 @@ export default function EmployeeHistoryPage() {
                       }
 
                       const operatorName =
+                        row.created_by_name ||
                         row.pic ||
-                        (row.operators ? row.operators.nama_operator : null);
+                        (row.operators ? row.operators.nama_operator : null) || "-";
 
                       // Extract unique problems
                       let problems: string[] = [];

@@ -66,7 +66,7 @@ export async function getRealProductionsData(): Promise<{
       
       const mesinId = item.mesin_id || `KNIT-001`;
       
-      const actualOperator = item.nama_operator || "Operator Unknown";
+      const actualOperator = item.created_by_name || item.pic || item.nama_operator || "Operator Unknown";
       
       return {
         id: item.id || `header_${item.header_id}_${Math.random().toString().slice(2, 8)}`,
@@ -119,7 +119,7 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
     // Query production_headers and join operators to get the operator's name
     const { data, error } = await supabase
       .from("production_headers")
-      .select("nomor_mc, tgl, design_id, tanggal_jam, operators(nama_operator)")
+      .select("nomor_mc, tgl, design_id, tanggal_jam, operators(nama_operator), created_by_name, pic")
       .gte("tgl", dateLimit)
       .order("tanggal_jam", { ascending: false });
 
@@ -184,7 +184,7 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
       return {
         mesin_id,
         status,
-        nama_operator: (row.operators as any)?.nama_operator || "-",
+        nama_operator: row.created_by_name || row.pic || (row.operators as any)?.nama_operator || "-",
         design: row.design_id || "-",
         last_input_date: row.tgl,
         last_input_time: lastTime

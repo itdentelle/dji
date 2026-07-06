@@ -42,7 +42,6 @@ const SYNC_TOUR_STEPS: ProductTourStep[] = [
 
 export default function SyncPage() {
   const [reports, setReports] = useState<any[]>([]);
-  const [operatorsList, setOperatorsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isTourOpen, setIsTourOpen] = useState(false);
@@ -56,7 +55,6 @@ export default function SyncPage() {
 
   useEffect(() => {
     fetchData();
-    fetchOperators();
   }, []);
 
   const fetchData = async () => {
@@ -83,19 +81,15 @@ export default function SyncPage() {
     }
   };
 
-  const fetchOperators = async () => {
-    try {
-      const { data } = await supabase
-        .from("operators")
-        .select("id, nama_operator")
-        .order("nama_operator", { ascending: true });
-      if (data) {
-        setOperatorsList(data);
-      }
-    } catch (err) {
-      console.error("Error fetching operators:", err);
-    }
-  };
+  // Automatically derive unique operators from fetched reports
+  const uniqueOperators = useMemo(() => {
+    const opsSet = new Set<string>();
+    reports.forEach((r) => {
+      const op = r.created_by_name || r.operators?.nama_operator || r.pic;
+      if (op) opsSet.add(op);
+    });
+    return Array.from(opsSet).sort();
+  }, [reports]);
 
   const forceSync = async (headerId: string) => {
     setSyncingId(headerId);
@@ -185,7 +179,7 @@ export default function SyncPage() {
       if (filterMachine && report.nomor_mc !== filterMachine) return false;
       // 3. Operator Filter
       if (filterOperator) {
-        const opName = report.operators?.nama_operator || report.pic || "";
+        const opName = report.created_by_name || report.operators?.nama_operator || report.pic || "";
         if (opName !== filterOperator) return false;
       }
       return true;
@@ -302,9 +296,9 @@ export default function SyncPage() {
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold cursor-pointer w-full"
           >
             <option value="">Semua Operator</option>
-            {operatorsList.map((op) => (
-              <option key={op.id} value={op.nama_operator}>
-                {op.nama_operator}
+            {uniqueOperators.map((opName) => (
+              <option key={opName} value={opName}>
+                {opName}
               </option>
             ))}
           </select>
@@ -380,7 +374,7 @@ export default function SyncPage() {
                     <td className="px-5 py-3.5 whitespace-nowrap font-semibold text-slate-800">
                       <div className="flex flex-col">
                         <span>
-                          {report.operators?.nama_operator || report.pic || "-"}
+                          {report.created_by_name || report.operators?.nama_operator || report.pic || "-"}
                         </span>
                         {report.created_by_name && (
                           <span className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
