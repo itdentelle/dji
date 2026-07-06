@@ -118,6 +118,7 @@ const HISTORY_TOUR_STEPS = [
 
 export default function EmployeeHistoryPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [filters, setFilters] = useState<{
     date: string;
     nomor_mc: string;
@@ -493,69 +494,71 @@ export default function EmployeeHistoryPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-slate-100 animate-fadeIn">
               <div className="flex flex-col md:col-span-2 lg:col-span-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                      Nama Operator{" "}
-                      {filters.group_id
-                        ? `(Shift ${groups.find((g) => g.id.toString() === filters.group_id)?.name})`
-                        : "(Semua Shift)"}
-                    </label>
-                    <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white custom-scrollbar">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 px-1">
-                        {(() => {
-                          const activeShiftName = filters.group_id
-                            ? groups.find(
-                                (g) => g.id.toString() === filters.group_id,
-                              )?.name
-                            : null;
-                          const activeOps = activeShiftName
-                            ? operators.filter(
-                                (op: any) =>
-                                  op.shift === activeShiftName || !op.shift,
-                              )
-                            : operators;
+                  {user?.role === "admin" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">
+                        Nama Operator{" "}
+                        {filters.group_id
+                          ? `(Shift ${groups.find((g) => g.id.toString() === filters.group_id)?.name})`
+                          : "(Semua Shift)"}
+                      </label>
+                      <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white custom-scrollbar">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 px-1">
+                          {(() => {
+                            const activeShiftName = filters.group_id
+                              ? groups.find(
+                                  (g) => g.id.toString() === filters.group_id,
+                                )?.name
+                              : null;
+                            const activeOps = activeShiftName
+                              ? operators.filter(
+                                  (op: any) =>
+                                    op.shift === activeShiftName || !op.shift,
+                                )
+                              : operators;
 
-                          if (activeOps.length === 0) {
-                            return (
-                              <div className="col-span-full text-xs text-slate-400 italic py-2 text-center">
-                                Tidak ada operator di shift ini
-                              </div>
-                            );
-                          }
+                            if (activeOps.length === 0) {
+                              return (
+                                <div className="col-span-full text-xs text-slate-400 italic py-2 text-center">
+                                  Tidak ada operator di shift ini
+                                </div>
+                              );
+                            }
 
-                          return activeOps.map((op: any) => (
-                            <label
-                              key={op.id}
-                              className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 p-1.5 rounded transition-colors"
-                            >
-                              <input
-                                type="checkbox"
-                                value={op.id.toString()}
-                                checked={(filters.operator_ids || []).includes(
-                                  op.id.toString(),
-                                )}
-                                onChange={(e) => {
-                                  const id = op.id.toString();
-                                  setFilters((prev) => ({
-                                    ...prev,
-                                    operator_ids: e.target.checked
-                                      ? [...(prev.operator_ids || []), id]
-                                      : (prev.operator_ids || []).filter(
-                                          (x) => x !== id,
-                                        ),
-                                  }));
-                                }}
-                                className="w-3.5 h-3.5 text-sky-500 border-slate-300 rounded focus:ring-sky-400"
-                              />
-                              <span className="truncate">
-                                {op.name || op.nama_operator}
-                              </span>
-                            </label>
-                          ));
-                        })()}
+                            return activeOps.map((op: any) => (
+                              <label
+                                key={op.id}
+                                className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 p-1.5 rounded transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  value={op.id.toString()}
+                                  checked={(filters.operator_ids || []).includes(
+                                    op.id.toString(),
+                                  )}
+                                  onChange={(e) => {
+                                    const id = op.id.toString();
+                                    setFilters((prev) => ({
+                                      ...prev,
+                                      operator_ids: e.target.checked
+                                        ? [...(prev.operator_ids || []), id]
+                                        : (prev.operator_ids || []).filter(
+                                            (x) => x !== id,
+                                          ),
+                                    }));
+                                  }}
+                                  className="w-3.5 h-3.5 text-sky-500 border-slate-300 rounded focus:ring-sky-400"
+                                />
+                                <span className="truncate">
+                                  {op.name || op.nama_operator}
+                                </span>
+                              </label>
+                            ));
+                          })()}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-semibold text-slate-400 uppercase">
                       Grup Shift
