@@ -76,7 +76,6 @@ export default function ChangePasswordPage() {
       }, 2000);
 
     } catch (err: any) {
-      console.error(err);
       setError(err.message || "Gagal mengganti password.");
     } finally {
       setIsSubmitting(false);
