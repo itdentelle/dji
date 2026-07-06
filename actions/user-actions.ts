@@ -103,7 +103,8 @@ export async function createAdminUser(payload: {
         id: authUser.user.id,
         full_name: payload.fullName,
         employee_id: payload.employeeId,
-        role: payload.role
+        role: payload.role,
+        force_password_change: true
       });
 
     if (profileError) {
@@ -150,13 +151,18 @@ export async function updateAdminUser(userId: string, payload: {
     if (authError) throw authError;
 
     // 2. Update profile
+    const profileUpdatePayload: any = {
+      full_name: payload.fullName,
+      employee_id: payload.employeeId,
+      role: payload.role
+    };
+    if (payload.password) {
+      profileUpdatePayload.force_password_change = true;
+    }
+
     const { error: profileError } = await supabase
       .from("user_profiles")
-      .update({
-        full_name: payload.fullName,
-        employee_id: payload.employeeId,
-        role: payload.role
-      })
+      .update(profileUpdatePayload)
       .eq("id", userId);
 
     if (profileError) throw profileError;

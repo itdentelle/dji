@@ -155,14 +155,15 @@ export default function UserManagementPage() {
   // Handle Create Submit
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password || !fullName || !employeeId) {
+    if (!password || !fullName || !employeeId) {
       return alert("Harap isi semua kolom wajib!");
     }
 
+    const computedEmail = `${employeeId}@dji.local`;
     setActionLoading(true);
     try {
       const res = await createAdminUser({
-        email,
+        email: computedEmail,
         password,
         fullName,
         employeeId,
@@ -187,14 +188,15 @@ export default function UserManagementPage() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
-    if (!email || !fullName || !employeeId) {
+    if (!fullName || !employeeId) {
       return alert("Harap isi semua kolom wajib!");
     }
 
+    const computedEmail = `${employeeId}@dji.local`;
     setActionLoading(true);
     try {
       const res = await updateAdminUser(selectedUser.id, {
-        email,
+        email: computedEmail,
         fullName,
         employeeId,
         role,
@@ -540,20 +542,8 @@ export default function UserManagementPage() {
 
               <div className="border-t border-slate-100 my-2 pt-2"></div>
 
-              {/* Email */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Mail className="w-3 h-3" /> Email Akun
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Contoh: tubagus@dji.com"
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-700"
-                />
-              </div>
+              {/* Email (Hidden, Auto-generated) */}
+              <input type="hidden" value={`${employeeId}@dji.local`} />
 
               {/* Password */}
               <div className="flex flex-col gap-1.5">
@@ -665,19 +655,8 @@ export default function UserManagementPage() {
 
               <div className="border-t border-slate-100 my-2 pt-2"></div>
 
-              {/* Email */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Mail className="w-3 h-3" /> Email Akun
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-700"
-                />
-              </div>
+              {/* Email (Hidden, Auto-generated) */}
+              <input type="hidden" value={`${employeeId}@dji.local`} />
 
               {/* Password Change */}
               <div className="flex flex-col gap-1.5">
