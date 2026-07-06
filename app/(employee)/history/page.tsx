@@ -167,58 +167,33 @@ export default function EmployeeHistoryPage() {
   // Load from session storage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
       const cachedFilters = sessionStorage.getItem("dji_history_filters");
-
+      
+      // Always reset date to today on mount
+      let initialFilters = { ...filters, date: today };
       if (cachedFilters) {
         try {
           const parsed = JSON.parse(cachedFilters);
-          if (!parsed.operator_ids) {
-            parsed.operator_ids = [];
+          initialFilters = { ...parsed, date: today };
+          if (!initialFilters.operator_ids) {
+            initialFilters.operator_ids = [];
           }
-          setFilters(parsed);
         } catch (e) {}
-      } else {
-        setFilters((prev) => ({ ...prev, date: today }));
       }
+      setFilters(initialFilters);
 
-      const cachedData = sessionStorage.getItem("dji_history_data");
-      const cachedSearched = sessionStorage.getItem("dji_history_searched");
-      if (cachedData && cachedSearched === "true") {
-        try {
-          const parsed = JSON.parse(cachedData);
-          // Deteksi data dari tabel lama (production_reports/productions)
-          if (
-            parsed.length > 0 &&
-            parsed[0].hasOwnProperty("jml_hasil_produksi") &&
-            !parsed[0].hasOwnProperty("production_details")
-          ) {
-            console.log("Old history data format detected. Clearing cache.");
-            sessionStorage.removeItem("dji_history_data");
-            sessionStorage.removeItem("dji_history_searched");
-            setData([]);
-            setHasSearched(false);
-          } else {
-            setData(parsed);
-            setHasSearched(true);
-          }
-        } catch (e) {
-          console.error("Failed to parse cached history");
+      // Force auto-search on mount to get fresh data for today
+      searchEmployeeHistory(initialFilters).then((res) => {
+        if (res.success && res.data) {
+          setData(res.data);
+          setHasSearched(true);
+          sessionStorage.setItem("dji_history_data", JSON.stringify(res.data));
+          sessionStorage.setItem("dji_history_searched", "true");
         }
-      } else {
-        // Auto-search for today's data if no cache exists
-        const initialFilters = cachedFilters ? JSON.parse(cachedFilters) : { ...filters, date: today };
-        searchEmployeeHistory(initialFilters).then((res) => {
-          if (res.success && res.data) {
-            setData(res.data);
-            setHasSearched(true);
-            sessionStorage.setItem("dji_history_data", JSON.stringify(res.data));
-            sessionStorage.setItem("dji_history_searched", "true");
-          }
-        }).catch(err => {
-          console.error("Auto-search failed", err);
-        });
-      }
+      }).catch(err => {
+        console.error("Auto-search failed", err);
+      });
 
       // Load dropdowns from Supabase
       async function loadDbData() {
@@ -681,8 +656,8 @@ export default function EmployeeHistoryPage() {
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
                       <th className="px-4 py-2.5 pl-6">Waktu Input</th>
                       <th className="px-4 py-2.5">Mesin</th>
-                      <th className="px-4 py-2.5">Operator</th>
-                      <th className="px-4 py-2.5">Grup</th>
+                      {user?.role === "admin" && <th className="px-4 py-2.5">Operator</th>}
+                      {user?.role === "admin" && <th className="px-4 py-2.5">Grup</th>}
                       <th className="px-4 py-2.5">Design</th>
                       <th className="px-4 py-2.5">Panel/Pot</th>
                       <th className="px-4 py-2.5">Masalah</th>
@@ -741,18 +716,22 @@ export default function EmployeeHistoryPage() {
                               {row.nomor_mc || "-"}
                             </span>
                           </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            {operatorName || (
-                              <span className="text-slate-400 italic">
-                                No Name
+                          {user?.role === "admin" && (
+                            <td className="px-4 py-2 whitespace-nowrap">
+                              {operatorName || (
+                                <span className="text-slate-400 italic">
+                                  No Name
+                                </span>
+                              )}
+                            </td>
+                          )}
+                          {user?.role === "admin" && (
+                            <td className="px-4 py-2 whitespace-nowrap">
+                              <span className="font-semibold text-slate-600">
+                                {row.groups?.nama_grup || row.group_id || "-"}
                               </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            <span className="font-semibold text-slate-600">
-                              {row.groups?.nama_grup || row.group_id || "-"}
-                            </span>
-                          </td>
+                            </td>
+                          )}
                           <td
                             className="px-4 py-2 whitespace-nowrap max-w-[120px] truncate"
                             title={
