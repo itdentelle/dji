@@ -916,6 +916,7 @@ export default function ContinuousForm({
 
     // Ambil nama operator dan simpan ke PIC (dari auth context)
     data.pic = user?.fullName || "";
+    data.operatorId = "AUTO";
     data.grupName = getGroupName(data.groupId);
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;

@@ -45,7 +45,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     // Format tanggal ke YYYY-MM-DD
     const tgl = tanggalJam.split(" ")[0];
 
-    const operatorIdNum = validated.operatorId ? parseInt(validated.operatorId) : null;
+    const operatorIdNum = validated.operatorId && !isNaN(parseInt(validated.operatorId)) ? parseInt(validated.operatorId) : null;
     const groupIdNum = validated.groupId ? parseInt(validated.groupId) : null;
     const designIdNum = validated.designId ? parseInt(validated.designId) : null;
 
@@ -607,7 +607,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
     const { error: headerError } = await supabase
       .from("production_headers")
       .update({
-        operator_id: data.operatorId && data.operatorId.length > 0 ? parseInt(data.operatorId[0]) : null,
+        operator_id: data.operatorId && data.operatorId.length > 0 && !isNaN(parseInt(data.operatorId[0])) ? parseInt(data.operatorId[0]) : null,
         group_id: data.groupId,
         design_id: data.designId,
         nomor_mc: data.nomorMc || null,

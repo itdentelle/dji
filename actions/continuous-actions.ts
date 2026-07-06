@@ -251,7 +251,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       id: headerId,
       tgl,
       tanggal_jam: tanggalJam,
-      operator_id: validated.operatorId ? parseInt(validated.operatorId) : null,
+      operator_id: validated.operatorId && !isNaN(parseInt(validated.operatorId)) ? parseInt(validated.operatorId) : null,
       group_id: parseInt(validated.groupId),
       design_id: validated.designId,
       nomor_mc: validated.nomorMc || null,
@@ -455,7 +455,7 @@ export async function updateContinuousReport(
       .from("production_headers")
       .update({
         operator_id:
-          data.operatorId && data.operatorId.length > 0
+          data.operatorId && data.operatorId.length > 0 && !isNaN(parseInt(data.operatorId[0]))
             ? parseInt(data.operatorId[0])
             : null,
         group_id: data.groupId,
