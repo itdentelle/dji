@@ -92,6 +92,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/", request.url));
     }
 
+    // Rute profil dan ganti password diizinkan untuk semua role
+    if (pathname === "/profile" || pathname === "/change-password") {
+      return response;
+    }
+
     // Role-Based Access Control (RBAC)
     if (role === "operator") {
       // Operator hanya boleh mengakses halaman /input, /input-meter, /dashboard, /history, dan /edit
