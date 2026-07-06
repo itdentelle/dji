@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 
 export async function getUserProfile(userId: string) {
@@ -75,6 +75,12 @@ export async function createAdminUser(payload: {
   role: string;
 }) {
   try {
+    // 🔐 Hanya admin yang boleh membuat akun baru
+    const { user: caller, role: callerRole } = await getAuthenticatedUser();
+    if (!caller || callerRole !== "admin") {
+      return { success: false, error: "Unauthorized: hanya admin yang dapat membuat akun." };
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -128,6 +134,12 @@ export async function updateAdminUser(userId: string, payload: {
   role: string;
 }) {
   try {
+    // 🔐 Hanya admin yang boleh mengubah akun
+    const { user: caller, role: callerRole } = await getAuthenticatedUser();
+    if (!caller || callerRole !== "admin") {
+      return { success: false, error: "Unauthorized: hanya admin yang dapat mengubah akun." };
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -176,6 +188,12 @@ export async function updateAdminUser(userId: string, payload: {
 
 export async function deleteAdminUser(userId: string) {
   try {
+    // 🔐 Hanya admin yang boleh menghapus akun
+    const { user: caller, role: callerRole } = await getAuthenticatedUser();
+    if (!caller || callerRole !== "admin") {
+      return { success: false, error: "Unauthorized: hanya admin yang dapat menghapus akun." };
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const supabase = createClient(supabaseUrl, supabaseKey, {

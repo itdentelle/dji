@@ -184,7 +184,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             throw new Error("Gagal menyimpan tanggal potong: " + cutUpdateError.message);
           }
 
-          const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+          const sheetUrl = process.env.GOOGLE_SHEET_URL;
           if (sheetUrl) {
             type CutSheetHeader = {
               id?: string | null;
@@ -273,7 +273,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             .eq("potongan_ke", potonganKeNum);
 
           // Trigger sinkronisasi update ke Google Sheets untuk panel-panel sebelumnya
-          const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+          const sheetUrl = process.env.GOOGLE_SHEET_URL;
           if (sheetUrl && previousHeaders && previousHeaders.length > 0) {
             // Gabungkan semua payload menjadi satu array besar
             let massPayload: any[] = [];
@@ -328,7 +328,7 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     });
 
     // C. Trigger Sinkronisasi Google Sheets (secara asinkron) bahkan di Mock Mode
-    const sheetUrlMock = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+    const sheetUrlMock = process.env.GOOGLE_SHEET_URL;
     if (sheetUrlMock) {
       const payloadMock = detailData.map((detail: any) => ({
         "ID Laporan": headerId,
@@ -691,7 +691,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
           .eq("potongan_ke", potonganKeNum);
 
         // Trigger sinkronisasi update ke Google Sheets untuk panel-panel sebelumnya
-        const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+        const sheetUrl = process.env.GOOGLE_SHEET_URL;
         if (sheetUrl && previousHeaders && previousHeaders.length > 0) {
           let massPayload: any[] = [];
           for (const h of previousHeaders as any[]) {
@@ -715,7 +715,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
         }
       }
       
-      const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+      const sheetUrl = process.env.GOOGLE_SHEET_URL;
       if (sheetUrl) {
         const payload = detailData.map((detail: any) => ({
           id_header: headerId,

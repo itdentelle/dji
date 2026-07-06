@@ -205,7 +205,7 @@ export async function submitQCInspection(params: {
         }
       }
 
-      const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+      const sheetUrl = process.env.GOOGLE_SHEET_URL;
       if (sheetUrl && detailRecords && detailRecords.length > 0) {
         const payloadData = params.details.map(d => {
           const dbRecord = detailRecords.find((r: any) => r.id === d.detailId);
@@ -585,7 +585,7 @@ export async function addQCDefectDetail(params: {
 
     // Sync new defect finding to Google Sheets
     try {
-      const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+      const sheetUrl = process.env.GOOGLE_SHEET_URL;
       if (sheetUrl) {
         // Fetch header info for the payload
         const { data: headerData } = await supabase

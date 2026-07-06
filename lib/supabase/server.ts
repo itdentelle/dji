@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-// import { Database } from "@/types/database.types";
+
+const SESSION_MAX_AGE = 60 * 60 * 8; // 8 jam
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -16,7 +17,7 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              const sessionOptions = { ...options, maxAge: undefined, expires: undefined };
+              const sessionOptions = { ...options, maxAge: SESSION_MAX_AGE };
               cookieStore.set(name, value, sessionOptions);
             });
           } catch {
@@ -43,7 +44,7 @@ export async function createAdminClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              const sessionOptions = { ...options, maxAge: undefined, expires: undefined };
+              const sessionOptions = { ...options, maxAge: SESSION_MAX_AGE };
               cookieStore.set(name, value, sessionOptions);
             });
           } catch {
@@ -55,3 +56,21 @@ export async function createAdminClient() {
   );
 }
 
+/**
+ * Helper: Dapatkan user yang sedang login beserta role-nya dari database.
+ * Gunakan fungsi ini di API routes dan Server Actions untuk memvalidasi akses.
+ */
+export async function getAuthenticatedUser() {
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return { user: null, role: null };
+
+  const admin = await createAdminClient();
+  const { data: profile } = await admin
+    .from("user_profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  return { user, role: profile?.role ?? null };
+}

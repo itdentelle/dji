@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 import * as xlsx from "xlsx";
 
 export async function GET(req: NextRequest) {
+  // 🔐 Hanya admin/manager yang bisa export data
+  const { user, role } = await getAuthenticatedUser();
+  if (!user || !["admin", "manager"].includes(role ?? "")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const searchParams = req.nextUrl.searchParams;
   const monthStr = searchParams.get("month");
   const yearStr = searchParams.get("year");

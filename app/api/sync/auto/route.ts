@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
 export async function POST() {
   try {
+    // 🔐 Hanya user yang sudah login dengan role admin/manager yang bisa memicu sync
+    const { user, role } = await getAuthenticatedUser();
+    if (!user || !["admin", "manager"].includes(role ?? "")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const supabase = await createAdminClient();
 
     // Fetch up to 10 pending syncs to avoid timeout
@@ -27,7 +33,7 @@ export async function POST() {
     }
 
     let successCount = 0;
-    const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+    const sheetUrl = process.env.GOOGLE_SHEET_URL;
 
     if (!sheetUrl) {
       return NextResponse.json({ error: "Google Sheet URL tidak disetting" }, { status: 500 });
