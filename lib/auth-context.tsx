@@ -84,6 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (session?.user) {
                 const result = await getUserProfile(session.user.id);
                 if (result.success && result.data) role = result.data.role;
+                
+                // Cek jika butuh ganti password
+                if (result?.success && result?.data?.force_password_change) {
+                  router.push("/change-password");
+                  return; // Hentikan eksekusi redirect normal
+                }
               }
               
               if (role === "operator") {
@@ -94,11 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 router.push("/mending");
               } else {
                 router.push("/");
-              }
-              
-              // Cek jika butuh ganti password
-              if (result?.success && result?.data?.force_password_change) {
-                router.push("/change-password");
               }
             }
           }
