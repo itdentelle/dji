@@ -481,9 +481,9 @@ export default function EmployeeHistoryPage() {
           {/* Advanced Filters */}
           {showAdvanced && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-slate-100 animate-fadeIn">
-              <div className="flex flex-col md:col-span-2 lg:col-span-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  {user?.role === "admin" && (
+              {user?.role === "admin" && (
+                <div className="flex flex-col md:col-span-2 lg:col-span-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] font-semibold text-slate-400 uppercase">
                         Nama Operator{" "}
@@ -547,8 +547,6 @@ export default function EmployeeHistoryPage() {
                         </div>
                       </div>
                     </div>
-                  )}
-                  {user?.role === "admin" && (
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] font-semibold text-slate-400 uppercase">
                         Grup Shift
@@ -573,9 +571,9 @@ export default function EmployeeHistoryPage() {
                         ))}
                       </select>
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">
