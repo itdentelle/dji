@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { continuousFormSchema, ContinuousFormInput } from "@/lib/schemas";
@@ -330,6 +330,11 @@ export default function ContinuousForm({
   isEdit,
 }: ContinuousFormProps = {}) {
   const { user } = useAuth();
+  const idempotencyKeyRef = useRef<string>(
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
+      ? crypto.randomUUID() 
+      : Math.random().toString(36).substring(2, 15)
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successData, setSuccessData] = useState<
     (ContinuousFormInput & { id?: string }) | null
@@ -906,8 +911,8 @@ export default function ContinuousForm({
       }
     }
 
-    // Generate idempotency key
-    data.idempotencyKey = crypto.randomUUID();
+    // Gunakan idempotency key dari ref yang stabil
+    data.idempotencyKey = idempotencyKeyRef.current;
 
     // Check if operatorId is in activeOperators
     const isValidOperator = activeOperators.some(
@@ -1169,6 +1174,12 @@ export default function ContinuousForm({
       tanggalPotong: "",
       targetMeter: wasLastRoll ? "" : watch("targetMeter"),
     });
+
+    // Refresh idempotency key setelah sukses submit
+    idempotencyKeyRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
+      ? crypto.randomUUID() 
+      : Math.random().toString(36).substring(2, 15);
+
     setIsLastRoll(false);
     setIsTimerRunning(false);
     setTimerStartRef(null);
