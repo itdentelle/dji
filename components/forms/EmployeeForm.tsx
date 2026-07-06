@@ -545,6 +545,7 @@ export default function EmployeeForm({
       shadow: "",
       pinggiran: "",
       rpm: "",
+      statusMatching: "",
       potonganKe: "",
       course: "",
       pic: "",

@@ -570,6 +570,7 @@ export default function ContinuousForm({
       shadow: "",
       pinggiran: "",
       rpm: "",
+      statusMatching: "",
       potonganKe: "",
       course: "",
       pic: "",
