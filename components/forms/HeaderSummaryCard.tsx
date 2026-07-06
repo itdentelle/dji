@@ -35,8 +35,8 @@ export default function HeaderSummaryCard({
 
   if (isBottom) {
     return (
-      <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden mb-0">
-        <div className="grid grid-cols-1 sm:grid-cols-2">
+      <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden mb-0 h-full flex flex-col justify-between">
+        <div className="grid grid-cols-1 sm:grid-cols-2 grow">
           <div className="p-2.5 sm:p-3 lg:p-5 bg-sky-50/80">
             <div className="flex items-center gap-1 mb-0.5">
               <Factory className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-sky-600 shrink-0" />

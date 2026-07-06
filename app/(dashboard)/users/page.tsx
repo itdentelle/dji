@@ -501,7 +501,7 @@ export default function UserManagementPage() {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Contoh: Tubagus"
+                  placeholder=""
                   className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-700"
                 />
               </div>
@@ -509,14 +509,14 @@ export default function UserManagementPage() {
               {/* Employee ID */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                  ID Pegawai (NIK / Kode)
+                  NIP (Nomor Induk Pegawai)
                 </label>
                 <input
                   type="text"
                   required
                   value={employeeId}
                   onChange={(e) => setEmployeeId(e.target.value)}
-                  placeholder="Contoh: OP-024 atau QC-011"
+                  placeholder=""
                   className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-700"
                 />
               </div>
@@ -622,7 +622,7 @@ export default function UserManagementPage() {
               {/* Employee ID */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                  ID Pegawai (NIK / Kode)
+                  NIP (Nomor Induk Pegawai)
                 </label>
                 <input
                   type="text"

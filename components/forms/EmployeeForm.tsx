@@ -1134,7 +1134,7 @@ export default function EmployeeForm({
         <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
           <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-3 sm:p-4 lg:p-5">
             <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-3 sm:gap-4 lg:gap-5 items-stretch">
-              <div data-tour="header-summary" className="w-full">
+              <div data-tour="header-summary" className="w-full h-full">
                 <HeaderSummaryCard
                   operatorName={user?.fullName || ""}
                   shiftName={activeShiftName}

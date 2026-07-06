@@ -331,8 +331,8 @@ export default function ContinuousForm({
 }: ContinuousFormProps = {}) {
   const { user } = useAuth();
   const idempotencyKeyRef = useRef<string>(
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
-      ? crypto.randomUUID() 
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
       : Math.random().toString(36).substring(2, 15)
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -627,29 +627,29 @@ export default function ContinuousForm({
         pcsData:
           initialData.details && initialData.details.length > 0
             ? initialData.details.map((d: any) => ({
-                pcsIndex: String(d.pcs_index || "1"),
-                jmlHasilProduksi: "0",
-                meterKain: d.meter_kain || "",
-                indikatorStop: d.kategori_masalah ? true : false,
-                kategoriMasalah: d.kategori_masalah
-                  ? d.kategori_masalah.split(", ")
-                  : [],
-                detailMasalah: d.detail_masalah || "",
-                keteranganCacat: d.keterangan_cacat || "",
-                rollNo: d.roll_no || "",
-              }))
+              pcsIndex: String(d.pcs_index || "1"),
+              jmlHasilProduksi: "0",
+              meterKain: d.meter_kain || "",
+              indikatorStop: d.kategori_masalah ? true : false,
+              kategoriMasalah: d.kategori_masalah
+                ? d.kategori_masalah.split(", ")
+                : [],
+              detailMasalah: d.detail_masalah || "",
+              keteranganCacat: d.keterangan_cacat || "",
+              rollNo: d.roll_no || "",
+            }))
             : [
-                {
-                  pcsIndex: "1",
-                  jmlHasilProduksi: "0",
-                  meterKain: "",
-                  indikatorStop: false,
-                  kategoriMasalah: [],
-                  detailMasalah: "",
-                  keteranganCacat: "",
-                  rollNo: "",
-                },
-              ],
+              {
+                pcsIndex: "1",
+                jmlHasilProduksi: "0",
+                meterKain: "",
+                indikatorStop: false,
+                kategoriMasalah: [],
+                detailMasalah: "",
+                keteranganCacat: "",
+                rollNo: "",
+              },
+            ],
       });
     }
   }, [initialData, isEdit, reset]);
@@ -1120,7 +1120,7 @@ export default function ContinuousForm({
       try {
         const parsed = JSON.parse(savedHeader);
         if (parsed.nextPanelNo) nextPanelNo = parsed.nextPanelNo;
-      } catch (e) {}
+      } catch (e) { }
     }
     const currentPcsData = watch("pcsData") || [];
     const newPcsData = currentPcsData.map((pcs, index) => ({
@@ -1148,17 +1148,17 @@ export default function ContinuousForm({
         newPcsData.length > 0
           ? newPcsData
           : [
-              {
-                pcsIndex: "1",
-                jmlHasilProduksi: "1",
-                meterKain: "",
-                rollNo: "",
-                indikatorStop: false,
-                kategoriMasalah: [],
-                detailMasalah: "",
-                keteranganCacat: "",
-              },
-            ],
+            {
+              pcsIndex: "1",
+              jmlHasilProduksi: "1",
+              meterKain: "",
+              rollNo: "",
+              indikatorStop: false,
+              kategoriMasalah: [],
+              detailMasalah: "",
+              keteranganCacat: "",
+            },
+          ],
       totalDowntime: "",
       meterAwal: wasLastRoll ? "" : watch("meterAwal"),
       meterAkhir: "",
@@ -1168,8 +1168,8 @@ export default function ContinuousForm({
     });
 
     // Refresh idempotency key setelah sukses submit
-    idempotencyKeyRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
-      ? crypto.randomUUID() 
+    idempotencyKeyRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
       : Math.random().toString(36).substring(2, 15);
 
     setIsLastRoll(false);
@@ -1255,9 +1255,9 @@ export default function ContinuousForm({
     typeof window !== "undefined" ? window.innerWidth : 1024;
   const tourCardTop = tourRect
     ? Math.min(
-        Math.max(tourRect.top + tourRect.height + 16, 16),
-        Math.max(viewportHeight - 260, 16),
-      )
+      Math.max(tourRect.top + tourRect.height + 16, 16),
+      Math.max(viewportHeight - 260, 16),
+    )
     : 96;
   const tourCardLeft = tourRect
     ? Math.min(Math.max(tourRect.left, 16), Math.max(viewportWidth - 368, 16))
@@ -1331,7 +1331,7 @@ export default function ContinuousForm({
         >
           <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-3 sm:p-4 lg:p-5">
             <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-3 sm:gap-4 lg:gap-5 items-stretch">
-              <div data-tour="meter-header-summary" className="w-full">
+              <div data-tour="meter-header-summary" className="w-full h-full">
                 <HeaderSummaryCard
                   operatorName={user?.fullName || ""}
                   shiftName={activeShiftName}
@@ -1380,12 +1380,12 @@ export default function ContinuousForm({
                     <h4 className="text-sm sm:text-base lg:text-lg font-black text-emerald-900">
                       {watch("nomorMc") === "T2A"
                         ? "Laporan Meter"
-                        : "Laporan Hasil Akhir (Shift / Roll)"}
+                        : "Laporan Hasil Akhir (Shift)"}
                     </h4>
                     <p className="text-[10px] sm:text-xs text-emerald-700 mt-1 sm:mt-2 max-w-sm mx-auto">
                       {watch("nomorMc") === "T2A"
                         ? "Gunakan tombol di bawah untuk melaporkan meter produksi."
-                        : "Gunakan tombol di bawah jika gulungan telah dipotong atau shift selesai."}
+                        : "Gunakan tombol di bawah jika beres potongan atau shift selesai."}
                     </p>
                   </div>
                   <button
@@ -1552,17 +1552,16 @@ export default function ContinuousForm({
                                                     currentSelections,
                                                   )
                                                     ? currentSelections.includes(
-                                                        p,
-                                                      )
+                                                      p,
+                                                    )
                                                     : currentSelections === p;
                                                 return (
                                                   <label
                                                     key={p}
-                                                    className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${
-                                                      isSelected
-                                                        ? "bg-red-50 text-red-700 font-bold"
-                                                        : "hover:bg-slate-50 text-slate-600"
-                                                    }`}
+                                                    className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${isSelected
+                                                      ? "bg-red-50 text-red-700 font-bold"
+                                                      : "hover:bg-slate-50 text-slate-600"
+                                                      }`}
                                                   >
                                                     <input
                                                       type="checkbox"
@@ -1583,14 +1582,14 @@ export default function ContinuousForm({
                                           </div>
                                           {errors.pcsData?.[index]
                                             ?.detailMasalahMap?.[c.id] && (
-                                            <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                                              {
-                                                errors.pcsData[index]
-                                                  ?.detailMasalahMap?.[c.id]
-                                                  ?.message
-                                              }
-                                            </span>
-                                          )}
+                                              <span className="text-red-500 text-[10px] font-bold mt-1 block">
+                                                {
+                                                  errors.pcsData[index]
+                                                    ?.detailMasalahMap?.[c.id]
+                                                    ?.message
+                                                }
+                                              </span>
+                                            )}
                                         </div>
                                       )}
                                     </div>
@@ -1884,11 +1883,10 @@ export default function ContinuousForm({
                           onWheel={(e) => (e.target as HTMLElement).blur()}
                           {...register("meterAwal")}
                           readOnly={isMeterAwalLocked}
-                          className={`h-12 px-4 rounded-xl border text-base font-semibold outline-none transition-all ${
-                            isMeterAwalLocked
-                              ? "bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed"
-                              : "bg-white border-slate-200 focus:border-emerald-400"
-                          }`}
+                          className={`h-12 px-4 rounded-xl border text-base font-semibold outline-none transition-all ${isMeterAwalLocked
+                            ? "bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed"
+                            : "bg-white border-slate-200 focus:border-emerald-400"
+                            }`}
                           placeholder="Contoh: 600"
                         />
                         {isMeterAwalLocked && (
