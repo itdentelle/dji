@@ -205,6 +205,19 @@ export default function EmployeeHistoryPage() {
         } catch (e) {
           console.error("Failed to parse cached history");
         }
+      } else {
+        // Auto-search for today's data if no cache exists
+        const initialFilters = cachedFilters ? JSON.parse(cachedFilters) : { ...filters, date: today };
+        searchEmployeeHistory(initialFilters).then((res) => {
+          if (res.success && res.data) {
+            setData(res.data);
+            setHasSearched(true);
+            sessionStorage.setItem("dji_history_data", JSON.stringify(res.data));
+            sessionStorage.setItem("dji_history_searched", "true");
+          }
+        }).catch(err => {
+          console.error("Auto-search failed", err);
+        });
       }
 
       // Load dropdowns from Supabase
@@ -560,30 +573,32 @@ export default function EmployeeHistoryPage() {
                       </div>
                     </div>
                   )}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                      Grup Shift
-                    </label>
-                    <select
-                      value={filters.group_id}
-                      onChange={(e) => {
-                        // Jika grup diubah, kosongkan pilihan operator karena beda shift
-                        setFilters({
-                          ...filters,
-                          group_id: e.target.value,
-                          operator_ids: [],
-                        });
-                      }}
-                      className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-sm focus:border-sky-400 outline-none"
-                    >
-                      <option value="">Semua Grup</option>
-                      {groups.map((g) => (
-                        <option key={g.id} value={g.id.toString()}>
-                          Grup {g.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {user?.role === "admin" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">
+                        Grup Shift
+                      </label>
+                      <select
+                        value={filters.group_id}
+                        onChange={(e) => {
+                          // Jika grup diubah, kosongkan pilihan operator karena beda shift
+                          setFilters({
+                            ...filters,
+                            group_id: e.target.value,
+                            operator_ids: [],
+                          });
+                        }}
+                        className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-sm focus:border-sky-400 outline-none"
+                      >
+                        <option value="">Semua Grup</option>
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id.toString()}>
+                            Grup {g.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 
