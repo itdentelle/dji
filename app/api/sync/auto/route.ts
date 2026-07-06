@@ -90,6 +90,7 @@ export async function POST() {
             "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
             "Kategori Masalah": detail.kategori_masalah || "",
             "Detail Masalah": detail.detail_masalah || "",
+            "Spesifik Masalah": detail.spesifik_masalah || "",
             "Keterangan Cacat": detail.keterangan_cacat || "",
             "Penanggung Jawab": header.created_by_name || ""
           });
