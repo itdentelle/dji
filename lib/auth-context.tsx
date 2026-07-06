@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getUserProfile } from "@/actions/user-actions";
 
-export type UserRole = "admin" | "manager" | "employee" | "qc";
+export type UserRole = "admin" | "manager" | "employee" | "qc" | "operator" | "inspeksi" | "mending";
 
 export interface User {
   id: string;
