@@ -1168,7 +1168,7 @@ export default function ContinuousForm({
               },
             ],
       totalDowntime: "",
-      meterAwal: wasLastRoll && watch("nomorMc") === "T2A" ? "" : "",
+      meterAwal: wasLastRoll ? "" : watch("meterAwal"),
       meterAkhir: "",
       hasilProduksiMeter: "",
       tanggalPotong: "",
