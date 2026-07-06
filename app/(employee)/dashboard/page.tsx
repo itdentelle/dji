@@ -358,6 +358,9 @@ export default function DashboardPage() {
     }
     if (user) {
       loadLiveData();
+      if (user.role === "operator" && user.fullName) {
+        setActiveEmployeeName(user.fullName);
+      }
     }
   }, [user]);
 
@@ -891,17 +894,19 @@ export default function DashboardPage() {
             <RefreshCw className="w-4 h-4 transition-transform duration-500 group-hover:rotate-180" />
             Reset Slicer
           </button>
-          <button
-            onClick={() => {
-              setActiveEmployeeName(null);
-              setSearchQuery("");
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-extrabold text-rose-600 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300 rounded-full border border-rose-200 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300 group"
-            title="Ganti Pegawai"
-          >
-            <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-            Ganti Pegawai
-          </button>
+          {user?.role !== "operator" && (
+            <button
+              onClick={() => {
+                setActiveEmployeeName(null);
+                setSearchQuery("");
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-extrabold text-rose-600 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300 rounded-full border border-rose-200 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300 group"
+              title="Ganti Pegawai"
+            >
+              <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+              Ganti Pegawai
+            </button>
+          )}
         </div>
       </div>
 
