@@ -410,21 +410,22 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
           "Penanggung Jawab": headerData.created_by_name || "",
         }));
 
-        fetch(sheetUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-          .then(async (res) => {
-            if (res.ok) {
-              const client = await createClient();
-              await client
-                .from("production_headers")
-                .update({ is_synced_to_sheet: true })
-                .eq("id", headerId);
-            }
-          })
-          .catch((err) => console.error("Gagal sinkron Google Sheets:", err));
+        try {
+          const res = await fetch(sheetUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) {
+            const client = await createClient();
+            await client
+              .from("production_headers")
+              .update({ is_synced_to_sheet: true })
+              .eq("id", headerId);
+          }
+        } catch (err) {
+          console.error("Gagal sinkron Google Sheets:", err);
+        }
       }
 
       revalidatePath("/(employee)/history");
