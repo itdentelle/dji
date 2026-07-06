@@ -586,25 +586,25 @@ export default function EmployeeForm({
         pcsData:
           initialData.details && initialData.details.length > 0
             ? initialData.details.map((d: any) => ({
-                pcsIndex: String(d.pcs_index || "1"),
-                jmlHasilProduksi: String(d.jml_hasil_produksi || "1"),
-                indikatorStop: d.kategori_masalah ? true : false,
-                kategoriMasalah: d.kategori_masalah
-                  ? d.kategori_masalah.split(", ")
-                  : [],
-                detailMasalah: d.detail_masalah || "",
-                keteranganCacat: d.keterangan_cacat || "",
-              }))
+              pcsIndex: String(d.pcs_index || "1"),
+              jmlHasilProduksi: String(d.jml_hasil_produksi || "1"),
+              indikatorStop: d.kategori_masalah ? true : false,
+              kategoriMasalah: d.kategori_masalah
+                ? d.kategori_masalah.split(", ")
+                : [],
+              detailMasalah: d.detail_masalah || "",
+              keteranganCacat: d.keterangan_cacat || "",
+            }))
             : [
-                {
-                  pcsIndex: "1",
-                  jmlHasilProduksi: "1",
-                  indikatorStop: false,
-                  kategoriMasalah: [],
-                  detailMasalah: "",
-                  keteranganCacat: "",
-                },
-              ],
+              {
+                pcsIndex: "1",
+                jmlHasilProduksi: "1",
+                indikatorStop: false,
+                kategoriMasalah: [],
+                detailMasalah: "",
+                keteranganCacat: "",
+              },
+            ],
       });
       if (initialData.tanggal_potong) {
         setIsLastPanel(true);
@@ -703,7 +703,7 @@ export default function EmployeeForm({
         if (res.success && res.nextPanelNo) {
           setValue("panelNo", res.nextPanelNo.toString());
         }
-      } catch (e) {}
+      } catch (e) { }
     }, 600);
     return () => clearTimeout(timeoutId);
   }, [watchPotonganKe, watchNomorMc, setValue, isEdit]);
@@ -923,7 +923,7 @@ export default function EmployeeForm({
       try {
         const parsed = JSON.parse(savedHeader);
         if (parsed.nextPanelNo) nextPanelNo = parsed.nextPanelNo;
-      } catch (e) {}
+      } catch (e) { }
     }
     const currentPcsData = watch("pcsData") || [];
     const newPcsData = currentPcsData.map((pcs, index) => ({
@@ -949,15 +949,15 @@ export default function EmployeeForm({
         newPcsData.length > 0
           ? newPcsData
           : [
-              {
-                pcsIndex: "1",
-                jmlHasilProduksi: "1",
-                indikatorStop: false,
-                kategoriMasalah: [],
-                detailMasalah: "",
-                keteranganCacat: "",
-              },
-            ],
+            {
+              pcsIndex: "1",
+              jmlHasilProduksi: "1",
+              indikatorStop: false,
+              kategoriMasalah: [],
+              detailMasalah: "",
+              keteranganCacat: "",
+            },
+          ],
       totalDowntime: "",
       tanggalPotong: "",
     });
@@ -983,9 +983,9 @@ export default function EmployeeForm({
     typeof window !== "undefined" ? window.innerWidth : 1024;
   const tourCardTop = tourRect
     ? Math.min(
-        Math.max(tourRect.top + tourRect.height + 16, 16),
-        Math.max(viewportHeight - 260, 16),
-      )
+      Math.max(tourRect.top + tourRect.height + 16, 16),
+      Math.max(viewportHeight - 260, 16),
+    )
     : 96;
   const tourCardLeft = tourRect
     ? Math.min(Math.max(tourRect.left, 16), Math.max(viewportWidth - 368, 16))
@@ -1105,8 +1105,8 @@ export default function EmployeeForm({
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-4 sm:p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-stretch">
+          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-3 sm:p-4 lg:p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-3 sm:gap-4 lg:gap-5 items-stretch">
               <div data-tour="header-summary" className="w-full">
                 <HeaderSummaryCard
                   operatorName={
@@ -1144,16 +1144,16 @@ export default function EmployeeForm({
               {/* Data Panel Umum */}
               <div
                 data-tour="panel-info"
-                className="w-full min-h-full p-6 bg-slate-50 border-2 border-slate-200 rounded-2xl relative shadow-md flex flex-col justify-center"
+                className="w-full min-h-full p-3 sm:p-4 lg:p-6 bg-slate-50 border-2 border-slate-200 rounded-2xl relative shadow-md flex flex-col justify-center"
               >
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-slate-600 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md">
-                  Info Panel Otomatis
+                <div className="absolute -top-3.5 lg:-top-4 left-1/2 -translate-x-1/2 bg-slate-600 px-3 lg:px-5 py-1 lg:py-1.5 text-[9px] lg:text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md whitespace-nowrap">
+                  Info Panel
                 </div>
 
                 <div className="mt-3 flex flex-col items-center justify-center">
                   <input type="hidden" {...register("panelNo")} />
                   <div className="w-full flex items-center justify-center pt-3">
-                    <div className="h-32 w-full max-w-lg flex items-center justify-center rounded-xl bg-white border-2 border-slate-200 text-6xl font-extrabold text-slate-700 shadow-inner">
+                    <div className="h-20 sm:h-24 lg:h-32 w-full max-w-lg flex items-center justify-center rounded-xl bg-white border-2 border-slate-200 text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-700 shadow-inner">
                       {String(watch("panelNo") || "-")}
                     </div>
                   </div>
@@ -1302,17 +1302,16 @@ export default function EmployeeForm({
                                                     currentSelections,
                                                   )
                                                     ? currentSelections.includes(
-                                                        p,
-                                                      )
+                                                      p,
+                                                    )
                                                     : currentSelections === p;
                                                 return (
                                                   <label
                                                     key={p}
-                                                    className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${
-                                                      isSelected
+                                                    className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${isSelected
                                                         ? "bg-red-50 text-red-700 font-bold"
                                                         : "hover:bg-slate-50 text-slate-600"
-                                                    }`}
+                                                      }`}
                                                   >
                                                     <input
                                                       type="checkbox"
@@ -1333,14 +1332,14 @@ export default function EmployeeForm({
                                           </div>
                                           {errors.pcsData?.[index]
                                             ?.detailMasalahMap?.[c.id] && (
-                                            <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                                              {
-                                                errors.pcsData[index]
-                                                  ?.detailMasalahMap?.[c.id]
-                                                  ?.message
-                                              }
-                                            </span>
-                                          )}
+                                              <span className="text-red-500 text-[10px] font-bold mt-1 block">
+                                                {
+                                                  errors.pcsData[index]
+                                                    ?.detailMasalahMap?.[c.id]
+                                                    ?.message
+                                                }
+                                              </span>
+                                            )}
                                         </div>
                                       )}
                                     </div>

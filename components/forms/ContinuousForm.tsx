@@ -1326,8 +1326,8 @@ export default function ContinuousForm({
           onSubmit={handleSubmit(onSubmit, onInvalid)}
           className="space-y-4"
         >
-          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-4 sm:p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-stretch">
+          <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-3 sm:p-4 lg:p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-3 sm:gap-4 lg:gap-5 items-stretch">
               <div data-tour="meter-header-summary" className="w-full">
                 <HeaderSummaryCard
                   operatorName={
@@ -1368,9 +1368,9 @@ export default function ContinuousForm({
               {/* Tombol Pemicu Pop-up Meteran */}
               <div
                 data-tour="meter-final-report"
-                className="w-full min-h-full p-6 bg-emerald-50/80 border-2 border-emerald-200 rounded-2xl relative shadow-md flex flex-col justify-center"
+                className="w-full min-h-full p-3 sm:p-4 lg:p-6 bg-emerald-50/80 border-2 border-emerald-200 rounded-2xl relative shadow-md flex flex-col justify-center"
               >
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-emerald-600 px-5 py-1.5 text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md whitespace-nowrap">
+                <div className="absolute -top-3.5 lg:-top-4 left-1/2 -translate-x-1/2 bg-emerald-600 px-3 lg:px-5 py-1 lg:py-1.5 text-[9px] lg:text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md whitespace-nowrap">
                   {watch("nomorMc") === "T2A"
                     ? "Laporan Meter"
                     : "Laporan Hasil Akhir"}
@@ -1378,12 +1378,12 @@ export default function ContinuousForm({
 
                 <div className="mt-3 flex flex-col items-center justify-center text-center gap-4">
                   <div>
-                    <h4 className="text-lg font-black text-emerald-900">
+                    <h4 className="text-sm sm:text-base lg:text-lg font-black text-emerald-900">
                       {watch("nomorMc") === "T2A"
                         ? "Laporan Meter"
                         : "Laporan Hasil Akhir (Shift / Roll)"}
                     </h4>
-                    <p className="text-xs text-emerald-700 mt-2 max-w-sm mx-auto">
+                    <p className="text-[10px] sm:text-xs text-emerald-700 mt-1 sm:mt-2 max-w-sm mx-auto">
                       {watch("nomorMc") === "T2A"
                         ? "Gunakan tombol di bawah untuk melaporkan meter produksi."
                         : "Gunakan tombol di bawah jika gulungan telah dipotong atau shift selesai."}
