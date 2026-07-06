@@ -145,6 +145,12 @@ export default function Sidebar() {
           icon: User,
           roles: ["admin"],
         },
+        {
+          name: "Profil / Password",
+          href: "/profile",
+          icon: User,
+          roles: ["admin", "manager", "operator", "inspeksi", "mending"],
+        },
       ],
     },
   ];
