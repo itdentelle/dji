@@ -1795,166 +1795,173 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Machine Slicer */}
-        <div className="flex items-center gap-2 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0">
-          <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
-            <Layers className="w-4 h-4" />
-          </div>
-          <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1 whitespace-nowrap">
-            Mesin:
-          </span>
-          <div className="relative">
-            <button
-              onClick={() => setIsMachineDropdownOpen(!isMachineDropdownOpen)}
-              className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-bold cursor-pointer min-w-[150px] flex justify-between items-center"
-            >
-              <span className="truncate max-w-[120px]">
-                {selectedMachines.length === 0
-                  ? "Semua Mesin"
-                  : `${selectedMachines.length} Terpilih`}
-              </span>
-              <span className="text-[9px] ml-2 text-slate-400">▼</span>
-            </button>
+        {/* Entity Filters (Machine & Operator) */}
+        <div className="flex items-center gap-4 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0 flex-1 lg:flex-none overflow-x-auto custom-scrollbar">
+          
+          {/* Machine Slicer */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
+              <Layers className="w-4 h-4" />
+            </div>
+            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1">
+              Mesin:
+            </span>
+            <div className="relative">
+              <button
+                onClick={() => setIsMachineDropdownOpen(!isMachineDropdownOpen)}
+                className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-bold cursor-pointer min-w-[120px] flex justify-between items-center"
+              >
+                <span className="truncate max-w-[100px]">
+                  {selectedMachines.length === 0
+                    ? "Semua"
+                    : `${selectedMachines.length} Terpilih`}
+                </span>
+                <span className="text-[9px] ml-2 text-slate-400">▼</span>
+              </button>
 
-            {isMachineDropdownOpen && (
-              <div className="absolute top-full mt-2 left-0 w-64 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
-                <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase">
-                    Pilih Mesin
-                  </span>
-                  <button
-                    onClick={() => setIsMachineDropdownOpen(false)}
-                    className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded"
-                  >
-                    Tutup
-                  </button>
-                </div>
-                <div className="overflow-y-auto flex-1 pr-1 custom-scrollbar">
-                  <label className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group">
-                    <input
-                      type="checkbox"
-                      checked={selectedMachines.length === 0}
-                      onChange={() => setSelectedMachines([])}
-                      className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
-                    />
-                    <span
-                      className={`text-xs font-bold transition-colors ${selectedMachines.length === 0 ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
-                    >
-                      Semua Mesin (Reset)
+              {isMachineDropdownOpen && (
+                <div className="absolute top-full mt-2 left-0 w-56 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
+                  <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase">
+                      Pilih Mesin
                     </span>
-                  </label>
-                  <div className="h-px bg-slate-100 my-1" />
-                  {uniqueMachines.map((mac) => (
-                    <label
-                      key={mac}
-                      className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group"
+                    <button
+                      onClick={() => setIsMachineDropdownOpen(false)}
+                      className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded"
                     >
+                      Tutup
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto flex-1 pr-1 custom-scrollbar">
+                    <label className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group">
                       <input
                         type="checkbox"
-                        checked={selectedMachines.includes(mac)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedMachines((prev) => [...prev, mac]);
-                          } else {
-                            setSelectedMachines((prev) =>
-                              prev.filter((m) => m !== mac),
-                            );
-                          }
-                        }}
+                        checked={selectedMachines.length === 0}
+                        onChange={() => setSelectedMachines([])}
                         className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
                       />
                       <span
-                        className={`text-xs font-semibold transition-colors ${selectedMachines.includes(mac) ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
+                        className={`text-xs font-bold transition-colors ${selectedMachines.length === 0 ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
                       >
-                        {mac}
+                        Semua Mesin
                       </span>
                     </label>
-                  ))}
+                    <div className="h-px bg-slate-100 my-1" />
+                    {uniqueMachines.map((mac) => (
+                      <label
+                        key={mac}
+                        className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedMachines.includes(mac)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedMachines((prev) => [...prev, mac]);
+                            } else {
+                              setSelectedMachines((prev) =>
+                                prev.filter((m) => m !== mac),
+                              );
+                            }
+                          }}
+                          className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span
+                          className={`text-xs font-semibold transition-colors ${selectedMachines.includes(mac) ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
+                        >
+                          {mac}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Operator Slicer */}
-        <div className="flex items-center gap-2 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0">
-          <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
-            <Users className="w-4 h-4" />
-          </div>
-          <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1 whitespace-nowrap">
-            Pegawai:
-          </span>
-          <div className="relative">
-            <button
-              onClick={() => setIsOperatorDropdownOpen(!isOperatorDropdownOpen)}
-              className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-bold cursor-pointer min-w-[150px] flex justify-between items-center"
-            >
-              <span className="truncate max-w-[120px]">
-                {selectedOperators.length === 0
-                  ? "Semua Pegawai"
-                  : `${selectedOperators.length} Terpilih`}
-              </span>
-              <span className="text-[9px] ml-2 text-slate-400">▼</span>
-            </button>
+          <div className="w-px h-6 bg-slate-200 shrink-0 hidden sm:block" />
 
-            {isOperatorDropdownOpen && (
-              <div className="absolute top-full mt-2 left-0 w-64 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
-                <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase">
-                    Pilih Pegawai
-                  </span>
-                  <button
-                    onClick={() => setIsOperatorDropdownOpen(false)}
-                    className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded"
-                  >
-                    Tutup
-                  </button>
-                </div>
-                <div className="overflow-y-auto flex-1 pr-1 custom-scrollbar">
-                  <label className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group">
-                    <input
-                      type="checkbox"
-                      checked={selectedOperators.length === 0}
-                      onChange={() => setSelectedOperators([])}
-                      className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
-                    />
-                    <span
-                      className={`text-xs font-bold transition-colors ${selectedOperators.length === 0 ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
-                    >
-                      Semua Pegawai (Reset)
+          {/* Operator Slicer */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
+              <Users className="w-4 h-4" />
+            </div>
+            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1">
+              Pegawai:
+            </span>
+            <div className="relative">
+              <button
+                onClick={() => setIsOperatorDropdownOpen(!isOperatorDropdownOpen)}
+                className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-bold cursor-pointer min-w-[120px] flex justify-between items-center"
+              >
+                <span className="truncate max-w-[100px]">
+                  {selectedOperators.length === 0
+                    ? "Semua"
+                    : `${selectedOperators.length} Terpilih`}
+                </span>
+                <span className="text-[9px] ml-2 text-slate-400">▼</span>
+              </button>
+
+              {isOperatorDropdownOpen && (
+                <div className="absolute top-full mt-2 left-0 w-64 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
+                  <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase">
+                      Pilih Pegawai
                     </span>
-                  </label>
-                  <div className="h-px bg-slate-100 my-1" />
-                  {uniqueOperators.map((op) => (
-                    <label
-                      key={op}
-                      className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group"
+                    <button
+                      onClick={() => setIsOperatorDropdownOpen(false)}
+                      className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded"
                     >
+                      Tutup
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto flex-1 pr-1 custom-scrollbar">
+                    <label className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group">
                       <input
                         type="checkbox"
-                        checked={selectedOperators.includes(op)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedOperators((prev) => [...prev, op]);
-                          } else {
-                            setSelectedOperators((prev) =>
-                              prev.filter((o) => o !== op),
-                            );
-                          }
-                        }}
+                        checked={selectedOperators.length === 0}
+                        onChange={() => setSelectedOperators([])}
                         className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
                       />
                       <span
-                        className={`text-xs font-semibold transition-colors ${selectedOperators.includes(op) ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
+                        className={`text-xs font-bold transition-colors ${selectedOperators.length === 0 ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
                       >
-                        {op}
+                        Semua Pegawai
                       </span>
                     </label>
-                  ))}
+                    <div className="h-px bg-slate-100 my-1" />
+                    {uniqueOperators.map((op) => (
+                      <label
+                        key={op}
+                        className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedOperators.includes(op)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedOperators((prev) => [...prev, op]);
+                            } else {
+                              setSelectedOperators((prev) =>
+                                prev.filter((o) => o !== op),
+                              );
+                            }
+                          }}
+                          className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span
+                          className={`text-xs font-semibold transition-colors ${selectedOperators.includes(op) ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
+                        >
+                          {op}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
+
         </div>
       </div>
 
