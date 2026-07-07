@@ -1796,16 +1796,18 @@ export default function DashboardPage() {
         </div>
 
         {/* Entity Filters (Machine & Operator) */}
-        <div className="flex items-center gap-4 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0 flex-1 lg:flex-none overflow-x-auto custom-scrollbar">
+        <div className="flex flex-col gap-3 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0 flex-1 lg:flex-none">
           
           {/* Machine Slicer */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
-              <Layers className="w-4 h-4" />
+          <div className="flex items-center justify-between w-full gap-4 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
+                <Layers className="w-4 h-4" />
+              </div>
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1">
+                Mesin:
+              </span>
             </div>
-            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1">
-              Mesin:
-            </span>
             <div className="relative">
               <button
                 onClick={() => setIsMachineDropdownOpen(!isMachineDropdownOpen)}
@@ -1820,7 +1822,7 @@ export default function DashboardPage() {
               </button>
 
               {isMachineDropdownOpen && (
-                <div className="absolute top-full mt-2 left-0 w-56 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
+                <div className="absolute top-full mt-2 right-0 w-56 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
                   <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
                     <span className="text-[10px] font-extrabold text-slate-400 uppercase">
                       Pilih Mesin
@@ -1879,16 +1881,18 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="w-px h-6 bg-slate-200 shrink-0 hidden sm:block" />
+          <div className="w-full h-px bg-slate-100 shrink-0" />
 
           {/* Operator Slicer */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
-              <Users className="w-4 h-4" />
+          <div className="flex items-center justify-between w-full gap-4 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
+                <Users className="w-4 h-4" />
+              </div>
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1">
+                Pegawai:
+              </span>
             </div>
-            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1">
-              Pegawai:
-            </span>
             <div className="relative">
               <button
                 onClick={() => setIsOperatorDropdownOpen(!isOperatorDropdownOpen)}
@@ -1903,7 +1907,7 @@ export default function DashboardPage() {
               </button>
 
               {isOperatorDropdownOpen && (
-                <div className="absolute top-full mt-2 left-0 w-64 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
+                <div className="absolute top-full mt-2 right-0 w-64 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
                   <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
                     <span className="text-[10px] font-extrabold text-slate-400 uppercase">
                       Pilih Pegawai
