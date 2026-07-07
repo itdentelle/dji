@@ -13,7 +13,7 @@ export default function LoginForm() {
     e.preventDefault();
     if (isLoading) return;
     setError(null);
-    
+
     if (!nip || !password) {
       setError("NIP dan password wajib diisi.");
       return;
@@ -52,11 +52,11 @@ export default function LoginForm() {
             value={nip}
             onChange={(e) => setNip(e.target.value)}
             disabled={isLoading}
-            placeholder="Misal: EMP-001"
+            placeholder=""
             className="w-full h-12.5 rounded-2xl bg-white/80 border border-slate-200 px-4 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-4 focus:ring-[#0070bc]/15 focus:border-[#0070bc] transition-all"
           />
         </div>
-        
+
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">Password</label>
           <input
