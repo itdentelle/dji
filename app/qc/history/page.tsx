@@ -99,19 +99,22 @@ export default function QCHistoryPage() {
     if (typeof window !== "undefined") {
       const today = new Date().toISOString().split("T")[0];
       const cachedFilters = sessionStorage.getItem("dji_qc_history_filters");
+      const cachedData = sessionStorage.getItem("dji_qc_history_data");
+      const cachedSearched = sessionStorage.getItem("dji_qc_history_searched");
+
+      let initialFilters = { ...filters, date: today };
 
       if (cachedFilters) {
         try {
           const parsed = JSON.parse(cachedFilters);
           if (!parsed.petugas_ids) parsed.petugas_ids = [];
+          initialFilters = parsed;
           setFilters(parsed);
         } catch (e) {}
       } else {
-        setFilters((prev) => ({ ...prev, date: today }));
+        setFilters(initialFilters);
       }
 
-      const cachedData = sessionStorage.getItem("dji_qc_history_data");
-      const cachedSearched = sessionStorage.getItem("dji_qc_history_searched");
       if (cachedData && cachedSearched === "true") {
         try {
           setData(JSON.parse(cachedData));
@@ -119,6 +122,21 @@ export default function QCHistoryPage() {
         } catch (e) {
           console.error("Failed to parse cached history");
         }
+      } else {
+        // Auto fetch today's data on initial mount
+        setIsLoading(true);
+        searchQCHistory(initialFilters).then((res) => {
+          if (res.success && res.data) {
+            setData(res.data);
+            setHasSearched(true);
+            sessionStorage.setItem("dji_qc_history_filters", JSON.stringify(initialFilters));
+            sessionStorage.setItem("dji_qc_history_data", JSON.stringify(res.data));
+            sessionStorage.setItem("dji_qc_history_searched", "true");
+          }
+          setIsLoading(false);
+        }).catch(() => {
+          setIsLoading(false);
+        });
       }
     }
   }, []);
