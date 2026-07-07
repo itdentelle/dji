@@ -384,6 +384,10 @@ export default function DashboardPage() {
   // Chart Type State
   const [chartType, setChartType] = useState<"BAR" | "LINE">("BAR");
 
+  // Machine Filter State
+  const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
+  const [isMachineDropdownOpen, setIsMachineDropdownOpen] = useState(false);
+
   // Operator Filter State
   const [selectedOperators, setSelectedOperators] = useState<string[]>([]);
   const [isOperatorDropdownOpen, setIsOperatorDropdownOpen] = useState(false);
@@ -442,6 +446,12 @@ export default function DashboardPage() {
     loadLiveData();
   }, []);
 
+  // Unique Machines for Filter Dropdown
+  const uniqueMachines = useMemo(() => {
+    const macs = new Set(transactions.map((t) => t.mesin_id));
+    return Array.from(macs).filter(Boolean).sort();
+  }, [transactions]);
+
   // Unique Operators for Filter Dropdown
   const uniqueOperators = useMemo(() => {
     const ops = new Set(transactions.map((t) => t.nama_operator));
@@ -496,8 +506,14 @@ export default function DashboardPage() {
       );
     }
 
+    if (selectedMachines.length > 0) {
+      result = result.filter((item) =>
+        selectedMachines.includes(item.mesin_id),
+      );
+    }
+
     return result;
-  }, [transactions, dateRangeMode, startDate, endDate, selectedOperators]);
+  }, [transactions, dateRangeMode, startDate, endDate, selectedOperators, selectedMachines]);
 
   // KPI Calculations (Pivot values calculated from active dataset, filtered by grade)
   // Helper to calculate stats for a given transaction list
@@ -746,8 +762,14 @@ export default function DashboardPage() {
       );
     }
 
+    if (selectedMachines.length > 0) {
+      result = result.filter((item) =>
+        selectedMachines.includes(item.mesin_id),
+      );
+    }
+
     return result;
-  }, [transactions, dateRangeMode, startDate, endDate, selectedOperators]);
+  }, [transactions, dateRangeMode, startDate, endDate, selectedOperators, selectedMachines]);
 
   // Current half transactions (last 15 days) to perform clean deltas when filtering by "ALL"
   const currentHalfFilteredTransactions = useMemo(() => {
@@ -768,12 +790,20 @@ export default function DashboardPage() {
         selectedOperators.includes(item.nama_operator),
       );
     }
+
+    if (selectedMachines.length > 0) {
+      result = result.filter((item) =>
+        selectedMachines.includes(item.mesin_id),
+      );
+    }
+    
     return result;
   }, [
     transactions,
     dateFilteredTransactions,
     dateRangeMode,
     selectedOperators,
+    selectedMachines,
   ]);
 
   // Main KPI calculations
@@ -1762,6 +1792,87 @@ export default function DashboardPage() {
             >
               Meteran
             </button>
+          </div>
+        </div>
+
+        {/* Machine Slicer */}
+        <div className="flex items-center gap-2 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0">
+          <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
+            <Layers className="w-4 h-4" />
+          </div>
+          <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1 whitespace-nowrap">
+            Mesin:
+          </span>
+          <div className="relative">
+            <button
+              onClick={() => setIsMachineDropdownOpen(!isMachineDropdownOpen)}
+              className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-bold cursor-pointer min-w-[150px] flex justify-between items-center"
+            >
+              <span className="truncate max-w-[120px]">
+                {selectedMachines.length === 0
+                  ? "Semua Mesin"
+                  : `${selectedMachines.length} Terpilih`}
+              </span>
+              <span className="text-[9px] ml-2 text-slate-400">▼</span>
+            </button>
+
+            {isMachineDropdownOpen && (
+              <div className="absolute top-full mt-2 left-0 w-64 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 p-3 max-h-[300px] flex flex-col">
+                <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase">
+                    Pilih Mesin
+                  </span>
+                  <button
+                    onClick={() => setIsMachineDropdownOpen(false)}
+                    className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded"
+                  >
+                    Tutup
+                  </button>
+                </div>
+                <div className="overflow-y-auto flex-1 pr-1 custom-scrollbar">
+                  <label className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group">
+                    <input
+                      type="checkbox"
+                      checked={selectedMachines.length === 0}
+                      onChange={() => setSelectedMachines([])}
+                      className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span
+                      className={`text-xs font-bold transition-colors ${selectedMachines.length === 0 ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
+                    >
+                      Semua Mesin (Reset)
+                    </span>
+                  </label>
+                  <div className="h-px bg-slate-100 my-1" />
+                  {uniqueMachines.map((mac) => (
+                    <label
+                      key={mac}
+                      className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded-lg group"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedMachines.includes(mac)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedMachines((prev) => [...prev, mac]);
+                          } else {
+                            setSelectedMachines((prev) =>
+                              prev.filter((m) => m !== mac),
+                            );
+                          }
+                        }}
+                        className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                      />
+                      <span
+                        className={`text-xs font-semibold transition-colors ${selectedMachines.includes(mac) ? "text-sky-700" : "text-slate-600 group-hover:text-slate-800"}`}
+                      >
+                        {mac}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
