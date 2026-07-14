@@ -12,6 +12,7 @@ import {
   User,
   Clock,
   ClipboardList,
+  Scale,
 } from "lucide-react";
 import { submitMending } from "@/actions/mending-actions";
 
@@ -57,6 +58,7 @@ export default function MendingModal({
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<MendingFormData>({
     resolver: zodResolver(mendingSchema),
@@ -71,6 +73,10 @@ export default function MendingModal({
       notes: "",
     },
   });
+
+  const valGradeA = watch("mending_grade_a") || 0;
+  const valGradeB = watch("mending_grade_b") || 0;
+  const valGradeBs = watch("mending_grade_bs") || 0;
 
   useEffect(() => {
     if (isOpen) {
@@ -98,9 +104,38 @@ export default function MendingModal({
         else if (val === "BS") countBS++;
       });
 
-      setValue("mending_grade_a", countA);
-      setValue("mending_grade_b", countB);
-      setValue("mending_grade_bs", countBS);
+      const isMeteran = (headerData?.details?.[0]?.production_headers?.panel_no === "METERAN") || 
+                        (detailData?.[0]?.production_headers?.panel_no === "METERAN");
+      if (isMeteran) {
+        let maxMeter = 0;
+        
+        // Ambil inspeksi_ceklis dari detailData (jumlah meter yang dikirim dari halaman inspeksi)
+        if (detailData && detailData.length > 0) {
+          for (const d of detailData) {
+            const qcBatch = d.qc_inspection_items?.[0]?.qc_inspection_batches;
+            if (qcBatch && qcBatch.inspeksi_ceklis !== null && qcBatch.inspeksi_ceklis !== undefined) {
+              maxMeter = Number(qcBatch.inspeksi_ceklis) || 0;
+              if (maxMeter > 0) break;
+            }
+          }
+        }
+
+        // Fallback ke meter_akhir jika tidak ada
+        if (maxMeter === 0 && headerData?.details) {
+          headerData.details.forEach((d: any) => {
+            const m = Number(d.production_headers?.meter_akhir) || 0;
+            if (m > maxMeter) maxMeter = m;
+          });
+        }
+
+        setValue("mending_grade_a", maxMeter);
+        setValue("mending_grade_b", countB);
+        setValue("mending_grade_bs", countBS);
+      } else {
+        setValue("mending_grade_a", countA);
+        setValue("mending_grade_b", countB);
+        setValue("mending_grade_bs", countBS);
+      }
 
       let initialBerat = 0;
       if (detailData && detailData.length > 0) {
@@ -118,7 +153,7 @@ export default function MendingModal({
       }
       setValue("berat_kain", initialBerat);
     }
-  }, [isOpen, setValue, selections, detailData]);
+  }, [isOpen, setValue, selections, detailData, headerData, startMendingTime]);
 
   const onSubmit = async (data: MendingFormData) => {
     setIsSubmitting(true);
@@ -165,76 +200,96 @@ export default function MendingModal({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-      <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+  const isMeteranBatch = (headerData?.details?.[0]?.production_headers?.panel_no === "METERAN") || 
+                         (detailData?.[0]?.production_headers?.panel_no === "METERAN");
 
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#0070bc]/10 flex items-center justify-center">
-              <ClipboardList className="w-5 h-5 text-[#0070bc]" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">
-                Rangkuman Mending
-              </h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Lengkapi form ini untuk menyelesaikan proses mending
-              </p>
-            </div>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-[#0070bc]" /> Form Rangkuman Mending
+            </h3>
+            <p className="text-xs text-slate-500 font-medium">
+              Isi seluruh data mending untuk {Object.keys(selections).length} baris yang telah Anda pilih gradenya.
+            </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            className="p-2 bg-white border border-slate-200 rounded-full hover:bg-slate-50 transition-colors text-slate-500 hover:text-slate-700"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-6 overflow-y-auto">
           {errorMsg && (
-            <div className="mb-6 p-4 rounded-xl bg-rose-50 text-rose-600 text-sm font-medium flex items-center gap-3 border border-rose-100">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-xs font-semibold border border-red-100 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
               {errorMsg}
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Desain ID
-              </span>
-              <p className="text-sm font-bold text-slate-800 mt-1">
-                {headerData.design_id || "-"}
-              </p>
-            </div>
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Potongan Ke
-              </span>
-              <p className="text-sm font-bold text-slate-800 mt-1">
-                {headerData.potongan_ke || "-"}
-              </p>
-            </div>
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Mesin
-              </span>
-              <p className="text-sm font-bold text-slate-800 mt-1">
-                {headerData.nomor_mc || "-"}
-              </p>
-            </div>
-            <div className="p-4 rounded-xl border border-slate-200 bg-emerald-50 border-emerald-100">
-              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
-                Total
-              </span>
-              <p className="text-xl font-black text-emerald-700 mt-0.5">
-                {Object.keys(selections).length} PCS
-              </p>
+          {/* Context Info */}
+          <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
+              <div>
+                <span className="text-slate-400 font-semibold uppercase tracking-wider block mb-1 text-[9px]">
+                  PCS Ke
+                </span>
+                <span className="font-bold text-slate-800">
+                  {headerData?.details?.[0]?.pcs_index || "-"}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-semibold uppercase tracking-wider block mb-1 text-[9px]">
+                  Mesin
+                </span>
+                <span className="font-bold text-slate-800">
+                  {headerData?.details?.[0]?.production_headers?.nomor_mc || "-"}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-semibold uppercase tracking-wider block mb-1 text-[9px]">
+                  Desain
+                </span>
+                <span className="font-bold text-slate-800">
+                  {headerData?.details?.[0]?.production_headers?.design_id || "-"}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-semibold uppercase tracking-wider block mb-1 text-[9px]">
+                  Potongan
+                </span>
+                <span className="font-bold text-slate-800">
+                  {headerData?.details?.[0]?.production_headers?.potongan_ke || "-"}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-semibold uppercase tracking-wider block mb-1 text-[9px]">
+                  Total Produksi
+                </span>
+                <span className="font-extrabold text-emerald-600 block">
+                  {(() => {
+                    const isMeteran = headerData?.details?.[0]?.production_headers?.panel_no === "METERAN";
+                    if (isMeteran) {
+                      let maxMeter = 0;
+                      if (headerData?.details) {
+                        headerData.details.forEach((d: any) => {
+                          const m = Number(d.production_headers?.meter_akhir) || 0;
+                          if (m > maxMeter) maxMeter = m;
+                        });
+                      }
+                      return `${maxMeter} METER`;
+                    } else {
+                      const totalPanel = detailData?.reduce((sum, d) => sum + (Number(d.jml_hasil_produksi) || 0), 0) || 0;
+                      return `${totalPanel} PANEL`;
+                    }
+                  })()}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -243,12 +298,12 @@ export default function MendingModal({
             onSubmit={handleSubmit(onSubmit)}
             className="space-y-6"
           >
-            <div className="p-5 rounded-xl border border-slate-200 space-y-4">
-              <h3 className="text-sm font-bold flex items-center gap-2 text-slate-800 border-b border-slate-100 pb-3">
-                <User className="w-4 h-4 text-[#0070bc]" />
-                Petugas & Waktu
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            {/* Bagian 1: Waktu & Petugas */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <User className="w-4 h-4 text-sky-500" /> Informasi Mending
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Petugas Mending
@@ -257,7 +312,7 @@ export default function MendingModal({
                     {...register("petugas_mending")}
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none"
                   >
-                    <option value="">-- Pilih --</option>
+                    <option value="">Pilih</option>
                     <option value="Dede Oting">Dede Oting</option>
                     <option value="Andri">Andri</option>
                     <option value="Yudi">Yudi</option>
@@ -268,8 +323,6 @@ export default function MendingModal({
                     </p>
                   )}
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Waktu Mulai
@@ -301,8 +354,14 @@ export default function MendingModal({
                   )}
                 </div>
               </div>
+            </div>
 
-              <div className="pt-2 border-t border-slate-100">
+            {/* Bagian 2: Hasil Fisik */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Scale className="w-4 h-4 text-emerald-500" /> Data Fisik
+              </h4>
+              <div className="w-full">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                   Berat Kain (kg)
                 </label>
@@ -329,58 +388,60 @@ export default function MendingModal({
               </div>
             </div>
 
-            <div className="p-5 rounded-xl border border-emerald-100 bg-emerald-50/30 space-y-4">
-              <h3 className="text-sm font-bold flex items-center gap-2 text-emerald-800 border-b border-emerald-100 pb-3">
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
-                Total Hasil Mending
-              </h3>
-              <div className="grid grid-cols-3 gap-4 pt-2">
-                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            {/* Bagian 3: Rincian Grade */}
+            <div className="bg-sky-50/50 border border-sky-100 rounded-xl p-5 shadow-sm">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-[#0070bc]" /> Total Hasil Mending
+              </h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white border border-slate-200/60 rounded-xl p-3 text-center shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Grade A
                   </span>
-                  <span className="text-2xl font-black text-slate-800">
-                    {Object.values(selections).filter((v) => v === "A").length}
+                  <span className="text-xl font-black text-emerald-600 block">
+                    {isMeteranBatch ? `${valGradeA} METER` : `${valGradeA} PANEL`}
                   </span>
                 </div>
-                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                <div className="bg-white border border-slate-200/60 rounded-xl p-3 text-center shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Grade B
                   </span>
-                  <span className="text-2xl font-black text-slate-800">
-                    {Object.values(selections).filter((v) => v === "B").length}
+                  <span className="text-xl font-black text-amber-500 block">
+                    {isMeteranBatch ? `${valGradeB} METER` : `${valGradeB} PANEL`}
                   </span>
                 </div>
-                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                <div className="bg-white border border-slate-200/60 rounded-xl p-3 text-center shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Grade BS
                   </span>
-                  <span className="text-2xl font-black text-slate-800">
-                    {Object.values(selections).filter((v) => v === "BS").length}
+                  <span className="text-xl font-black text-rose-600 block">
+                    {isMeteranBatch ? `${valGradeBs} METER` : `${valGradeBs} PANEL`}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+            {/* Catatan Tambahan */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
                 Catatan / Keterangan (Opsional)
               </label>
               <textarea
                 {...register("notes")}
                 placeholder="Tambahkan catatan khusus jika ada..."
-                className="w-full h-20 p-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none resize-none"
+                className="w-full h-16 p-3 rounded-xl bg-white border border-slate-200 text-sm focus:ring-2 focus:ring-[#0070bc]/20 focus:border-[#0070bc] outline-none transition-all resize-none"
               />
             </div>
           </form>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+            className="px-5 py-2.5 rounded-xl font-bold text-xs text-slate-500 hover:bg-slate-200 transition-colors"
           >
             Batal
           </button>
@@ -388,17 +449,14 @@ export default function MendingModal({
             type="submit"
             form="mending-form"
             disabled={isSubmitting}
-            className="px-6 py-2.5 rounded-xl bg-[#0070bc] hover:bg-[#004777] text-white text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="px-6 py-2.5 rounded-xl font-bold text-xs bg-[#0070bc] text-white hover:bg-[#004777] transition-colors shadow-lg shadow-[#0070bc]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...
-              </>
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <>
-                <CheckCircle className="w-4 h-4" /> Simpan & Kirim Mending
-              </>
+              <CheckCircle className="w-4 h-4" />
             )}
+            Simpan & Kirim Mending
           </button>
         </div>
       </div>

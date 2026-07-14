@@ -19,6 +19,7 @@ import { submitQCInspection } from "@/actions/qc-actions";
 const qcSchema = z.object({
   petugas_inspeksi: z.string().min(1, "Wajib diisi"),
   petugas_inspeksi_2: z.string().optional(),
+  petugas_inspeksi_3: z.string().optional(),
   start_inspect: z.string().min(1, "Wajib diisi"),
   finish_inspect: z.string().min(1, "Wajib diisi"),
   berat_kain: z.number().min(0, "Harus >= 0").optional().nullable(),
@@ -64,6 +65,7 @@ export default function QCInspectionModal({
     defaultValues: {
       petugas_inspeksi: "",
       petugas_inspeksi_2: "",
+      petugas_inspeksi_3: "",
       start_inspect: "",
       finish_inspect: "",
       berat_kain: 0,
@@ -75,14 +77,18 @@ export default function QCInspectionModal({
     },
   });
 
+  const isMeteranBatch = headerData?.details && headerData.details.length > 0 && headerData.details[0]?.production_headers?.panel_no === "METERAN";
+
   useEffect(() => {
     if (isOpen) {
       // Load from localStorage or set current date
       const storedPetugas1 = localStorage.getItem("qc_petugas1");
       const storedPetugas2 = localStorage.getItem("qc_petugas2");
+      const storedPetugas3 = localStorage.getItem("qc_petugas3");
 
       if (storedPetugas1) setValue("petugas_inspeksi", storedPetugas1);
       if (storedPetugas2) setValue("petugas_inspeksi_2", storedPetugas2);
+      if (storedPetugas3) setValue("petugas_inspeksi_3", storedPetugas3);
 
       const storedStart = localStorage.getItem("qc_start");
 
@@ -94,30 +100,58 @@ export default function QCInspectionModal({
       setValue("start_inspect", startInspectTime || storedStart || currentTime);
       setValue("finish_inspect", currentTime);
 
-      // Count selections to auto-fill QC grades
       let countCeklis = 0;
       let countSilang = 0;
-      Object.values(selections).forEach((val) => {
-        if (val === 1) countCeklis++;
-        else if (val === 3) countSilang++;
-      });
-      // Auto-calculate Prod Ceklis/Silang
       let countProdCeklis = 0;
       let countProdSilang = 0;
-      if (headerData?.details) {
+
+      if (isMeteranBatch && headerData?.details) {
+        let maxMeter = 0;
+        
         headerData.details.forEach((d: any) => {
-          const hasProblem =
-            !!d.kategori_masalah ||
-            !!d.detail_masalah ||
-            !!d.keterangan_cacat ||
-            !!d.indikator_stop;
-          if (hasProblem) countProdSilang++;
-          else countProdCeklis++;
+          const realKeterangan = d.keterangan_cacat?.replace(/\[LAPORAN ISTIRAHAT\]|\[SEBELUM ISTIRAHAT\]/g, "").trim();
+          const isCacat = !!d.kategori_masalah || !!d.detail_masalah || !!realKeterangan || !!d.indikator_stop || !!d.meter_kain;
+          
+          const meterAkhir = Number(d.production_headers?.meter_akhir) || 0;
+          if (meterAkhir > maxMeter) {
+            maxMeter = meterAkhir;
+          }
+
+          // Produksi
+          if (isCacat) countProdSilang += 1;
+
+          // Inspeksi QC
+          const grade = selections[d.id];
+          if (grade) {
+            if (grade === 2 || grade === 3 || grade === 4) countSilang += 1;
+          }
         });
+        
+        countProdCeklis = maxMeter;
+        countCeklis = Math.max(0, maxMeter - countSilang);
+      } else {
+        // Mode Panel (Default)
+        Object.values(selections).forEach((val) => {
+          if (val === 1) countCeklis++;
+          else if (val === 2 || val === 3 || val === 4) countSilang++;
+        });
+
+        if (headerData?.details) {
+          headerData.details.forEach((d: any) => {
+            const realKeterangan = d.keterangan_cacat?.replace(/\[LAPORAN ISTIRAHAT\]|\[SEBELUM ISTIRAHAT\]/g, "").trim();
+            const hasProblem =
+              !!d.kategori_masalah ||
+              !!d.detail_masalah ||
+              !!realKeterangan ||
+              !!d.indikator_stop;
+            if (hasProblem) countProdSilang++;
+            else countProdCeklis++;
+          });
+        }
       }
+
       setValue("prod_ceklis", countProdCeklis);
       setValue("prod_silang", countProdSilang);
-
       setValue("qc_ceklis", countCeklis);
       setValue("qc_silang", countSilang);
     }
@@ -136,15 +170,36 @@ export default function QCInspectionModal({
     setErrorMsg(null);
 
     try {
-      const detailsArray = Object.keys(selections).map((detailId) => ({
-        detailId,
-        finalInspectionId: selections[detailId],
-      }));
+      const detailsArray = isMeteranBatch 
+        ? headerData.details.map((d: any) => {
+            const isIstirahat = !!d.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+                                !!d.kategori_masalah?.toUpperCase().includes("ISTIRAHAT");
+            const isFinishReport = d.production_headers?.meter_akhir !== null && 
+                                   d.production_headers?.meter_akhir !== undefined && 
+                                   String(d.production_headers.meter_akhir).trim() !== "";
+            const isGradable = !isIstirahat && !isFinishReport;
+
+            let grade = selections[d.id];
+            if (!isGradable && grade === undefined) {
+              grade = 1;
+            }
+            return {
+              detailId: d.id,
+              finalInspectionId: grade !== undefined ? grade : 1,
+            };
+          })
+        : headerData.details
+            .filter((d: any) => selections[d.id] !== undefined)
+            .map((d: any) => ({
+              detailId: d.id,
+              finalInspectionId: selections[d.id],
+            }));
 
       const payload = {
         details: detailsArray,
         petugas_inspeksi: data.petugas_inspeksi,
         petugas_inspeksi_2: data.petugas_inspeksi_2 || undefined,
+        petugas_inspeksi_3: data.petugas_inspeksi_3 || undefined,
         tanggal_inspeksi: new Date().toISOString().split("T")[0],
         start_inspect: data.start_inspect,
         finish_inspect: data.finish_inspect,
@@ -163,6 +218,7 @@ export default function QCInspectionModal({
         // Save to localStorage for next time
         localStorage.setItem("qc_petugas1", data.petugas_inspeksi || "");
         localStorage.setItem("qc_petugas2", data.petugas_inspeksi_2 || "");
+        localStorage.setItem("qc_petugas3", data.petugas_inspeksi_3 || "");
         localStorage.setItem("qc_start", data.start_inspect || "");
         localStorage.setItem("qc_finish", data.finish_inspect || "");
 
@@ -177,6 +233,7 @@ export default function QCInspectionModal({
         // Save to localStorage for next time
         localStorage.setItem("qc_petugas1", data.petugas_inspeksi || "");
         localStorage.setItem("qc_petugas2", data.petugas_inspeksi_2 || "");
+        localStorage.setItem("qc_petugas3", data.petugas_inspeksi_3 || "");
         localStorage.setItem("qc_start", data.start_inspect || "");
         localStorage.setItem("qc_finish", data.finish_inspect || "");
         if (onSuccess) onSuccess();
@@ -246,10 +303,10 @@ export default function QCInspectionModal({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
               <div>
                 <span className="text-slate-400 font-semibold uppercase tracking-wider block mb-1 text-[9px]">
-                  Operator
+                  PCS Ke
                 </span>
                 <span className="font-bold text-slate-800">
-                  {headerData.operator || "-"}
+                  {headerData?.details?.[0]?.pcs_index || "-"}
                 </span>
               </div>
               <div>
@@ -257,7 +314,7 @@ export default function QCInspectionModal({
                   Mesin
                 </span>
                 <span className="font-bold text-slate-800">
-                  {headerData.nomor_mc || "-"}
+                  {headerData?.details?.[0]?.production_headers?.nomor_mc || "-"}
                 </span>
               </div>
               <div>
@@ -265,7 +322,7 @@ export default function QCInspectionModal({
                   Desain
                 </span>
                 <span className="font-bold text-slate-800">
-                  {headerData.design_id || "-"}
+                  {headerData?.details?.[0]?.production_headers?.design_id || "-"}
                 </span>
               </div>
               <div>
@@ -273,7 +330,7 @@ export default function QCInspectionModal({
                   Potongan
                 </span>
                 <span className="font-bold text-slate-800">
-                  {headerData.potongan_ke || "-"}
+                  {headerData?.details?.[0]?.production_headers?.potongan_ke || "-"}
                 </span>
               </div>
             </div>
@@ -289,8 +346,8 @@ export default function QCInspectionModal({
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <User className="w-4 h-4 text-sky-500" /> Informasi Inspeksi
               </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                <div className="col-span-2 sm:col-span-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Petugas 1
                   </label>
@@ -302,6 +359,9 @@ export default function QCInspectionModal({
                     <option value="Nurdin">Nurdin</option>
                     <option value="Hendra">Hendra</option>
                     <option value="Taufik">Taufik</option>
+                    <option value="Dede Oting">Dede Oting</option>
+                    <option value="Andri">Andri</option>
+                    <option value="Yudi">Yudi</option>
                   </select>
                   {errors.petugas_inspeksi && (
                     <p className="text-red-500 text-[10px] mt-1">
@@ -309,7 +369,7 @@ export default function QCInspectionModal({
                     </p>
                   )}
                 </div>
-                <div className="col-span-2 sm:col-span-1">
+                <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Petugas 2
                   </label>
@@ -321,10 +381,35 @@ export default function QCInspectionModal({
                     <option value="Nurdin">Nurdin</option>
                     <option value="Hendra">Hendra</option>
                     <option value="Taufik">Taufik</option>
+                    <option value="Dede Oting">Dede Oting</option>
+                    <option value="Andri">Andri</option>
+                    <option value="Yudi">Yudi</option>
                   </select>
                   {errors.petugas_inspeksi_2 && (
                     <p className="text-red-500 text-[10px] mt-1">
                       {errors.petugas_inspeksi_2.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Petugas 3
+                  </label>
+                  <select
+                    {...register("petugas_inspeksi_3")}
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    <option value="Nurdin">Nurdin</option>
+                    <option value="Hendra">Hendra</option>
+                    <option value="Taufik">Taufik</option>
+                    <option value="Dede Oting">Dede Oting</option>
+                    <option value="Andri">Andri</option>
+                    <option value="Yudi">Yudi</option>
+                  </select>
+                  {errors.petugas_inspeksi_3 && (
+                    <p className="text-red-500 text-[10px] mt-1">
+                      {errors.petugas_inspeksi_3.message}
                     </p>
                   )}
                 </div>
@@ -338,7 +423,7 @@ export default function QCInspectionModal({
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-sky-500 outline-none"
                   />
                   {errors.start_inspect && (
-                    <p className="text-red-500 text-[10px] mt-1">
+                     <p className="text-red-500 text-[10px] mt-1">
                       {errors.start_inspect.message}
                     </p>
                   )}
@@ -398,23 +483,33 @@ export default function QCInspectionModal({
                       <CheckCircle className="w-3 h-3 text-emerald-500" />{" "}
                       Normal
                     </label>
-                    <input
-                      type="number"
-                      {...register("prod_ceklis", { valueAsNumber: true })}
-                      onWheel={(e) => (e.target as HTMLElement).blur()}
-                      className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-emerald-500 outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        {...register("prod_ceklis", { valueAsNumber: true })}
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        className="w-full h-9 pl-3 pr-12 rounded-lg border border-slate-200 text-sm focus:border-emerald-500 outline-none"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 pointer-events-none uppercase">
+                        {isMeteranBatch ? "meter" : "baris"}
+                      </span>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1">
                       <X className="w-3 h-3 text-red-500" /> Cacat
                     </label>
-                    <input
-                      type="number"
-                      {...register("prod_silang", { valueAsNumber: true })}
-                      onWheel={(e) => (e.target as HTMLElement).blur()}
-                      className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:border-red-500 outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        {...register("prod_silang", { valueAsNumber: true })}
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        className="w-full h-9 pl-3 pr-12 rounded-lg border border-slate-200 text-sm focus:border-red-500 outline-none"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 pointer-events-none uppercase">
+                        {isMeteranBatch ? "titik" : "baris"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -430,23 +525,33 @@ export default function QCInspectionModal({
                       <CheckCircle className="w-3 h-3 text-emerald-500" />{" "}
                       Normal
                     </label>
-                    <input
-                      type="number"
-                      {...register("qc_ceklis", { valueAsNumber: true })}
-                      onWheel={(e) => (e.target as HTMLElement).blur()}
-                      className="w-full h-9 px-3 rounded-lg border border-sky-200 text-sm focus:border-emerald-500 outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        {...register("qc_ceklis", { valueAsNumber: true })}
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        className="w-full h-9 pl-3 pr-12 rounded-lg border border-sky-200 text-sm focus:border-emerald-500 outline-none"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 pointer-events-none uppercase">
+                        {isMeteranBatch ? "meter" : "baris"}
+                      </span>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1">
                       <X className="w-3 h-3 text-red-500" /> Cacat
                     </label>
-                    <input
-                      type="number"
-                      {...register("qc_silang", { valueAsNumber: true })}
-                      onWheel={(e) => (e.target as HTMLElement).blur()}
-                      className="w-full h-9 px-3 rounded-lg border border-sky-200 text-sm focus:border-red-500 outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        {...register("qc_silang", { valueAsNumber: true })}
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        className="w-full h-9 pl-3 pr-12 rounded-lg border border-sky-200 text-sm focus:border-red-500 outline-none"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 pointer-events-none uppercase">
+                        {isMeteranBatch ? "titik" : "baris"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -39,6 +39,7 @@ import {
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
 import ProductionHeaderModal from "./ProductionHeaderModal";
+import DowntimeTracker from "./DowntimeTracker";
 
 // DATA FALLBACK DARI EXCEL
 const FALLBACK_OPERATORS = [
@@ -312,8 +313,8 @@ export default function EmployeeForm({
 }: EmployeeFormProps = {}) {
   const { user } = useAuth();
   const idempotencyKeyRef = useRef<string>(
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
-      ? crypto.randomUUID() 
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
       : Math.random().toString(36).substring(2, 15)
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -345,6 +346,7 @@ export default function EmployeeForm({
   // Accordion UI State
   const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
   const [highlightPotonganKe, setHighlightPotonganKe] = useState(false);
+  const [showAdvancedActions, setShowAdvancedActions] = useState(false);
 
   // States untuk upload foto
   const [isUploading, setIsUploading] = useState<{
@@ -356,23 +358,7 @@ export default function EmployeeForm({
     after: string | null;
   }>({ before: null, after: null });
 
-  // Timer State for Downtime
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [timerStartRef, setTimerStartRef] = useState<number | null>(null);
-  const [timerStopRef, setTimerStopRef] = useState<number | null>(null);
-  const [firstProblemTime, setFirstProblemTime] = useState<number | null>(null);
-  const [liveTimerSeconds, setLiveTimerSeconds] = useState(0);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isTimerRunning && timerStartRef) {
-      interval = setInterval(() => {
-        const elapsedMs = Date.now() - timerStartRef;
-        setLiveTimerSeconds(Math.floor(elapsedMs / 1000));
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, timerStartRef]);
 
   useEffect(() => {
     const startPanelTour = () => {
@@ -433,46 +419,6 @@ export default function EmployeeForm({
     setTourStepIndex(0);
   };
 
-  const handleStartTimer = () => {
-    const now = Date.now();
-    setIsTimerRunning(true);
-    setTimerStartRef(now);
-    setTimerStopRef(null);
-    if (!firstProblemTime) {
-      setFirstProblemTime(now);
-    }
-    setLiveTimerSeconds(0);
-  };
-
-  const handleStopTimer = () => {
-    if (!isTimerRunning) return;
-    setIsTimerRunning(false);
-
-    const now = Date.now();
-    const elapsedMs = now - (timerStartRef || now);
-    const elapsedSecs = Math.ceil(elapsedMs / 1000);
-
-    const currentTotalStr = watch("totalDowntime");
-    const currentTotal = parseInt(currentTotalStr || "0") || 0;
-
-    const newTotal = currentTotal + elapsedSecs;
-    setValue("totalDowntime", String(newTotal), {
-      shouldValidate: true,
-      shouldDirty: true,
-    });
-
-    setTimerStartRef(null);
-    setTimerStopRef(now);
-    setLiveTimerSeconds(0);
-  };
-
-  const formatTimer = (totalSeconds: number) => {
-    const m = Math.floor(totalSeconds / 60)
-      .toString()
-      .padStart(2, "0");
-    const s = (totalSeconds % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
 
   // Hubungkan ke Supabase secara dinamis
   useEffect(() => {
@@ -552,15 +498,12 @@ export default function EmployeeForm({
       fotoBefore: null,
       fotoAfter: null,
       panelNo: "1",
+      isPanelGagal: false,
       totalDowntime: "",
       pcsData: [
         {
           pcsIndex: "1",
           jmlHasilProduksi: "1",
-          indikatorStop: false,
-          kategoriMasalah: [],
-          detailMasalah: "",
-          keteranganCacat: "",
         },
       ],
     },
@@ -573,6 +516,7 @@ export default function EmployeeForm({
         groupId: String(initialData.group_id || ""),
         designId: String(initialData.design_id || ""),
         nomorMc: initialData.nomor_mc || "",
+        statusMatching: initialData.status_matching || "",
         tanggalProduksi:
           initialData.tgl || new Date().toISOString().split("T")[0],
         tanggalPotong: initialData.tanggal_potong || "",
@@ -591,24 +535,14 @@ export default function EmployeeForm({
         totalDowntime: String(initialData.total_downtime_detik || ""),
         pcsData:
           initialData.details && initialData.details.length > 0
-            ? initialData.details.map((d: any) => ({
-              pcsIndex: String(d.pcs_index || "1"),
+            ? initialData.details.map((d: any, index: number) => ({
+              pcsIndex: String(d.pcs_index || index + 1),
               jmlHasilProduksi: String(d.jml_hasil_produksi || "1"),
-              indikatorStop: d.kategori_masalah ? true : false,
-              kategoriMasalah: d.kategori_masalah
-                ? d.kategori_masalah.split(", ")
-                : [],
-              detailMasalah: d.detail_masalah || "",
-              keteranganCacat: d.keterangan_cacat || "",
             }))
             : [
               {
                 pcsIndex: "1",
                 jmlHasilProduksi: "1",
-                indikatorStop: false,
-                kategoriMasalah: [],
-                detailMasalah: "",
-                keteranganCacat: "",
               },
             ],
       });
@@ -630,6 +564,35 @@ export default function EmployeeForm({
     control,
     name: "pcsData",
   });
+
+  const [pcsConfirmModal, setPcsConfirmModal] = useState<{
+    isOpen: boolean;
+    targetCount: number;
+    actionType: "increment" | "decrement";
+  }>({
+    isOpen: false,
+    targetCount: 0,
+    actionType: "increment",
+  });
+
+  const handleChangePcsCount = (targetCount: number) => {
+    if (targetCount > fields.length) {
+      // Append directly without confirmation for increasing
+      for (let i = fields.length; i < targetCount; i++) {
+        append({
+          pcsIndex: String(i + 1),
+          jmlHasilProduksi: "1",
+        });
+      }
+    } else if (targetCount < fields.length) {
+      // Show confirmation dialog before reducing PCS count since it deletes data
+      setPcsConfirmModal({
+        isOpen: true,
+        targetCount,
+        actionType: "decrement",
+      });
+    }
+  };
 
   // Load Draft or Header Data dari LocalStorage
   useEffect(() => {
@@ -659,10 +622,6 @@ export default function EmployeeForm({
                 {
                   pcsIndex: "1",
                   jmlHasilProduksi: "1",
-                  indikatorStop: false,
-                  kategoriMasalah: [],
-                  detailMasalah: "",
-                  keteranganCacat: "",
                 },
               ];
               setValue("pcsData", currentPcs);
@@ -742,56 +701,23 @@ export default function EmployeeForm({
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    let adjustedMsg = "";
-    if (timerStopRef && firstProblemTime) {
-      const now = Date.now();
-      const gapSeconds = (now - timerStopRef) / 1000;
-      if (gapSeconds > 20) {
-        const actualDowntime = Math.ceil((now - firstProblemTime) / 1000);
-        const oldDowntime = data.totalDowntime || "0";
-        data.totalDowntime = String(actualDowntime);
-        setValue("totalDowntime", String(actualDowntime), {
-          shouldValidate: true,
-          shouldDirty: true,
-        });
-        adjustedMsg = `Waktu downtime otomatis disesuaikan dari ${oldDowntime} detik menjadi ${actualDowntime} detik karena jeda pengiriman form lebih dari 20 detik.`;
-      }
-    }
+
 
     // Gunakan idempotency key dari ref yang stabil
     data.idempotencyKey = idempotencyKeyRef.current;
 
-    // Ambil nama operator dan simpan ke PIC (dari auth context)
-    data.pic = user?.fullName || "";
-    data.operatorId = "AUTO";
+    // Otomatis set isPanelGagal jika ada PCS yang BS
+    if (data.pcsData?.some((p) => p.isBs)) {
+      data.isPanelGagal = true;
+    }
+
+    // Ambil nama operator asli
+    data.pic = getOperatorName(data.operatorId) || "";
     data.grupName = getGroupName(data.groupId);
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;
 
-    // Gabungkan detailMasalahMap ke spesifikMasalah, dan set detailMasalah ke nama kategori lengkap
-    if (data.pcsData) {
-      data.pcsData.forEach((pcs) => {
-        if (pcs.indikatorStop && pcs.kategoriMasalah && pcs.detailMasalahMap) {
-          const detailNames = pcs.kategoriMasalah
-            .map(
-              (cat) =>
-                NEW_PROBLEM_CATEGORIES.find((c) => c.id === cat)?.name || cat,
-            )
-            .join(", ");
 
-          const combinedSpesifik = pcs.kategoriMasalah
-            .map((cat) => {
-              const details = pcs.detailMasalahMap?.[cat];
-              return Array.isArray(details) ? details.join(", ") : details;
-            })
-            .filter(Boolean)
-            .join(", ");
-
-          pcs.detailMasalah = detailNames || null;
-          pcs.spesifikMasalah = combinedSpesifik || null;
-        }
-      });
-    }
 
     // Save Header Data to LocalStorage automatically on submit
     // Save Header Data to LocalStorage automatically on submit
@@ -811,7 +737,22 @@ export default function EmployeeForm({
     const submitData: ProductionFormInput = isCutSubmit
       ? { ...data, panelNo: "" }
       : data;
-    const nextPanelNoForSave = isCutSubmit ? "1" : nextPanelNo;
+
+    // Jika mesinMasihStop, tahan nomor panel (tidak maju)
+    // Shift 2 bisa submit panel yang sama karena backend izinkan beda operator
+    let nextPanelNoForSave = isCutSubmit ? "1" : nextPanelNo;
+    if ((data.mesinMasihStop || data.isPanelGagal) && !isCutSubmit) {
+      nextPanelNoForSave = currentPanelNo || nextPanelNo; // tetap di panel yang sama
+      if (data.mesinMasihStop && data.downtimeEvents && data.downtimeEvents.length > 0) {
+        const lastEvent = data.downtimeEvents[data.downtimeEvents.length - 1];
+        localStorage.setItem("dji_unresolved_downtime", JSON.stringify({
+          ...lastEvent,
+          durasiDetik: 0 // Reset waktu, shift baru mulai hitung dari 0
+        }));
+      }
+    } else {
+      localStorage.removeItem("dji_unresolved_downtime");
+    }
 
     const headerDataToSave = {
       operatorId: data.operatorId,
@@ -844,7 +785,7 @@ export default function EmployeeForm({
         setSuccessData({
           ...data,
           isOfflineSaved: true,
-          autoAdjustedDowntimeMsg: adjustedMsg,
+
           isCutSubmit,
         } as any);
         return;
@@ -862,7 +803,6 @@ export default function EmployeeForm({
         setSuccessData({
           ...data,
           id: isEdit ? initialData.id : (result as any).productionId,
-          autoAdjustedDowntimeMsg: adjustedMsg,
           isCutSubmit,
         } as any);
       } else {
@@ -880,7 +820,6 @@ export default function EmployeeForm({
         setSuccessData({
           ...data,
           isOfflineSaved: true,
-          autoAdjustedDowntimeMsg: adjustedMsg,
           isCutSubmit,
         } as any);
       } else {
@@ -911,15 +850,12 @@ export default function EmployeeForm({
         rpm: "",
         potonganKe: "",
         panelNo: "1",
+        isPanelGagal: false,
         totalDowntime: "",
         pcsData: [
           {
             pcsIndex: "1",
             jmlHasilProduksi: "",
-            indikatorStop: false,
-            kategoriMasalah: [],
-            detailMasalah: "",
-            keteranganCacat: "",
           },
         ],
       });
@@ -950,10 +886,6 @@ export default function EmployeeForm({
     const newPcsData = currentPcsData.map((pcs, index) => ({
       pcsIndex: (index + 1).toString(),
       jmlHasilProduksi: "1",
-      indikatorStop: false,
-      kategoriMasalah: [],
-      detailMasalah: "",
-      keteranganCacat: "",
     }));
 
     const currentPotongan = parseInt(watch("potonganKe") || "0");
@@ -962,10 +894,15 @@ export default function EmployeeForm({
         ? String(currentPotongan + 1)
         : watch("potonganKe");
 
+    // Jika mesinMasihStop, gunakan panelNo yang sama (dari localStorage yang sudah disimpan dengan nextPanelNo = currentPanelNo)
+    // nextPanelNo dari localStorage sudah memegang nomor panel yang sama
+
     reset({
       ...watch(),
       potonganKe: nextPotongan,
       panelNo: nextPanelNo,
+      isPanelGagal: false,
+      mesinMasihStop: false,
       pcsData:
         newPcsData.length > 0
           ? newPcsData
@@ -973,27 +910,20 @@ export default function EmployeeForm({
             {
               pcsIndex: "1",
               jmlHasilProduksi: "1",
-              indikatorStop: false,
-              kategoriMasalah: [],
-              detailMasalah: "",
-              keteranganCacat: "",
             },
           ],
       totalDowntime: "",
       tanggalPotong: "",
+      downtimeEvents: [],
     });
 
     // Refresh idempotency key setelah sukses submit
-    idempotencyKeyRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
-      ? crypto.randomUUID() 
+    idempotencyKeyRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
       : Math.random().toString(36).substring(2, 15);
 
     setIsLastPanel(false);
-    setIsTimerRunning(false);
-    setTimerStartRef(null);
-    setTimerStopRef(null);
-    setFirstProblemTime(null);
-    setLiveTimerSeconds(0);
+
     setPreviews({ before: null, after: null });
 
     if (wasLastPanel) {
@@ -1082,9 +1012,9 @@ export default function EmployeeForm({
   return (
     <div className="w-full bg-gradient-to-br from-blue-50/40 via-white to-white border border-[#e9ecef] rounded-[24px] p-6 sm:p-8 shadow-[0_8px_30px_rgba(0,112,188,0.06)] text-slate-800 relative overflow-hidden">
       {/* Decorative background shape */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none -z-10"></div>
 
-      <div className="relative z-10">
+      <div className="relative">
         {/* Segmented Control for Mode Switching */}
         <div
           data-tour="mode-switch"
@@ -1133,19 +1063,59 @@ export default function EmployeeForm({
 
         <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
           <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-3 sm:p-4 lg:p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-3 sm:gap-4 lg:gap-5 items-stretch">
-              <div data-tour="header-summary" className="w-full h-full">
-                <HeaderSummaryCard
-                  operatorName={user?.fullName || ""}
-                  shiftName={activeShiftName}
-                  nomorMc={watch("nomorMc") || ""}
-                  design={watch("designId") || ""}
-                  statusMatching={watch("statusMatching") || ""}
-                  potonganKe={watch("potonganKe")}
-                  onEdit={() => setIsHeaderModalOpen(true)}
-                  showEditButton
-                  showEditButtonPlacement="bottom"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 items-start">
+              {/* Kolom Kiri: Info Header & Info Panel */}
+              <div className="flex flex-col gap-3 sm:gap-4 lg:gap-5">
+                <div data-tour="header-summary" className="w-full">
+                  <HeaderSummaryCard
+                    operatorName={getOperatorName(watch("operatorId"))}
+                    shiftName={activeShiftName}
+                    nomorMc={watch("nomorMc") || ""}
+                    design={watch("designId") || ""}
+                    statusMatching={watch("statusMatching") || ""}
+                    potonganKe={watch("potonganKe")}
+                    pcsCount={fields.length}
+                    onEdit={() => setIsHeaderModalOpen(true)}
+                    showEditButton
+                    showEditButtonPlacement="bottom"
+                  />
+                </div>
+
+                {/* Data Panel Umum */}
+                <div
+                  data-tour="panel-info"
+                  className="w-full mt-3.5 sm:mt-4 p-4 lg:p-5 bg-slate-50 border border-slate-200 rounded-2xl relative shadow-sm flex flex-col justify-center items-center"
+                >
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-600 px-3.5 py-0.5 text-[10px] font-black text-white uppercase tracking-widest border border-white rounded-full shadow-sm whitespace-nowrap">
+                    Info Panel
+                  </div>
+
+                  <div className="mt-2 flex flex-col items-center justify-center w-full">
+                    <input type="hidden" {...register("panelNo")} />
+                    <div className="w-full max-w-xs flex items-center justify-center pt-2">
+                      <div className="h-16 sm:h-20 w-full flex items-center justify-center rounded-xl bg-white border border-slate-200 text-3xl sm:text-4xl font-extrabold text-slate-700 shadow-inner">
+                        {String(watch("panelNo") || "-")}
+                      </div>
+                    </div>
+                    {errors.panelNo && (
+                      <span className="text-red-500 text-[10px] font-bold mt-2">
+                        {errors.panelNo.message}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Kolom Kanan: Downtime Tracker */}
+              <div className="flex flex-col w-full">
+                <div data-tour="downtime" className="w-full">
+                  <DowntimeTracker
+                    control={control}
+                    setValue={setValue}
+                    watch={watch}
+                    showBlockInput={true}
+                  />
+                </div>
               </div>
 
               <ProductionHeaderModal
@@ -1162,362 +1132,152 @@ export default function EmployeeForm({
                 activeShiftName={activeShiftName}
                 onClearHeader={handleClearHeader}
                 highlightPotonganKe={highlightPotonganKe}
+                pcsCount={fields.length}
+                onChangePcsCount={handleChangePcsCount}
               />
-
-              {/* Data Panel Umum */}
-              <div
-                data-tour="panel-info"
-                className="w-full min-h-full p-3 sm:p-4 lg:p-6 bg-slate-50 border-2 border-slate-200 rounded-2xl relative shadow-md flex flex-col justify-center"
-              >
-                <div className="absolute -top-3.5 lg:-top-4 left-1/2 -translate-x-1/2 bg-slate-600 px-3 lg:px-5 py-1 lg:py-1.5 text-[9px] lg:text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md whitespace-nowrap">
-                  Info Panel
-                </div>
-
-                <div className="mt-3 flex flex-col items-center justify-center">
-                  <input type="hidden" {...register("panelNo")} />
-                  <div className="w-full flex items-center justify-center pt-3">
-                    <div className="h-20 sm:h-24 lg:h-32 w-full max-w-lg flex items-center justify-center rounded-xl bg-white border-2 border-slate-200 text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-700 shadow-inner">
-                      {String(watch("panelNo") || "-")}
-                    </div>
-                  </div>
-                  {errors.panelNo && (
-                    <span className="text-red-500 text-[10px] font-bold mt-2">
-                      {errors.panelNo.message}
-                    </span>
-                  )}
-                </div>
-              </div>
             </div>
 
-            {/* ARRAY OF PCS */}
-            <div data-tour="pcs-detail" className="mt-8">
-              <div className="text-center mb-6">
-                <h4 className="text-sm font-bold text-slate-700">
-                  Detail per PCS
-                </h4>
-              </div>
-
-              <div className="space-y-6">
-                {fields.map((field, index) => {
-                  const watchIndikator = watch(
-                    `pcsData.${index}.indikatorStop` as any,
-                  );
-                  return (
-                    <div
-                      key={field.id}
-                      className="border-t-2 border-slate-200/60 relative pt-6 pb-2"
-                    >
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-3 py-0.5 text-[10px] font-bold text-sky-500 uppercase tracking-widest border border-slate-200 rounded-full flex gap-3 items-center shadow-sm">
-                        <span>PCS Ke-{index + 1}</span>
-                        {fields.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => remove(index)}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded-full transition-colors"
-                            title="Hapus PCS"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-1 gap-5 mt-4">
-                        {/* Hidden Jml Hasil Produksi */}
-                        <input
-                          type="hidden"
-                          {...register(
-                            `pcsData.${index}.jmlHasilProduksi` as const,
-                          )}
-                        />
-                      </div>
-
-                      <div
-                        className={`mt-4 border rounded-xl overflow-hidden transition-all duration-300 ${watchIndikator ? "border-red-200 bg-red-50/20" : "border-slate-200 bg-slate-50/50"}`}
-                      >
-                        <label className="flex items-center justify-between p-4 cursor-pointer select-none">
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              {...register(
-                                `pcsData.${index}.indikatorStop` as const,
-                              )}
-                              onChange={(e) => {
-                                register(
-                                  `pcsData.${index}.indikatorStop` as const,
-                                ).onChange(e);
-                                if (e.target.checked) {
-                                  if (!isTimerRunning) handleStartTimer();
-                                } else {
-                                  setTimeout(() => {
-                                    const currentPcsData =
-                                      getValues("pcsData") || [];
-                                    if (
-                                      !currentPcsData.some(
-                                        (p) => p.indikatorStop,
-                                      )
-                                    ) {
-                                      setIsTimerRunning(false);
-                                      setTimerStartRef(null);
-                                      setTimerStopRef(null);
-                                      setFirstProblemTime(null);
-                                      setLiveTimerSeconds(0);
-                                      setValue("totalDowntime", "");
-                                    }
-                                  }, 10);
-                                }
-                              }}
-                              className="w-5 h-5 rounded text-red-600 focus:ring-red-500 border-slate-300 cursor-pointer"
-                            />
-                            <div>
-                              <h5
-                                className={`text-sm font-bold ${watchIndikator ? "text-red-650" : "text-slate-600"}`}
-                              >
-                                Terdapat Cacat / Kendala pada PCS ini?
-                              </h5>
-                            </div>
-                          </div>
-                        </label>
-
-                        {watchIndikator && (
-                          <div className="p-4 border-t border-red-100/50 space-y-4 animate-fadeIn">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[10px] font-bold text-red-600 uppercase">
-                                Kategori Masalah (Pilih lebih dari 1)
-                              </label>
-                              <div className="flex flex-col gap-2 mt-1">
-                                {NEW_PROBLEM_CATEGORIES.map((c) => {
-                                  const isChecked = watch(
-                                    `pcsData.${index}.kategoriMasalah`,
-                                  )?.includes(c.id);
-                                  return (
-                                    <div
-                                      key={c.id}
-                                      className="flex flex-col gap-2 p-3 bg-white border border-red-100 rounded-lg shadow-sm"
-                                    >
-                                      <label className="flex items-center gap-2 cursor-pointer hover:text-red-500 transition-colors">
-                                        <input
-                                          type="checkbox"
-                                          value={c.id}
-                                          {...register(
-                                            `pcsData.${index}.kategoriMasalah` as const,
-                                          )}
-                                          className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500"
-                                        />
-                                        <span className="text-xs font-bold text-slate-700">
-                                          {c.name}
-                                        </span>
-                                      </label>
-
-                                      {isChecked && (
-                                        <div className="pl-6 animate-fadeIn mt-2">
-                                          <div className="w-full rounded-md bg-white border border-red-200 overflow-hidden flex flex-col shadow-inner">
-                                            <div className="px-3 py-1.5 bg-slate-50 border-b border-red-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                              Pilih Detail Masalah
-                                            </div>
-                                            <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                                              {NEW_PROBLEMS[c.id]?.map((p) => {
-                                                const currentSelections =
-                                                  watch(
-                                                    `pcsData.${index}.detailMasalahMap.${c.id}`,
-                                                  ) || [];
-                                                const isSelected =
-                                                  Array.isArray(
-                                                    currentSelections,
-                                                  )
-                                                    ? currentSelections.includes(
-                                                      p,
-                                                    )
-                                                    : currentSelections === p;
-                                                return (
-                                                  <label
-                                                    key={p}
-                                                    className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${isSelected
-                                                        ? "bg-red-50 text-red-700 font-bold"
-                                                        : "hover:bg-slate-50 text-slate-600"
-                                                      }`}
-                                                  >
-                                                    <input
-                                                      type="checkbox"
-                                                      value={p}
-                                                      {...register(
-                                                        `pcsData.${index}.detailMasalahMap.${c.id}` as const,
-                                                      )}
-                                                      className="hidden"
-                                                    />
-                                                    <span>{p}</span>
-                                                    {isSelected && (
-                                                      <CheckCircle2 className="w-4 h-4 text-red-500 shrink-0 ml-2" />
-                                                    )}
-                                                  </label>
-                                                );
-                                              })}
-                                            </div>
-                                          </div>
-                                          {errors.pcsData?.[index]
-                                            ?.detailMasalahMap?.[c.id] && (
-                                              <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                                                {
-                                                  errors.pcsData[index]
-                                                    ?.detailMasalahMap?.[c.id]
-                                                    ?.message
-                                                }
-                                              </span>
-                                            )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                              {errors.pcsData?.[index]?.kategoriMasalah && (
-                                <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                                  {
-                                    errors.pcsData[index]?.kategoriMasalah
-                                      ?.message
-                                  }
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-6 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() =>
-                    append({
-                      pcsIndex: String(fields.length + 1),
-                      jmlHasilProduksi: "1",
-                      indikatorStop: false,
-                      kategoriMasalah: [],
-                      detailMasalah: "",
-                      keteranganCacat: "",
-                    })
-                  }
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition-all shadow-sm"
-                >
-                  <Plus className="w-4 h-4 text-slate-400" />
-                  Tambah PCS Baru
-                </button>
-              </div>
-            </div>
+            {/* Hidden PCS fields to match the array structure for form submission */}
+            {fields.map((field, index) => (
+              <input
+                key={field.id}
+                type="hidden"
+                {...register(`pcsData.${index}.jmlHasilProduksi` as const)}
+              />
+            ))}
           </div>
 
-          {/* Global Downtime Input */}
-          {watch("pcsData")?.some((pcs) => pcs.indikatorStop) && (
-            <div
-              data-tour="downtime"
-              className="p-5 bg-orange-50 border border-orange-200 rounded-2xl shadow-sm mb-6"
-            >
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-orange-800 uppercase flex items-center gap-2">
-                  Total Estimasi Waktu Mesin Berhenti (Downtime)
-                </label>
-                <p className="text-[10px] text-orange-600">
-                  Waktu henti mesin akan tercatat otomatis saat timer berjalan.
-                </p>
-                <div className="relative flex items-center gap-4 mt-2">
-                  <div className="relative w-32 shrink-0">
-                    <input
-                      type="number"
-                      {...register("totalDowntime")}
-                      className="w-full h-14 pl-4 pr-12 rounded-2xl bg-white/50 border-2 border-orange-200 text-xl font-black text-orange-700 focus:outline-none transition-all shadow-inner cursor-not-allowed"
-                      placeholder="0"
-                      readOnly
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-500 text-[10px] font-bold uppercase">
-                      Detik
-                    </span>
-                  </div>
 
-                  {/* Timer Controls */}
-                  <div className="flex-1">
-                    {!isTimerRunning ? (
-                      <button
-                        type="button"
-                        onClick={handleStartTimer}
-                        className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
+          {/* Tindakan Akhir Panel Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShowAdvancedActions(!showAdvancedActions)}
+            className="w-full flex items-center justify-center gap-2 py-3 mb-4 rounded-xl border-2 border-slate-200 border-dashed text-slate-500 font-bold text-sm hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300 transition-all duration-200"
+          >
+            {showAdvancedActions ? (
+              <>Tutup Opsi Lanjutan</>
+            ) : (
+              <>Buka Opsi Lanjutan (Potong / Lanjut Shift)</>
+            )}
+          </button>
+
+          {/* Tindakan Akhir Panel */}
+          {showAdvancedActions && (
+            <div className="flex flex-col gap-3 mb-6 animate-fadeIn">
+              {/* Potong Kain Toggle */}
+              <div
+                data-tour="cut-panel"
+                className={`p-4 border rounded-2xl transition-all duration-300 ${isLastPanel ? "bg-sky-50 border-sky-300 shadow-sm" : "bg-slate-50 border-slate-200"}`}
+              >
+                <label className="flex items-center justify-between cursor-pointer select-none">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isLastPanel}
+                      onChange={(e) => {
+                        setIsLastPanel(e.target.checked);
+                        if (e.target.checked) {
+                          setValue(
+                            "tanggalPotong",
+                            new Date().toISOString().split("T")[0],
+                          );
+                        } else {
+                          setValue("tanggalPotong", "");
+                        }
+                      }}
+                      className="w-5 h-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
+                    />
+                    <div>
+                      <h5
+                        className={`text-sm font-bold ${isLastPanel ? "text-sky-700" : "text-slate-600"}`}
                       >
-                        <Play className="w-5 h-5 fill-current" />
-                        Mulai Timer
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleStopTimer}
-                        className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-red-500/20 animate-pulse active:scale-[0.98]"
-                      >
-                        <Square className="w-5 h-5 fill-current" />
-                        Stop ({formatTimer(liveTimerSeconds)})
-                      </button>
-                    )}
+                        Potong Kain
+                      </h5>
+                    </div>
                   </div>
-                </div>
-                {errors.totalDowntime && (
-                  <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                    {errors.totalDowntime.message}
-                  </span>
+                  <Scissors
+                    className={`w-5 h-5 shrink-0 ${isLastPanel ? "text-sky-600" : "text-slate-400"}`}
+                    style={{ transform: "scaleX(-1)" }}
+                  />
+                </label>
+
+                {isLastPanel && (
+                  <div className="mt-4 pt-4 border-t border-sky-200/60 animate-fadeIn">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-sky-600 uppercase">
+                        Tanggal Potong
+                      </label>
+                      <input
+                        type="date"
+                        {...register("tanggalPotong")}
+                        className="h-10 px-3 rounded-lg bg-white border border-sky-200 text-sm font-semibold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none shadow-sm"
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
+
+              {/* Pilih PCS yang BS */}
+              {fields.length > 0 && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 transition-all duration-300 shadow-sm">
+                  <h5 className="text-xs font-black text-rose-800 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4" />
+                    Tandai PCS BS
+                  </h5>
+                  <p className="text-[10px] font-medium text-rose-600 mb-4">
+                    Centang PCS yang rusak. Jika ada 1 saja yang dicentang, nomor panel akan otomatis diulang untuk panel selanjutnya.
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    {fields.map((field, index) => (
+                      <label key={field.id} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
+                        <input
+                          type="checkbox"
+                          {...register(`pcsData.${index}.isBs` as const)}
+                          className="w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-rose-700">
+                          PCS {index + 1}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Lanjut Shift Checkbox */}
+              {!isEdit && (
+                <div className="bg-orange-50/80 border border-orange-200/60 rounded-2xl p-4 transition-all duration-300">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      {...register("mesinMasihStop")}
+                      className="w-5 h-5 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-orange-800 uppercase tracking-wide">Masalah Lanjut Shift (Mesin Stop)</span>
+                      <span className="text-[10px] font-medium text-orange-600/80">Centang jika masalah belum selesai dan panel dilanjutkan shift berikutnya.</span>
+                    </div>
+                  </label>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Potong Kain Toggle */}
-          <div
-            data-tour="cut-panel"
-            className={`p-5 border rounded-2xl transition-all duration-300 mb-6 ${isLastPanel ? "bg-sky-50 border-sky-300 shadow-sm" : "bg-slate-50 border-slate-200"}`}
-          >
-            <label className="flex items-center justify-between cursor-pointer select-none">
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={isLastPanel}
-                  onChange={(e) => {
-                    setIsLastPanel(e.target.checked);
-                    if (e.target.checked) {
-                      setValue(
-                        "tanggalPotong",
-                        new Date().toISOString().split("T")[0],
-                      );
-                    } else {
-                      setValue("tanggalPotong", "");
-                    }
-                  }}
-                  className="w-5 h-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
-                />
-                <div>
-                  <h5
-                    className={`text-sm font-bold ${isLastPanel ? "text-sky-700" : "text-slate-600"}`}
-                  >
-                    Potong Kain
-                  </h5>
-                </div>
-              </div>
-              <Scissors
-                className={`w-5 h-5 shrink-0 ${isLastPanel ? "text-sky-600" : "text-slate-400"}`}
-                style={{ transform: "scaleX(-1)" }}
-              />
+          <div className="mt-4 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col gap-2">
+            <label htmlFor="jenisLaporanMain" className="text-xs font-bold text-slate-700 uppercase">
+              Jenis Laporan / Info Istirahat
             </label>
-
-            {isLastPanel && (
-              <div className="mt-4 pt-4 border-t border-sky-200/60 animate-fadeIn">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-sky-600 uppercase">
-                    Tanggal Potong
-                  </label>
-                  <input
-                    type="date"
-                    {...register("tanggalPotong")}
-                    className="h-10 px-3 rounded-lg bg-white border border-sky-200 text-sm font-semibold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none shadow-sm"
-                  />
-                </div>
-              </div>
-            )}
+            <select
+              id="jenisLaporanMain"
+              {...register("jenisLaporan")}
+              className="w-full h-11 px-3 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-[#0070bc] focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+            >
+              <option value="">Normal</option>
+              <option value="Istirahat">Istirahat</option>
+            </select>
+            <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+              Pilih <strong>Istirahat</strong> jika panel ini adalah hasil kerja saat Anda beristirahat (dikerjakan oleh helper).
+            </p>
           </div>
 
           {/* Kirim Button */}
@@ -1616,6 +1376,58 @@ export default function EmployeeForm({
               >
                 Tutup & Perbaiki
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Konfirmasi Perubahan Jumlah PCS */}
+        {pcsConfirmModal.isOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+            <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl flex flex-col items-center animate-scaleIn text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-sky-500"></div>
+              <div className="w-14 h-14 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center mb-4">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h4 className="text-lg font-bold text-slate-800">
+                {pcsConfirmModal.actionType === "increment"
+                  ? "Tambah PCS?"
+                  : "Hapus PCS?"}
+              </h4>
+              <p className="text-sm text-slate-600 mt-2 mb-6 leading-relaxed">
+                {pcsConfirmModal.actionType === "increment"
+                  ? `Apakah Anda yakin ingin menambah jumlah PCS menjadi ${pcsConfirmModal.targetCount} pcs?`
+                  : `Apakah Anda yakin ingin mengurangi jumlah PCS menjadi ${pcsConfirmModal.targetCount} pcs? Tindakan ini akan menghapus data yang berkaitan dengan PCS di atas nomor tersebut.`}
+              </p>
+              <div className="flex w-full gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPcsConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-95 transition-all text-sm"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pcsConfirmModal.actionType === "increment") {
+                      for (let i = fields.length; i < pcsConfirmModal.targetCount; i++) {
+                        append({
+                          pcsIndex: String(i + 1),
+                          jmlHasilProduksi: "1",
+                        });
+                      }
+                    } else {
+                      for (let i = fields.length - 1; i >= pcsConfirmModal.targetCount; i--) {
+                        remove(i);
+                      }
+                    }
+                    setPcsConfirmModal(prev => ({ ...prev, isOpen: false }));
+                  }}
+                  className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl active:scale-95 transition-all text-sm"
+                >
+                  Ya, Ubah
+                </button>
+              </div>
             </div>
           </div>
         )}

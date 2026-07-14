@@ -23,11 +23,12 @@ export const productionFormSchemaBase = z.object({
   operatorId: z.string().min(1, "Minimal pilih 1 operator"),
   groupId: z.string().min(1, "Grup Shift harus dipilih"),
   grupName: z.string().optional(),
+  nomorMc: z.string().min(1, "Nomor MC harus diisi"),
+  mesinMasihStop: z.boolean().optional(),
   designId: z.string().min(1, "Design harus dipilih"),
   designName: z.string().optional(),
   created_by_name: z.string().optional().nullable(),
-// Header Data
-  nomorMc: z.string().optional().nullable(),
+  // Header Data
   statusMatching: z.string().min(1, "Status Matching harus dipilih"),
   tanggalProduksi: z.string().optional().nullable(),
   tanggalPotong: z.string().optional().nullable(),
@@ -39,7 +40,7 @@ export const productionFormSchemaBase = z.object({
   heavy: z.string().optional().nullable(),
   shadow: z.string().optional().nullable(),
   pinggiran: z.string().optional().nullable(),
-  
+
   // Data Umum Panel (dibagikan ke semua panel dalam 1 submit)
   rpm: z
     .string()
@@ -59,35 +60,48 @@ export const productionFormSchemaBase = z.object({
     .refine((val) => !val || /^\d+$/.test(val), {
       message: "Nomor panel harus berupa angka positif",
     }),
+  isPanelGagal: z.boolean().optional(),
   course: z.string().optional().nullable(),
   pic: z.string().max(100, "Nama PIC maksimal 100 karakter").optional().nullable(),
-  
+
   fotoBefore: z.string().optional().nullable(),
   fotoAfter: z.string().optional().nullable(),
+  jenisLaporan: z.string().optional(),
 
   // Waktu Berhenti (Global)
   totalDowntime: z.string().optional().nullable(),
+  downtimeEvents: z.array(
+    z.object({
+      id: z.string(),
+      durasiDetik: z.number(),
+      kategori: z.string().optional(),
+      detail: z.string().optional(),
+      blok: z.string().optional(),
+      pcsKe: z.string().optional(),
+      problems: z.array(
+        z.object({
+          kategori: z.string(),
+          details: z.array(z.string()),
+          blok: z.string().optional(),
+          meter: z.string().optional(),
+        })
+      ).optional(),
+    })
+  ).optional(),
 
   // Array of PCS Data untuk satu Panel
   pcsData: z.array(
     z.object({
       pcsIndex: z.string(), // Misalnya "1", "2", "3"
       jmlHasilProduksi: z.string().optional().nullable(),
-      indikatorStop: z.boolean().optional(),
-      kategoriMasalah: z.array(z.string()).optional(),
-      detailMasalahMap: z.record(z.string(), detailMasalahSelectionSchema).optional(),
-      detailMasalah: z.string().optional().nullable(),
-      spesifikMasalah: z.string().optional().nullable(),
       meterKain: z.string().optional().nullable(),
-      keteranganCacat: z.string().max(200, "Keterangan maksimal 200 karakter").optional().nullable(),
+      isBs: z.boolean().optional(),
     })
   ).min(1, "Minimal harus ada 1 PCS"),
   idempotencyKey: z.string().optional(),
 });
 
 export const productionFormSchema = productionFormSchemaBase.superRefine((data, ctx) => {
-  const hasMasalah = data.pcsData && data.pcsData.some(pcs => pcs.indikatorStop);
-
   if (!data.tanggalPotong && (!data.panelNo || data.panelNo.trim() === "")) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -95,53 +109,27 @@ export const productionFormSchema = productionFormSchemaBase.superRefine((data, 
       path: ["panelNo"],
     });
   }
-
-  if (data.pcsData && data.pcsData.length > 0) {
-    data.pcsData.forEach((pcs, index) => {
-      if (pcs.indikatorStop) {
-        if (!pcs.kategoriMasalah || pcs.kategoriMasalah.length === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Wajib memilih minimal 1 Kategori Masalah jika mencentang cacat",
-            path: ["pcsData", index, "kategoriMasalah"],
-          });
-        } else {
-          pcs.kategoriMasalah.forEach((catId) => {
-            if (!pcs.detailMasalahMap || !hasSelectedDetailMasalah(pcs.detailMasalahMap[catId])) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Harus memilih salah satu detail masalah",
-                path: ["pcsData", index, "detailMasalahMap", catId],
-              });
-            }
-          });
-        }
-      }
-    });
-  }
-
-  if (hasMasalah) {
-    if (!data.totalDowntime || data.totalDowntime.trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Wajib mengisi Estimasi Waktu Mesin Berhenti (Downtime) jika terdapat masalah/cacat",
-        path: ["totalDowntime"],
-      });
-    }
-  }
 });
 
 export type ProductionFormInput = z.infer<typeof productionFormSchema>;
+
+export const pcsDataSchema = z.object({
+  pcsIndex: z.string(),
+  jmlHasilProduksi: z.string(),
+  isBs: z.boolean().optional(),
+});
 
 export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: true, pcsData: true }).extend({
   meterAwal: z.string().optional().nullable(),
   meterAkhir: z.string().optional().nullable(),
   hasilProduksiMeter: z.string().optional().nullable(),
   targetMeter: z.string().optional().nullable(),
+  jenisLaporan: z.string().optional(),
   pcsData: z.array(
     z.object({
       pcsIndex: z.string(),
       jmlHasilProduksi: z.string().optional().nullable(),
+      isBs: z.boolean().optional(),
       indikatorStop: z.boolean().optional(),
       kategoriMasalah: z.array(z.string()).optional(),
       detailMasalahMap: z.record(z.string(), detailMasalahSelectionSchema).optional(),
@@ -153,14 +141,14 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
     })
   ),
 }).superRefine((data, ctx) => {
-  const hasMeter = (data.meterAkhir && data.meterAkhir.trim() !== "") || 
-                   (data.hasilProduksiMeter && data.hasilProduksiMeter.trim() !== "");
-  const hasMasalah = data.pcsData && data.pcsData.some(pcs => pcs.indikatorStop);
+  const hasMeter = (data.meterAkhir && data.meterAkhir.trim() !== "") ||
+    (data.hasilProduksiMeter && data.hasilProduksiMeter.trim() !== "");
+  const hasMasalah = data.downtimeEvents && data.downtimeEvents.length > 0;
   if (!hasMeter && !hasMasalah) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Anda harus mencentang 'Terdapat Cacat' pada setidaknya 1 PCS",
-      path: ["pcsData"],
+      message: "Anda harus mencatat 'Downtime' atau melaporkan 'Meteran Akhir'",
+      path: ["downtimeEvents"],
     });
   }
 
@@ -184,38 +172,8 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
     }
   }
 
-  if (data.pcsData && data.pcsData.length > 0) {
-    data.pcsData.forEach((pcs, index) => {
-      if (pcs.indikatorStop) {
-        if (!pcs.kategoriMasalah || pcs.kategoriMasalah.length === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Wajib memilih minimal 1 Kategori Masalah jika mencentang cacat",
-            path: ["pcsData", index, "kategoriMasalah"],
-          });
-        } else {
-          pcs.kategoriMasalah.forEach((catId) => {
-            if (!pcs.detailMasalahMap || !hasSelectedDetailMasalah(pcs.detailMasalahMap[catId])) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Harus memilih salah satu detail masalah",
-                path: ["pcsData", index, "detailMasalahMap", catId],
-              });
-            }
-          });
-        }
-      }
-    });
-  }
+  // Removed indikatorStop checks as we moved downtime tracking to global
 
-  if (hasMasalah) {
-    if (!data.totalDowntime || data.totalDowntime.trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Wajib mengisi Estimasi Waktu Mesin Berhenti (Downtime) jika terdapat masalah/cacat",
-        path: ["totalDowntime"],
-      });
-    }
-  }
+  // Validasi totalDowntime dihapus karena perhitungan downtime sekarang diambil langsung dari durasiDetik di masing-masing downtimeEvents.
 });
 export type ContinuousFormInput = z.infer<typeof continuousFormSchema>;

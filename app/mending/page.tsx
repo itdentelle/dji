@@ -11,15 +11,65 @@ import {
   Scissors,
   Clock,
   HelpCircle,
+  Stethoscope,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import ProductTour, { ProductTourStep } from "@/components/ProductTour";
 import MendingModal from "@/components/forms/MendingModal";
 import ProductionDetailModal from "@/components/ProductionDetailModal";
+import HeaderSummaryCard from "@/components/forms/HeaderSummaryCard";
+import CompactHeaderCard from "@/components/forms/CompactHeaderCard";
 import {
-  getPendingMendingDetailsByBatch,
-  getAvailableMendingFilters,
+  getPendingMendingDetailsByDate,
+  getMendingDetailsByGroup,
 } from "@/actions/mending-actions";
+import { deleteProductionDetailRow } from "@/actions/qc-actions";
 import { getEmployeeHistoryDetail } from "@/actions/employee-actions";
+import { Package, X, Trash2 } from "lucide-react";
+
+const PROBLEM_DETAILS: Record<string, string[]> = {
+  A: ["L1,L2,L3 Benang timbul putus", "Benang lolos", "Bolong corak", "Benang narik/Kendor", "Benang Nyilang", "Perbaikan/Beset benang Dasar", "Benang Kejepit/Jebol/Kusut", "Jalur benang"],
+  B: ["Jarum pattern patah/bengkok", "Ganti Jacquard", "Ganti jarum Compoun Nedle, pattern", "Ngampul", "Ganti dari scaloop ke non scaloop atau sebaliknya", "Ngegaris/Stopline", "Keluar Jarum", "Ganti String bar", "Ganti PBO", "Pressan As beam kendor", "Tensi tensioner"],
+  C: ["Loading design/Ganti Design", "Perbaikan corak/revisi", "Salah ganti design", "Error design", "Proofing/PCB", "Ganti Pattern Disk", "Ganti pick"],
+  D: ["Ganti benang dasar L1/L2", "Salah ganti benang dasar", "Ganti benang Pattern Linner", "Ganti benang Pattern Heavy", "Ganti benang Pattern Shadow", "Ganti benang pattern keseluruhan (L,H,S)", "salah ganti benang pattern", "Ngelancarin", "Over Cone/Rewind", "Tunggu benang dasar dari warping", "Tunggu benang (benang belum datang)"],
+  E: ["Error Servo Drive", "Ganti motor servo", "Sensor Benang/Laser Stop", "Perbaikan Eletrik lainnya", "Konsleting", "Perbaikan listrik"],
+  F: ["Perbaikan cilynder Angin", "Ganti Bellow", "Perbaikan gear/Take Up Roll", "Ganti rantai/pertensi", "Ganti Black grip roll", "Ganti Oli", "Pelumasan/greace pada mesin", "Ganti Vanbelt", "Perawatan Panel Listrik", "Servis Overhaul"],
+  G: ["Hari Libur", "Tidak ada order", "Tunggu info", "Demo", "Bencana/gempa/banjir", "Istirahat selama buka puasa"]
+};
+
+const cleanMeterVal = (val: any) => {
+  if (val === null || val === undefined) return "";
+  const str = String(val);
+  const clean = str.replace(/PCS\s*\d+\s*:\s*/gi, "");
+  return clean.replace(/[a-zA-Z\s]+$/g, "").trim();
+};
+
+const getActualMeter = (item: any, h: any) => {
+  if (item.meter_kain !== null && item.meter_kain !== undefined && String(item.meter_kain).trim() !== "") {
+    const clean = cleanMeterVal(item.meter_kain);
+    const parsed = parseFloat(clean);
+    if (!isNaN(parsed)) return parsed;
+  }
+  if (item.detail_masalah) {
+    const meterMatch = item.detail_masalah.match(/\(Titik:\s*([A-Za-z0-9\s.\-]+)\)/i);
+    if (meterMatch && meterMatch[1]) {
+      const clean = cleanMeterVal(meterMatch[1]);
+      const parsed = parseFloat(clean);
+      if (!isNaN(parsed)) return parsed;
+    }
+  }
+  const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+                       !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
+                      !item.kategori_masalah && !item.detail_masalah;
+  const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
+  if ((isIstirahat || isFinishReport) && (h.meter_akhir || h.meter_awal)) {
+    const clean = cleanMeterVal(h.meter_akhir || h.meter_awal);
+    const parsed = parseFloat(clean);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return null;
+};
 
 const MENDING_TOUR_STEPS: ProductTourStep[] = [
   {
@@ -55,168 +105,752 @@ const MENDING_TOUR_STEPS: ProductTourStep[] = [
 ];
 
 export default function MendingPage() {
+  const [searchTanggal, setSearchTanggal] = useState("");
   const [searchMesin, setSearchMesin] = useState("");
   const [searchDesain, setSearchDesain] = useState("");
   const [searchPotongan, setSearchPotongan] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
-  const [isTourOpen, setIsTourOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isTourOpen, setIsTourOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
-  const [availableFilters, setAvailableFilters] = useState<
-    { nomor_mc: string; design_id: string; potongan_ke: string }[]
-  >([]);
-  const [isLoadingFilters, setIsLoadingFilters] = useState(true);
-
-  useEffect(() => {
-    const loadFilters = async () => {
-      const res = await getAvailableMendingFilters();
-      if (res.success && res.data) {
-        setAvailableFilters(res.data);
-      }
-      setIsLoadingFilters(false);
-    };
-    loadFilters();
-  }, []);
-
-  // Menampilkan semua mesin yang tersedia secara statis
-  const uniqueMesin = [
-    "R1",
-    "R2",
-    "R3B",
-    "R1C",
-    "R2C",
-    "R11",
-    "R12",
-    "R16",
-    "T1C",
-    "T2A",
-    "Warping D6",
-    "Winding",
-  ];
-  const availableDesigns = searchMesin
-    ? Array.from(
-        new Set(
-          availableFilters
-            .filter((f) => f.nomor_mc === searchMesin)
-            .map((f) => f.design_id),
-        ),
-      )
-    : [];
-  const availablePotongans = searchDesain
-    ? Array.from(
-        new Set(
-          availableFilters
-            .filter(
-              (f) => f.nomor_mc === searchMesin && f.design_id === searchDesain,
-            )
-            .map((f) => f.potongan_ke),
-        ),
-      )
-    : [];
-
-  // All pending details for the selected Design & Potongan
   const [allDetails, setAllDetails] = useState<any[]>([]);
-  const [selectedPcsIndex, setSelectedPcsIndex] = useState<string>("");
+  const [activeMendingPcs, setActiveMendingPcs] = useState<{ nomor_mc: string, design_id: string, potongan_ke: string, pcs_index: string } | null>(null);
+  const [fullActiveMendingDetails, setFullActiveMendingDetails] = useState<any[]>([]);
   const [startMendingTime, setStartMendingTime] = useState<string>("");
 
-  // Map of detailId -> grade string (A, B, BS)
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Detail Modal State
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailData, setDetailData] = useState<any | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
 
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!searchMesin || !searchDesain || !searchPotongan) {
-      setErrorMsg("Mesin, Desain, dan Potongan harus dipilih!");
-      return;
-    }
+  useEffect(() => {
+    handleSearch(searchTanggal);
+  }, [searchTanggal]);
 
+  const handleSearch = async (tanggal: string) => {
     setIsSearching(true);
     setErrorMsg(null);
     setAllDetails([]);
-    setSelectedPcsIndex("");
+    setActiveMendingPcs(null);
     setSelections({});
+    setSearchMesin("");
+    setSearchDesain("");
+    setSearchPotongan("");
+    setCurrentPage(1);
 
-    const res = await getPendingMendingDetailsByBatch(
-      searchMesin,
-      searchDesain,
-      searchPotongan,
-    );
+    const queryTanggal = tanggal === "" ? "all" : tanggal;
+    const res = await getPendingMendingDetailsByDate(queryTanggal);
     if (res.success && res.data) {
-      if (res.data.length === 0) {
-        setErrorMsg(
-          "Tidak ada antrean Mending untuk Desain & Potongan tersebut.",
-        );
-      } else {
-        setAllDetails(res.data);
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, "0");
-        const mm = String(now.getMinutes()).padStart(2, "0");
-        setStartMendingTime(`${hh}:${mm}`);
-      }
+      setAllDetails(res.data);
+      setPendingCount(res.pendingCount || 0);
     } else {
       setErrorMsg(res.error || "Gagal mencari data.");
+      setPendingCount(0);
     }
     setIsSearching(false);
   };
 
-  // Derive available PCS indexes from allDetails
-  const uniquePcsIndexes = Array.from(
-    new Set(allDetails.map((d) => d.pcs_index)),
-  ).sort((a, b) => a - b);
+  const uniqueMesins = React.useMemo(() => {
+    return Array.from(new Set(allDetails.map(d => d.production_headers?.nomor_mc).filter(Boolean)));
+  }, [allDetails]);
 
-  // Filter details by selected PCS and sort panels/rolls in natural order
-  const detailsToDisplay = allDetails
-    .filter((d) => String(d.pcs_index) === selectedPcsIndex)
-    .sort((a, b) => {
-      const panelA = a.production_headers?.panel_no;
-      const panelB = b.production_headers?.panel_no;
+  const uniqueDesains = React.useMemo(() => {
+    return Array.from(new Set(allDetails
+      .filter(d => !searchMesin || d.production_headers?.nomor_mc === searchMesin)
+      .map(d => d.production_headers?.design_id)
+      .filter(Boolean)));
+  }, [allDetails, searchMesin]);
 
-      if (panelA === "METERAN" && panelB === "METERAN") {
-        const meterA = parseFloat(a.meter_kain ?? "");
-        const meterB = parseFloat(b.meter_kain ?? "");
-        return (isNaN(meterA) ? 0 : meterA) - (isNaN(meterB) ? 0 : meterB);
+  const uniquePotongans = React.useMemo(() => {
+    return Array.from(new Set(allDetails
+      .filter(d => (!searchMesin || d.production_headers?.nomor_mc === searchMesin) && (!searchDesain || d.production_headers?.design_id === searchDesain))
+      .map(d => d.production_headers?.potongan_ke)
+      .filter(Boolean)));
+  }, [allDetails, searchMesin, searchDesain]);
+
+  const groupedPcsList = React.useMemo(() => {
+    const map = new Map<string, any>();
+    allDetails.forEach((d: any) => {
+      const h = d.production_headers;
+      if (searchMesin && String(h?.nomor_mc) !== String(searchMesin)) return;
+      if (searchDesain && String(h?.design_id) !== String(searchDesain)) return;
+      if (searchPotongan && String(h?.potongan_ke) !== String(searchPotongan)) return;
+
+      const key = `${h?.nomor_mc}_${h?.design_id}_${h?.potongan_ke}_${d.pcs_index}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          nomor_mc: h?.nomor_mc,
+          design_id: h?.design_id,
+          potongan_ke: h?.potongan_ke,
+          pcs_index: d.pcs_index,
+          meter_kain: d.meter_kain || null,
+          header: h,
+          detailsCount: 0,
+          totalHasilProduksi: 0
+        });
       }
-      if (panelA === "METERAN") return 1;
-      if (panelB === "METERAN") return -1;
-
-      const numA = parseInt(panelA, 10);
-      const numB = parseInt(panelB, 10);
-      if (!isNaN(numA) && !isNaN(numB)) {
-        return numA - numB;
-      }
-
-      return String(panelA || "").localeCompare(
-        String(panelB || ""),
-        undefined,
-        {
-          numeric: true,
-        },
-      );
+      const group = map.get(key);
+      group.detailsCount++;
+      group.totalHasilProduksi += (d.jml_hasil_produksi || 0);
+      if (d.meter_kain) group.meter_kain = d.meter_kain;
     });
+    return Array.from(map.values());
+  }, [allDetails, searchMesin, searchDesain, searchPotongan]);
+
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(groupedPcsList.length / ITEMS_PER_PAGE);
+  const currentPcsList = React.useMemo(() => {
+    return groupedPcsList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  }, [groupedPcsList, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchMesin, searchDesain, searchPotongan, searchTanggal]);
+
+  const refreshActiveMendingDetails = async (mc: string, des: string, pot: string, pcs: string, initSelections: boolean = false) => {
+    const res = await getMendingDetailsByGroup(mc, des, pot, pcs);
+    if (res.success && res.data) {
+      setFullActiveMendingDetails(res.data);
+      
+      if (initSelections) {
+        const initialSelections: Record<string, string> = {};
+        res.data.forEach((item: any) => {
+          const hasDefect = item.indikator_stop || (item.kategori_masalah && item.kategori_masalah.trim() !== "");
+          if (item.final_inspection_id === 4) {
+            initialSelections[item.id] = "BS";
+          } else if (item.final_inspection_id === 3) {
+            initialSelections[item.id] = "B";
+          } else {
+            if (!hasDefect) {
+              initialSelections[item.id] = "A";
+            } else {
+              initialSelections[item.id] = "B";
+            }
+          }
+        });
+        setSelections(initialSelections);
+      }
+    }
+  };
+
+  const handleStartMending = async (nomor_mc: string, design_id: string, potongan_ke: string, pcs_index: string) => {
+    setActiveMendingPcs({ nomor_mc: String(nomor_mc), design_id: String(design_id), potongan_ke: String(potongan_ke), pcs_index: String(pcs_index) });
+    setSelections({});
+    
+    await refreshActiveMendingDetails(String(nomor_mc), String(design_id), String(potongan_ke), String(pcs_index), true);
+    
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    setStartMendingTime(`${hh}:${mm}`);
+  };
+
+  const [detailToDelete, setDetailToDelete] = useState<{ id: string, name: string } | null>(null);
+  const [isDeletingDetail, setIsDeletingDetail] = useState(false);
+
+  const detailsToDisplay = React.useMemo(() => {
+    if (!fullActiveMendingDetails) return [];
+    
+    return [...fullActiveMendingDetails].sort((a: any, b: any) => {
+      const hA = a.production_headers || {};
+      const hB = b.production_headers || {};
+      const panelA = hA.panel_no;
+      const panelB = hB.panel_no;
+
+      if (panelA === "METERAN" || panelB === "METERAN") {
+        // Urutkan berdasarkan header (sesi operator) via tanggal_jam
+        const hjA = String(hA.tanggal_jam || "");
+        const hjB = String(hB.tanggal_jam || "");
+        if (hjA !== hjB) return hjA.localeCompare(hjB);
+
+        // Dalam sesi operator yang sama, urutkan berdasarkan meter_kain
+        // Baris ISTIRAHAT / FINISH tanpa meter_kain diletakkan di akhir grup
+        const isSpecialA = ((!!a.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || !!a.kategori_masalah?.toUpperCase().includes("ISTIRAHAT"))
+              && !a.kategori_masalah && !a.detail_masalah)
+          || (hA.meter_akhir !== null && hA.meter_akhir !== undefined
+              && String(hA.meter_akhir).trim() !== ""
+              && (a.meter_kain === null || a.meter_kain === undefined));
+        const isSpecialB = ((!!b.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || !!b.kategori_masalah?.toUpperCase().includes("ISTIRAHAT"))
+              && !b.kategori_masalah && !b.detail_masalah)
+          || (hB.meter_akhir !== null && hB.meter_akhir !== undefined
+              && String(hB.meter_akhir).trim() !== ""
+              && (b.meter_kain === null || b.meter_kain === undefined));
+
+        if (isSpecialA && !isSpecialB) return 1;
+        if (!isSpecialA && isSpecialB) return -1;
+        if (isSpecialA && isSpecialB) return 0;
+
+        const valA = getActualMeter(a, hA);
+        const valB = getActualMeter(b, hB);
+        const mA = valA !== null ? valA : Infinity;
+        const mB = valB !== null ? valB : Infinity;
+        if (mA === Infinity && mB === Infinity) return 0;
+        return mA - mB;
+      } else {
+        const numA = parseInt(panelA, 10);
+        const numB = parseInt(panelB, 10);
+        if (!isNaN(numA) && !isNaN(numB)) {
+          if (numA !== numB) return numA - numB;
+        }
+        return String(panelA || "").localeCompare(String(panelB || ""), undefined, { numeric: true });
+      }
+    });
+  }, [fullActiveMendingDetails]);
+
+  const isMeteranBatch = detailsToDisplay.length > 0 && detailsToDisplay[0]?.production_headers?.panel_no === "METERAN";
+
+  const displayItems = React.useMemo(() => {
+    if (!isMeteranBatch) {
+      const processed = detailsToDisplay.map((item) => {
+        const h = item.production_headers || {};
+        const opr = h.operators?.nama_operator || h.pic || "";
+        const grp = h.groups?.nama_grup || "";
+        const tgl = h.tgl || "";
+        const operatorStr = (grp ? `(${grp}) ` : '') + opr;
+
+        const isIstirahat = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT");
+        const isFinish = item.keterangan_cacat === "FINISH" || item.production_headers?.panel_no === "FINISH";
+        const isStart = item.keterangan_cacat === "START" || item.production_headers?.panel_no === "START";
+        const isGradable = !isIstirahat && !isFinish && !isStart;
+
+        let displayDetail = item.detail_masalah || "";
+        let displayKeterangan = item.keterangan_cacat || "";
+        let oprStr = opr;
+        
+        if (displayKeterangan.includes("ISTIRAHAT")) {
+          oprStr = "Istirahat";
+          displayKeterangan = displayKeterangan.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
+          displayKeterangan = displayKeterangan.replace(/^,\s*|\s*,\s*$/g, "");
+        }
+
+        let cacatLines: string[] = [];
+        const katsRaw = item.kategori_masalah;
+        const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
+        
+        const pushDetailsForCat = (k: string, d: string) => {
+          if (!d) {
+            cacatLines.push(k);
+            return;
+          }
+          const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
+          const matchedDetails: string[] = [];
+          let remainingD = d;
+          const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
+          sortedKnown.forEach(known => {
+            if (remainingD.includes(known)) {
+              matchedDetails.push(known);
+              remainingD = remainingD.replace(known, "");
+            }
+          });
+          if (matchedDetails.length > 0) {
+            const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
+            matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
+            customParts.forEach(custom => cacatLines.push(`${k} - ${custom}`));
+          } else {
+            const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
+            parts.forEach(p => cacatLines.push(`${k} - ${p}`));
+          }
+        };
+
+        if (kats.length > 0) {
+          if (displayDetail.includes(" | ")) {
+            const catDetails = displayDetail.split(" | ");
+            for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
+              const k = kats[i] || "Unknown";
+              const d = catDetails[i] || "";
+              pushDetailsForCat(k, d);
+            }
+          } else if (displayDetail) {
+            if (kats.length === 1) {
+              pushDetailsForCat(kats[0], displayDetail);
+            } else {
+              const dets = displayDetail.split(", ");
+              if (kats.length === dets.length) {
+                for (let i = 0; i < kats.length; i++) {
+                  pushDetailsForCat(kats[i], dets[i]);
+                }
+              } else {
+                dets.forEach((det: string) => {
+                  let foundKat = "Unknown";
+                  for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+                    if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
+                      foundKat = kat;
+                      break;
+                    }
+                  }
+                  cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
+                });
+              }
+            }
+          } else {
+            cacatLines.push(kats.join(", "));
+          }
+        } else if (displayDetail) {
+          cacatLines.push(displayDetail);
+        }
+
+        let ketCacat = displayKeterangan;
+        const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
+        ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
+        ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
+        ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
+
+        if (ketCacat) {
+          if (cacatLines.length > 0) {
+            const parts = ketCacat.split(",").map((s: string) => s.trim());
+            cacatLines = cacatLines.map((line, i) => {
+              const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
+              let partIndex = i;
+              if (lineKat && kats.includes(lineKat)) {
+                 partIndex = kats.indexOf(lineKat);
+              }
+              if (parts[partIndex] && parts[partIndex] !== "") {
+                const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
+                return `${line} (Blok ${cleanB})`;
+              } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
+                 const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
+                 return `${line} (Blok ${cleanB})`;
+              }
+              return line;
+            });
+          } else {
+            const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
+            cacatLines.push(`(Blok ${cleanB})`);
+          }
+        }
+
+        if (hasTambahanQC) {
+          if (cacatLines.length === 0) {
+            cacatLines.push("[TAMBAHAN QC]");
+          } else {
+            for (let i = 0; i < cacatLines.length; i++) {
+              cacatLines[i] = cacatLines[i] + " [TAMBAHAN QC]";
+            }
+          }
+        }
+
+        const cacatText = cacatLines.join("\n");
+
+        return {
+          item,
+          isIstirahat,
+          isFinish,
+          isStart,
+          isGradable,
+          opr,
+          grp,
+          tgl,
+          operatorStr,
+          oprStr,
+          cacatText,
+        };
+      });
+
+      const items: any[] = [];
+      let currentOpCount = 0;
+      let currentOpIds: string[] = [];
+      let lastTgl = "";
+      let lastGrp = "";
+      let lastOpr = "";
+
+      processed.forEach((p, i) => {
+        const { item, isIstirahat, isFinish, isStart, isGradable, opr, grp, tgl, operatorStr, oprStr, cacatText } = p;
+
+        if (isGradable) {
+          currentOpCount += 1;
+          currentOpIds.push(item.id);
+        }
+
+        let showTgl = true;
+        let showGrp = true;
+        let showOpr = true;
+
+        if (tgl === lastTgl) showTgl = false;
+        if (grp === lastGrp) showGrp = false;
+
+        if (isIstirahat) {
+          showTgl = false;
+          showGrp = false;
+          showOpr = true;
+        } else {
+          let prevActualOprStr = "-";
+          for (let k = items.length - 1; k >= 0; k--) {
+            const pItem = items[k];
+            if (!pItem.isTotalRow && !pItem.isIstirahat) {
+              prevActualOprStr = pItem.production_headers?.operators?.nama_operator || pItem.production_headers?.pic || "-";
+              break;
+            }
+          }
+          if (prevActualOprStr === opr) {
+            showOpr = false;
+          }
+        }
+
+        lastTgl = tgl;
+        lastGrp = grp;
+        lastOpr = isIstirahat ? "Istirahat" : opr;
+
+        items.push({
+          ...item,
+          isMeter: false,
+          isStartRow: false,
+          isIstirahat,
+          isFinishReport: isFinish,
+          displayNo: item.production_headers?.panel_no || "-",
+          meterDisplay: "-",
+          cacatDisplay: cacatText,
+          isGradable,
+          showTgl,
+          showGrp,
+          showOpr,
+          oprStr,
+          grpStr: grp,
+          tglStr: tgl,
+          hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
+        });
+
+        let nextOprStr = null;
+        if (i + 1 < processed.length) {
+          nextOprStr = processed[i + 1].operatorStr;
+        }
+
+        if (nextOprStr === null || nextOprStr !== operatorStr) {
+          if (currentOpCount > 0) {
+            const [prevGrp, prevOpr] = operatorStr.includes(") ") 
+              ? [operatorStr.match(/\(([^)]+)\)/)?.[1] || "", operatorStr.replace(/^\([^)]+\)\s*/, "")]
+              : ["", operatorStr];
+
+            items.push({
+              id: `total-${operatorStr}-${Math.random()}`,
+              isTotalRow: true,
+              totalLabel: `Total Produksi${prevGrp ? ` (${prevGrp})` : ""} ${prevOpr}:`,
+              totalCount: currentOpCount,
+              countA: currentOpIds.filter(id => selections[id] === "A").length,
+              countB: currentOpIds.filter(id => selections[id] === "B").length,
+              countBS: currentOpIds.filter(id => selections[id] === "BS").length,
+            });
+          }
+          currentOpCount = 0;
+          currentOpIds = [];
+        }
+      });
+
+      return items;
+    }
+
+    const items: any[] = [];
+    let globalRowCount = 0;
+    let prevOperatorLastMeter: number | null = null;
+    let currentOpStartMeter: number | null = null;
+    let currentOpLastMeter: number | null = null;
+    let lastOprString = "";
+
+    // cleanMeterVal is defined globally at the top
+
+    detailsToDisplay.forEach((item, idx) => {
+      const h = item.production_headers || {};
+      const opr = h.operators?.nama_operator || h.pic || "";
+      const grp = h.groups?.nama_grup || "";
+      const operatorStr = (grp ? `(${grp}) ` : '') + opr;
+
+      if (items.length === 0) {
+        lastOprString = operatorStr;
+      }
+
+      let isSameAsPrev = false;
+      if (operatorStr !== lastOprString && items.length > 0) {
+        const totalMeter = currentOpStartMeter !== null && currentOpLastMeter !== null
+          ? Math.abs(currentOpLastMeter - currentOpStartMeter)
+          : null;
+        const [prevGrp, prevOpr] = lastOprString.includes(") ") 
+          ? [lastOprString.match(/\(([^)]+)\)/)?.[1] || "", lastOprString.replace(/^\([^)]+\)\s*/, "")]
+          : ["", lastOprString];
+        items.push({
+          id: `total-${lastOprString}-${Math.random()}`,
+          isTotalRow: true,
+          totalLabel: `Total Produksi${prevGrp ? ` (${prevGrp})` : ""} ${prevOpr}:`,
+          totalMeter: totalMeter !== null ? `${totalMeter} Meter` : "-",
+        });
+        prevOperatorLastMeter = currentOpLastMeter;
+        currentOpStartMeter = null;
+        currentOpLastMeter = null;
+        lastOprString = operatorStr;
+        isSameAsPrev = false;
+      } else if (items.length > 0) {
+        isSameAsPrev = true;
+      }
+
+      const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
+                          !item.kategori_masalah && !item.detail_masalah;
+      const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
+
+      let cacatLines: string[] = [];
+      const katsRaw = item.kategori_masalah;
+      const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
+      
+      const pushDetailsForCat = (k: string, d: string) => {
+        if (!d) {
+          cacatLines.push(k);
+          return;
+        }
+        const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
+        const matchedDetails: string[] = [];
+        let remainingD = d;
+        const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
+        sortedKnown.forEach(known => {
+          if (remainingD.includes(known)) {
+            matchedDetails.push(known);
+            remainingD = remainingD.replace(known, "");
+          }
+        });
+        if (matchedDetails.length > 0) {
+          const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
+          matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
+          customParts.forEach(custom => cacatLines.push(`${k} - ${custom}`));
+        } else {
+          const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
+          parts.forEach(p => cacatLines.push(`${k} - ${p}`));
+        }
+      };
+
+      if (kats.length > 0) {
+        if (item.detail_masalah?.includes(" | ")) {
+          const catDetails = item.detail_masalah.split(" | ");
+          for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
+            const k = kats[i] || "Unknown";
+            const d = catDetails[i] || "";
+            pushDetailsForCat(k, d);
+          }
+        } else if (item.detail_masalah) {
+          if (kats.length === 1) {
+            pushDetailsForCat(kats[0], item.detail_masalah);
+          } else {
+            const dets = item.detail_masalah.split(", ");
+            if (kats.length === dets.length) {
+              for (let i = 0; i < kats.length; i++) {
+                pushDetailsForCat(kats[i], dets[i]);
+              }
+            } else {
+              dets.forEach((det: string) => {
+                let foundKat = "Unknown";
+                for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+                  if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
+                    foundKat = kat;
+                    break;
+                  }
+                }
+                cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
+              });
+            }
+          }
+        } else {
+          cacatLines.push(kats.join(", "));
+        }
+      } else if (item.detail_masalah) {
+        cacatLines.push(item.detail_masalah);
+      }
+
+      let ketCacat = item.keterangan_cacat || "";
+      const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
+      ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
+      ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
+      ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
+
+      if (ketCacat) {
+        if (cacatLines.length > 0) {
+          const parts = ketCacat.split(",").map((s: string) => s.trim());
+          cacatLines = cacatLines.map((line, i) => {
+            const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
+            let partIndex = i;
+            if (lineKat && kats.includes(lineKat)) {
+              partIndex = kats.indexOf(lineKat);
+            }
+            if (parts[partIndex] && parts[partIndex] !== "") {
+              const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
+              return `${line} (Blok ${cleanB})`;
+            } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
+              const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
+              return `${line} (Blok ${cleanB})`;
+            }
+            return line;
+          });
+        } else {
+          const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
+          cacatLines.push(`(Blok ${cleanB})`);
+        }
+      }
+
+      if (hasTambahanQC) {
+        if (cacatLines.length === 0) {
+          cacatLines.push("[TAMBAHAN QC]");
+        } else {
+          cacatLines = cacatLines.map(line => line + " [TAMBAHAN QC]");
+        }
+      }
+
+      const combinedCacat = cacatLines.join("\n");
+      const hasErrorDetail = !!item.kategori_masalah || !!item.detail_masalah;
+
+      let meterDisplay = "-";
+      if (item.meter_kain !== null && item.meter_kain !== undefined && String(item.meter_kain).trim() !== "") {
+        meterDisplay = cleanMeterVal(item.meter_kain);
+      } else if (item.detail_masalah) {
+        const meterMatch = item.detail_masalah.match(/\(Titik:\s*([A-Za-z0-9\s.\-]+)\)/i);
+        if (meterMatch && meterMatch[1]) {
+          meterDisplay = cleanMeterVal(meterMatch[1]);
+        }
+      }
+      
+      if (meterDisplay === "-") {
+        if ((isIstirahat || isFinishReport) && (h.meter_akhir || h.meter_awal)) {
+          meterDisplay = cleanMeterVal(h.meter_akhir || h.meter_awal);
+        }
+      }
+
+      if (!isSameAsPrev) {
+        const startTglStr = h.tgl || "-";
+        const startMeter = prevOperatorLastMeter !== null
+          ? String(prevOperatorLastMeter)
+          : (h.meter_awal !== undefined && h.meter_awal !== null ? cleanMeterVal(h.meter_awal) : "0");
+
+        items.push({
+          id: `start-${idx}-${Math.random()}`,
+          isStartRow: true,
+          isMeter: true,
+          displayNo: (globalRowCount + 1).toString(),
+          tglStr: startTglStr,
+          grpStr: grp,
+          oprStr: opr,
+          meterDisplay: startMeter,
+          cacatDisplay: "START",
+          isGradable: false,
+          showTgl: true,
+          showGrp: true,
+          showOpr: true,
+          hasErrorDetail: false
+        });
+        globalRowCount += 1;
+        const startMeterVal = parseFloat(cleanMeterVal(startMeter));
+        if (!isNaN(startMeterVal)) {
+          if (currentOpStartMeter === null) currentOpStartMeter = startMeterVal;
+          currentOpLastMeter = startMeterVal;
+        }
+        isSameAsPrev = true;
+      }
+
+      const finalOprStr = isSameAsPrev ? "" : opr;
+      const finalGrpStr = isSameAsPrev ? "" : grp;
+      const finalTglStr = isSameAsPrev ? "" : h.tgl || "-";
+
+      const showTgl = !isSameAsPrev;
+      const showGrp = !isSameAsPrev;
+      const showOpr = !isSameAsPrev;
+
+      const isGradable = !isIstirahat && (!isFinishReport || hasErrorDetail);
+      const cacatForMeter = combinedCacat
+        .split("\n")
+        .map((line: string) => line.replace(/\s*\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").trim())
+        .filter((line: string) => {
+          if (!line) return false;
+          if (line.includes(" - ")) {
+            const detailPart = line.split(" - ").slice(1).join(" - ").trim();
+            const withoutBlok = detailPart.replace(/\s*\(Blok[^)]*\)/gi, "").trim();
+            return withoutBlok.length > 0;
+          }
+          return true;
+        })
+        .join("\n");
+      const cacatText = isIstirahat ? "ISTIRAHAT" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
+
+      const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !isIstirahat && !isFinishReport;
+      if (!isPlaceholder) {
+        items.push({
+          ...item,
+          isStartRow: false,
+          isMeter: true,
+          isIstirahat,
+          isFinishReport,
+          displayNo: (globalRowCount + 1).toString(),
+          tglStr: finalTglStr,
+          grpStr: finalGrpStr,
+          oprStr: finalOprStr,
+          meterDisplay,
+          cacatDisplay: cacatText,
+          isGradable,
+          showTgl,
+          showGrp,
+          showOpr,
+          hasErrorDetail
+        });
+        globalRowCount += 1;
+
+        const meterVal = parseFloat(cleanMeterVal(meterDisplay));
+        if (!isNaN(meterVal)) {
+          if (currentOpStartMeter === null) currentOpStartMeter = meterVal;
+          currentOpLastMeter = meterVal;
+        }
+      }
+    });
+
+    if (items.length > 0 && currentOpStartMeter !== null && currentOpLastMeter !== null) {
+      const totalMeter = Math.abs(currentOpLastMeter - currentOpStartMeter);
+      const [lastGrp, lastOprOnly] = lastOprString.includes(") ") 
+        ? [lastOprString.match(/\(([^)]+)\)/)?.[1] || "", lastOprString.replace(/^\([^)]+\)\s*/, "")]
+        : ["", lastOprString];
+      items.push({
+        id: `total-last-${lastOprString}-${Math.random()}`,
+        isTotalRow: true,
+        totalLabel: `Total Produksi${lastGrp ? ` (${lastGrp})` : ""} ${lastOprOnly}:`,
+        totalMeter: `${totalMeter} Meter`,
+      });
+    }
+
+    return items;
+  }, [detailsToDisplay, isMeteranBatch, selections]);
+
+  const gradableItems = React.useMemo(() => {
+    return displayItems.filter((item: any) => item.isGradable);
+  }, [displayItems]);
+
+  const handleDeleteDetail = async () => {
+    if (!detailToDelete) return;
+    setIsDeletingDetail(true);
+    const res = await deleteProductionDetailRow(detailToDelete.id);
+    if (res.success) {
+      setDetailToDelete(null);
+      handleSearch(searchTanggal);
+      if (activeMendingPcs) {
+        refreshActiveMendingDetails(activeMendingPcs.nomor_mc, activeMendingPcs.design_id, activeMendingPcs.potongan_ke, activeMendingPcs.pcs_index);
+      }
+    } else {
+      alert("Gagal menghapus data: " + res.error);
+    }
+    setIsDeletingDetail(false);
+  };
 
   const handleSelectGrade = (detailId: string, grade: string) => {
     setSelections((prev) => ({ ...prev, [detailId]: grade }));
   };
 
-  // Auto-assign Grade A for items that were inspected as normal when PCS changes
   useEffect(() => {
-    if (!selectedPcsIndex) return;
-    const itemsForPcs = allDetails.filter(
-      (d) => String(d.pcs_index) === selectedPcsIndex,
-    );
+    if (!activeMendingPcs) return;
     const autoSelections: Record<string, string> = {};
-    for (const d of itemsForPcs) {
-      if (d.final_inspection_id === 1) {
+    for (const d of detailsToDisplay) {
+      if (d.final_inspection_id === 1 || d.final_inspection_id === 2) {
         autoSelections[d.id] = "A"; // Ceklis → auto Grade A
+      } else if (d.final_inspection_id === 3) {
+        autoSelections[d.id] = "B"; // Silang → auto Grade B
+      } else if (d.final_inspection_id === 4) {
+        autoSelections[d.id] = "BS"; // BS → auto Grade BS
       }
     }
-    setSelections(autoSelections);
-  }, [selectedPcsIndex, allDetails]);
+    setSelections((prev) => ({ ...autoSelections, ...prev }));
+  }, [activeMendingPcs, detailsToDisplay]);
 
   const handleOpenDetail = async (headerId: string) => {
     setDetailModalOpen(true);
@@ -238,45 +872,483 @@ export default function MendingPage() {
     }
   };
 
-  const isAllSelected =
-    detailsToDisplay.length > 0 &&
-    detailsToDisplay.every((d) => selections[d.id]);
-
+  const isAllSelected = gradableItems.length > 0 && gradableItems.every((d) => selections[d.id]);
+  const totalGradable = gradableItems.length;
+  const totalA = gradableItems.filter((item: any) => selections[item.id] === "A").length;
+  const totalB = gradableItems.filter((item: any) => selections[item.id] === "B").length;
+  const totalBS = gradableItems.filter((item: any) => selections[item.id] === "BS").length;
   const firstDetail = detailsToDisplay.length > 0 ? detailsToDisplay[0] : null;
-  const dummyHeaderData = {
-    design_id: searchDesain,
-    potongan_ke: searchPotongan,
-    operator:
-      firstDetail?.production_headers?.pic ||
-      firstDetail?.production_headers?.operators?.nama_operator ||
-      "-",
-    nomor_mc: firstDetail?.production_headers?.nomor_mc || "-",
-    details: detailsToDisplay,
+  const h = firstDetail?.production_headers || {};
+  const compactProps = {
+    nomorMc: h.nomor_mc || "-",
+    shiftName: h.groups?.nama_grup || "-",
+    operatorName: h.operators?.nama_operator || h.pic || "-",
+    design: h.design_id || "-",
+    pcsCount: detailsToDisplay.length,
+    panelPotongan: `${h.panel_no || "-"} / ${h.potongan_ke || "-"}`,
+    courseRpm: `${h.course || "-"} / ${h.rpm || "-"}`,
+    noCustomer: h.no_customer || "-",
+    noOrder: h.no_order_barang || "-",
+    tanggalPotong: h.tanggal_potong || "-",
+    statusMatching: h.status_matching || "-",
+    pick: String(h.pick || "-"),
+    benangDasar: h.jenis_benang_dasar || "-",
+    liner: h.liner || "-",
+    heavy: h.heavy || "-",
+    shadow: h.shadow || "-",
+    pinggiran: h.pinggiran || "-",
+    tanggalProduksi: h.tgl || "-",
+    rollNo: firstDetail?.roll_no || "-"
   };
 
+  if (activeMendingPcs) {
+    return (
+      <div className="w-full max-w-6xl mx-auto pb-10 animate-fadeIn">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setActiveMendingPcs(null)}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+              <Scissors className="w-6 h-6 text-rose-500" />
+              Mending PCS Ke-{activeMendingPcs.pcs_index}
+            </h1>
+          </div>
+          {startMendingTime && (
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Mulai Mending</span>
+              <div className="h-11 px-6 rounded-xl bg-sky-50 border border-sky-100 text-sm font-black text-sky-700 flex items-center gap-2 shadow-sm">
+                <Clock className="w-4 h-4 text-sky-500" />
+                {startMendingTime}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mb-6">
+          <CompactHeaderCard {...compactProps} />
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          {detailsToDisplay.length === 0 ? (
+            <div className="p-10 flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                <CheckCircle className="w-8 h-8 text-slate-300" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-700">Tidak ada panel/roll untuk di-mending.</h3>
+            </div>
+          ) : detailsToDisplay.length === 1 && !detailsToDisplay[0].kategori_masalah ? (
+            <div className="p-10 flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border border-emerald-100">
+                <CheckCircle className="w-8 h-8 text-emerald-500" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-1">PCS Normal Bebas Cacat</h3>
+              <p className="text-sm text-slate-500 mb-6 max-w-sm">
+                PCS ini tidak memiliki catatan masalah dari proses QC. Anda dapat langsung menyelesaikan mending.
+              </p>
+              
+              <button
+                onClick={() => {
+                  handleSelectGrade(detailsToDisplay[0].id, "A");
+                  setIsModalOpen(true);
+                }}
+                className="h-12 px-8 rounded-xl font-bold text-sm text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <CheckCircle className="w-5 h-5" />
+                Selesaikan Mending Cepat
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto bg-white rounded-xl border border-slate-200">
+                {isMeteranBatch ? (
+                  // METERAN Table Layout
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                        <th className="px-2 py-2 w-8 text-center border-r border-slate-100" rowSpan={2}>NO</th>
+                        <th className="px-2 py-2 w-20 border-r border-slate-100 whitespace-nowrap" rowSpan={2}>TGL</th>
+                        <th className="px-1.5 py-2 w-10 text-center border-r border-slate-100" rowSpan={2}>Group</th>
+                        <th className="px-2 py-2 w-24 border-r border-slate-100" rowSpan={2}>Operator</th>
+                        <th className="px-1.5 py-2 text-center w-12 border-r border-slate-100" rowSpan={2}>METER</th>
+                        <th className="px-1.5 py-2 text-center w-12 border-r border-slate-100" rowSpan={2}>KET ✓/X</th>
+                        <th className="px-2 py-2 min-w-[200px] w-full border-r border-slate-100" rowSpan={2}>KETERANGAN CACAT</th>
+                        <th className="px-2 py-2 text-center w-24 border-r border-slate-100" rowSpan={2}>AKSI</th>
+                        <th className="px-2 py-1 border-b border-slate-200 font-extrabold text-slate-600 text-center border-r border-slate-100" colSpan={3}>MENDING</th>
+                      </tr>
+                      <tr className="bg-slate-50">
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-emerald-600 border-r border-slate-100">A</th>
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-amber-600 border-r border-slate-100">B</th>
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-rose-600 border-r border-slate-100">BS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                      {displayItems.map((item: any, index: number) => {
+                        if (item.isTotalRow) {
+                          return (
+                            <tr key={item.id || index} className="bg-slate-100 border-t-2 border-b-2 border-slate-300">
+                              <td colSpan={11} className="px-3 py-2 text-center text-xs font-semibold text-slate-600">
+                                {item.totalLabel} <span className="font-extrabold text-slate-800 ml-1">{item.totalMeter}</span>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        if (item.isStartRow) {
+                          return (
+                            <tr key={item.id || index} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-1 py-1.5 font-bold text-slate-800 text-center text-xs w-7 border-r border-slate-100 border-b border-slate-100">
+                                {item.displayNo}
+                              </td>
+                              <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100 border-b border-slate-100">
+                                {item.showTgl ? item.tglStr : ""}
+                              </td>
+                              <td className="px-1.5 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
+                                {item.showGrp ? item.grpStr : ""}
+                              </td>
+                              <td className="px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100">
+                                {item.showOpr ? item.oprStr : ""}
+                              </td>
+                              <td className="px-1.5 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100 border-b border-slate-100">
+                                {item.meterDisplay}
+                              </td>
+                              <td className="px-1.5 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100 border-b border-slate-100">
+                                {/* Empty KET for START */}
+                              </td>
+                              <td className="px-3 py-1.5 text-[11px] font-bold text-slate-400 whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
+                                START
+                              </td>
+                              <td className="px-2 py-1.5 text-center w-24 border-r border-slate-100 border-b border-slate-100">
+                                {/* Empty AKSI for START */}
+                              </td>
+                              <td className="px-1 py-1.5 border-b border-slate-100 border-r border-slate-100"></td>
+                              <td className="px-1 py-1.5 border-b border-slate-100 border-r border-slate-100"></td>
+                              <td className="px-1 py-1.5 border-b border-slate-100"></td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={item.id || index} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-1 py-1.5 font-bold text-slate-800 text-center text-xs w-7 border-r border-slate-100 border-b border-slate-100">
+                              {item.displayNo}
+                            </td>
+                            <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100 border-b border-slate-100">
+                              {item.showTgl ? item.tglStr : ""}
+                            </td>
+                            <td className="px-1.5 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
+                              {item.showGrp ? item.grpStr : ""}
+                            </td>
+                            <td className="px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100">
+                              {item.showOpr ? item.oprStr : ""}
+                            </td>
+                            <td className="px-1.5 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100 border-b border-slate-100">
+                              {item.meterDisplay}
+                            </td>
+                            <td className="px-1.5 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100 border-b border-slate-100">
+                              {!item.isGradable ? "" : (item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
+                            </td>
+                            <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${(!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600'}`}>
+                              {item.cacatDisplay || "-"}
+                            </td>
+                            <td className="px-2 py-1.5 text-center w-24 border-r border-slate-100 border-b border-slate-100">
+                              {item.isGradable ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => handleOpenDetail(item.header_id)}
+                                    className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setDetailToDelete({ id: item.id, name: `${item.kategori_masalah || 'Masalah'} - ${item.detail_masalah || 'Tidak ada detail'}` })}
+                                    className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 transition-all shadow-sm"
+                                    title="Hapus Rincian"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
+                              {item.isGradable ? (
+                                <button
+                                  onClick={() => handleSelectGrade(item.id, "A")}
+                                  className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md transition-all border ${selections[item.id] === "A" ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-white text-slate-300 hover:border-emerald-300 hover:text-emerald-500"}`}
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                </button>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
+                              {item.isGradable ? (
+                                <button
+                                  onClick={() => handleSelectGrade(item.id, "B")}
+                                  className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md transition-all border ${selections[item.id] === "B" ? "border-amber-500 bg-amber-100 text-amber-700 shadow-sm" : "border-slate-200 bg-white text-slate-300 hover:border-amber-300 hover:text-amber-500"}`}
+                                >
+                                  <span className="text-[10px] font-black">B</span>
+                                </button>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1.5 text-center border-b border-slate-100">
+                              {item.isGradable ? (
+                                <button
+                                  onClick={() => handleSelectGrade(item.id, "BS")}
+                                  className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md transition-all border ${selections[item.id] === "BS" ? "border-rose-500 bg-rose-100 text-rose-700 shadow-sm" : "border-slate-200 bg-white text-slate-300 hover:border-rose-300 hover:text-rose-500"}`}
+                                >
+                                  <span className="text-[10px] font-black">BS</span>
+                                </button>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  // PANEL Table Layout
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12" rowSpan={2}>PNL NO</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-20 whitespace-nowrap" rowSpan={2}>TGL</th>
+                        <th className="px-1.5 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12 text-center" rowSpan={2}>Group</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-24" rowSpan={2}>Operator</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-16 text-center" rowSpan={2}>KET ✓/X</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-64 whitespace-nowrap" rowSpan={2}>KETERANGAN CACAT</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-16 text-center" rowSpan={2}>AKSI</th>
+                        <th className="px-2 py-1 border-b border-slate-200 font-extrabold text-slate-600 text-center" colSpan={3}>MENDING</th>
+                      </tr>
+                      <tr className="bg-slate-50">
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-emerald-600">A</th>
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-amber-600">B</th>
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-rose-600">BS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {displayItems.map((item: any, index: number) => {
+                        if (item.isTotalRow) {
+                          return (
+                            <tr key={item.id || index} className="bg-slate-100 border-t border-b border-slate-200 font-semibold text-slate-700">
+                              <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap">
+                                {item.totalLabel}
+                              </td>
+                              <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap">
+                                {item.totalCount} Panel
+                              </td>
+                              <td colSpan={2} className="bg-slate-100"></td>
+                              <td className="px-1 py-2 text-center text-emerald-600 bg-emerald-50/20 font-black">
+                                {item.countA}
+                              </td>
+                              <td className="px-1 py-2 text-center text-amber-600 bg-amber-50/20 font-black">
+                                {item.countB}
+                              </td>
+                              <td className="px-1 py-2 text-center text-rose-600 bg-rose-50/20 font-black">
+                                {item.countBS}
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${item.final_inspection_id === 1 ? "bg-emerald-50/20" : ""}`}>
+                            <td className="px-2 py-1 font-bold text-slate-800">
+                              {item.displayNo}
+                            </td>
+                            <td className="px-2 py-1 text-slate-600 whitespace-nowrap">
+                              {item.showTgl ? (item.tglStr || "-") : ""}
+                            </td>
+                            <td className="px-1.5 py-1 font-medium text-slate-700 text-center">
+                              {item.showGrp ? (item.grpStr || "-") : ""}
+                            </td>
+                            <td className="px-2 py-1 font-medium text-slate-700 leading-tight">
+                              {item.showOpr ? (item.oprStr || "-") : ""}
+                            </td>
+                            <td className="px-2 py-1 text-center font-bold text-sm">
+                              {item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>}
+                            </td>
+                            <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight">
+                              {item.cacatDisplay || "-"}
+                            </td>
+                            <td className="px-2 py-1">
+                              {item.isGradable ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => handleOpenDetail(item.header_id)}
+                                    className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setDetailToDelete({ id: item.id, name: `${item.kategori_masalah || 'Masalah'} - ${item.detail_masalah || 'Tidak ada detail'}` })}
+                                    className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 transition-all shadow-sm"
+                                    title="Hapus Rincian"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1 text-center">
+                              {item.isGradable ? (
+                                <button
+                                  onClick={() => handleSelectGrade(item.id, "A")}
+                                  className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md transition-all border ${selections[item.id] === "A" ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-white text-slate-300 hover:border-emerald-300 hover:text-emerald-500"}`}
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                </button>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1 text-center">
+                              {item.isGradable ? (
+                                <button
+                                  onClick={() => handleSelectGrade(item.id, "B")}
+                                  className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md transition-all border ${selections[item.id] === "B" ? "border-amber-500 bg-amber-100 text-amber-700 shadow-sm" : "border-slate-200 bg-white text-slate-300 hover:border-amber-300 hover:text-amber-500"}`}
+                                >
+                                  <span className="text-[10px] font-black">B</span>
+                                </button>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1 text-center">
+                              {item.isGradable ? (
+                                <button
+                                  onClick={() => handleSelectGrade(item.id, "BS")}
+                                  className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md transition-all border ${selections[item.id] === "BS" ? "border-rose-500 bg-rose-100 text-rose-700 shadow-sm" : "border-slate-200 bg-white text-slate-300 hover:border-rose-300 hover:text-rose-500"}`}
+                                >
+                                  <span className="text-[10px] font-black">BS</span>
+                                </button>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {totalGradable > 0 && (
+                        <tr className="bg-slate-50 font-bold border-t border-slate-200 text-[11px] text-slate-700 uppercase tracking-wider">
+                          <td className="px-2 py-3 text-right font-extrabold" colSpan={7}>
+                            Total ({totalGradable} Panel):
+                          </td>
+                          <td className="px-1 py-3 text-center text-emerald-600 bg-emerald-50/40 font-black">
+                            {totalA}
+                          </td>
+                          <td className="px-1 py-3 text-center text-amber-600 bg-amber-50/40 font-black">
+                            {totalB}
+                          </td>
+                          <td className="px-1 py-3 text-center text-rose-600 bg-rose-50/40 font-black">
+                            {totalBS}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div className="p-5 border-t border-slate-200 bg-slate-50 flex justify-end">
+                <button
+                  disabled={!isAllSelected}
+                  onClick={() => setIsModalOpen(true)}
+                  className={`h-12 px-8 rounded-xl font-bold text-sm text-white flex items-center gap-2 transition-all duration-300 ${isAllSelected ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 active:scale-95" : "bg-slate-300 cursor-not-allowed"}`}
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  Isi Rangkuman & Kirim Inspeksi
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        
+        {isModalOpen && (
+          <MendingModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            headerData={{ details: detailsToDisplay }}
+            selections={selections}
+            detailData={detailsToDisplay}
+            startMendingTime={startMendingTime}
+            onSuccess={() => {
+              setIsModalOpen(false);
+              setActiveMendingPcs(null);
+              handleSearch(searchTanggal);
+            }}
+          />
+        )}
+        
+        <ProductionDetailModal
+          isOpen={detailModalOpen}
+          onClose={() => setDetailModalOpen(false)}
+          detailData={detailData}
+          isLoading={isDetailLoading}
+          hideEdit={true}
+        />
+        
+        {/* Pop up modal hapus rincian */}
+        {detailToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+              <div className="flex items-center gap-3 mb-4 text-rose-600">
+                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-bold">Hapus Baris Data?</h3>
+              </div>
+              
+              <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+                Anda yakin ingin menghapus baris rincian data ini secara permanen?<br/>
+                <span className="font-semibold block mt-2 p-3 bg-slate-50 rounded-lg border border-slate-100 text-slate-800">
+                  {detailToDelete.name}
+                </span>
+              </p>
+              
+              <div className="flex gap-3 justify-end mt-4">
+                <button
+                  onClick={() => setDetailToDelete(null)}
+                  disabled={isDeletingDetail}
+                  className="px-4 py-2.5 rounded-xl font-bold text-sm text-slate-500 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleDeleteDetail}
+                  disabled={isDeletingDetail}
+                  className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isDeletingDetail ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Ya, Hapus Data
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Render Table View (Main Page)
   return (
     <div className="w-full max-w-6xl mx-auto pb-10">
-      <div
-        data-tour="mending-header"
-        className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-      >
-        <div className="flex flex-col gap-2">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
             <Scissors className="w-6 h-6 text-rose-500" />
             Proses Mending
           </h1>
-          <p className="text-sm text-slate-500">
-            Pilih potongan yang tersedia, lalu berikan Grade (A, B, BS) untuk
-            panel yang bermasalah.
+          <p className="text-sm font-semibold text-slate-500">
+            Total antrean baris yang belum dimending: <span className="text-rose-500 font-bold">{groupedPcsList.length} Antrean</span>
           </p>
         </div>
+
         <button
           type="button"
           onClick={() => setIsTourOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-4 py-2 text-sm font-bold text-[#0070bc] shadow-sm transition-all hover:bg-sky-100"
+          className="h-11 px-4 rounded-full bg-[#0070bc] hover:bg-[#004777] text-white text-xs font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-2 self-start"
         >
-          <HelpCircle className="w-4 h-4" />
-          Tutorial
+          <HelpCircle className="w-4 h-4" /> Tutorial
         </button>
       </div>
 
@@ -287,123 +1359,178 @@ export default function MendingPage() {
         </div>
       )}
 
-      {/* Filter Card */}
-      <div
-        data-tour="mending-filter"
-        className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6"
-      >
-        <form
-          onSubmit={handleSearch}
-          className="flex flex-col sm:flex-row gap-4 items-end"
-        >
-          <div className="flex flex-col gap-1 w-full sm:w-1/4">
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
+        <div className="flex flex-col sm:flex-row items-end gap-4 w-full">
+          <div className="flex flex-col gap-1 w-full sm:w-[25%]">
+            <label className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
+              <span>Tanggal</span>
+            </label>
+            <input
+              type="date"
+              value={searchTanggal}
+              onChange={(e) => setSearchTanggal(e.target.value)}
+              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-rose-400 focus:bg-white outline-none w-full"
+            />
+          </div>
+          <div className="flex flex-col gap-1 w-full sm:w-[20%]">
             <label className="text-xs font-bold text-slate-500 uppercase">
-              Nomor Mesin
+              Mesin
             </label>
             <select
               value={searchMesin}
-              onChange={(e) => {
-                setSearchMesin(e.target.value);
-                setSearchDesain("");
-                setSearchPotongan("");
-              }}
-              disabled={isLoadingFilters}
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full"
+              onChange={(e) => setSearchMesin(e.target.value)}
+              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-rose-400 focus:bg-white outline-none w-full"
             >
-              <option value="">-- Pilih Mesin --</option>
-              {uniqueMesin.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+              <option value="">Semua Mesin</option>
+              {uniqueMesins.map(m => (
+                <option key={String(m)} value={String(m)}>{String(m)}</option>
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1 w-full sm:w-1/4">
+          <div className="flex flex-col gap-1 w-full sm:w-[20%]">
             <label className="text-xs font-bold text-slate-500 uppercase">
-              Desain ID
+              Desain
             </label>
             <select
               value={searchDesain}
-              onChange={(e) => {
-                setSearchDesain(e.target.value);
-                setSearchPotongan(""); // reset potongan when design changes
-              }}
-              disabled={!searchMesin}
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full"
+              onChange={(e) => setSearchDesain(e.target.value)}
+              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-rose-400 focus:bg-white outline-none w-full"
             >
-              <option value="">-- Pilih Desain --</option>
-              {availableDesigns.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
+              <option value="">Semua Desain</option>
+              {uniqueDesains.map(d => (
+                <option key={String(d)} value={String(d)}>{String(d)}</option>
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1 w-full sm:w-1/4">
+          <div className="flex flex-col gap-1 w-full sm:w-[20%]">
             <label className="text-xs font-bold text-slate-500 uppercase">
-              Potongan Ke
+              Potongan
             </label>
             <select
               value={searchPotongan}
               onChange={(e) => setSearchPotongan(e.target.value)}
-              disabled={!searchDesain}
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full"
+              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-rose-400 focus:bg-white outline-none w-full"
             >
-              <option value="">-- Pilih Potongan --</option>
-              {availablePotongans.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
+              <option value="">Semua Potongan</option>
+              {uniquePotongans.map(p => (
+                <option key={String(p)} value={String(p)}>{String(p)}</option>
               ))}
             </select>
           </div>
           <button
-            type="submit"
+            onClick={() => handleSearch(searchTanggal)}
             disabled={isSearching}
-            className="h-11 px-6 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto shrink-0"
+            className="h-11 px-6 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm shrink-0 sm:w-[20%]"
           >
-            {isSearching ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Search className="w-4 h-4" />
-            )}
-            Cari Batch
+            {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            Cari Data
           </button>
-        </form>
+        </div>
+      </div>
 
-        {allDetails.length > 0 && (
-          <div
-            data-tour="mending-pcs"
-            className="mt-5 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-end justify-between gap-4 animate-fadeIn"
-          >
-            <div className="flex flex-col gap-1 w-full sm:w-1/3">
-              <label className="text-xs font-bold text-slate-500 uppercase">
-                Pilih Nomor PCS
-              </label>
-              <select
-                value={selectedPcsIndex}
-                onChange={(e) => {
-                  setSelectedPcsIndex(e.target.value);
-                }}
-                className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm font-semibold focus:border-sky-500 outline-none w-full cursor-pointer text-slate-700"
-              >
-                <option value="">-- Pilih PCS --</option>
-                {uniquePcsIndexes.map((pcs) => (
-                  <option key={pcs} value={String(pcs)}>
-                    PCS Ke-{pcs}
-                  </option>
-                ))}
-              </select>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fadeIn">
+        {groupedPcsList.length === 0 ? (
+          <div className="p-16 flex flex-col items-center justify-center text-center">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <Package className="w-10 h-10 text-slate-300" />
             </div>
-
-            {startMendingTime && (
-              <div className="flex flex-col items-end w-full sm:w-auto">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Mulai Mending
+            <h3 className="text-base font-bold text-slate-700 mb-1">
+              Tidak Ada Antrean Mending
+            </h3>
+            <p className="text-sm text-slate-500">
+              Tidak ditemukan data produksi yang perlu dimending pada tanggal ini.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4">Nomor Mesin</th>
+                  <th className="px-6 py-4">Desain & Potongan</th>
+                  <th className="px-6 py-4 text-center">PCS Ke</th>
+                  <th className="px-6 py-4 text-center">Jml Baris</th>
+                  <th className="px-6 py-4 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
+                {currentPcsList.map((g: any) => (
+                  <tr key={`${g.nomor_mc}_${g.design_id}_${g.potongan_ke}_${g.pcs_index}`} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="inline-flex items-center min-w-[3rem] h-8 px-3 rounded-lg bg-[#0070bc]/10 text-[#0070bc] font-bold">
+                        {g.header?.nomor_mc}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-slate-800 font-bold flex items-center gap-2">
+                        {g.header?.design_id}
+                        {g.header?.panel_no === "METERAN" ? (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700 uppercase tracking-wider">METERAN</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-700 uppercase tracking-wider">PANEL</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1 uppercase tracking-wider">
+                        Potongan Ke-{g.header?.potongan_ke}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 font-bold text-slate-600">
+                        {g.pcs_index}
+                      </div>
+                      {g.meter_kain && (
+                        <div className="text-[10px] text-slate-500 font-bold mt-1.5 uppercase tracking-wider">
+                          {g.meter_kain}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-slate-500">{g.detailsCount} baris</span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => handleStartMending(g.nomor_mc, g.design_id, g.potongan_ke, g.pcs_index)}
+                        className="px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs rounded-lg transition-all"
+                      >
+                        Mulai Mending
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+                <span className="text-xs font-medium text-slate-500">
+                  Menampilkan {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, groupedPcsList.length)} dari {groupedPcsList.length} antrean
                 </span>
-                <div className="h-11 px-6 rounded-xl bg-sky-50 border border-sky-100 text-sm font-black text-sky-700 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto">
-                  <Clock className="w-4 h-4 text-sky-500" />
-                  {startMendingTime}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-all"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === p ? "bg-rose-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-all"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )}
@@ -411,202 +1538,10 @@ export default function MendingPage() {
         )}
       </div>
 
-      {/* Details Table */}
-      {selectedPcsIndex && (
-        <div
-          data-tour="mending-details"
-          className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fadeIn"
-        >
-          {detailsToDisplay.length === 0 ? (
-            <div className="p-10 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
-                <CheckCircle className="w-8 h-8 text-slate-300" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-700">
-                Semua Panel di PCS ini sudah diinspeksi.
-              </h3>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                      <th className="px-6 py-4">Nomor Panel/Roll</th>
-                      <th className="px-6 py-4">Grade</th>
-                      <th className="px-6 py-4">Status / Masalah</th>
-                      <th className="px-6 py-4 text-center">Detail</th>
-                      <th className="px-6 py-4 text-center">Hasil Mending</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                    {detailsToDisplay.map((item) => {
-                      const selectedGrade = selections[item.id];
-
-                      return (
-                        <tr
-                          key={item.id}
-                          className={`hover:bg-slate-50/50 transition-colors ${item.final_inspection_id === 1 ? "bg-emerald-50/30" : ""}`}
-                        >
-                          <td className="px-6 py-4">
-                            <div className="inline-flex items-center justify-center min-w-[2rem] h-8 px-3 rounded-lg bg-slate-100 text-slate-700 font-bold">
-                              {item.production_headers?.panel_no === "METERAN"
-                                ? `Mesin ${item.production_headers?.nomor_mc}`
-                                : `Panel ${item.production_headers?.panel_no}`}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-wider">
-                              {item.production_headers?.pic ||
-                                item.production_headers?.operators
-                                  ?.nama_operator ||
-                                "Anonim"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            {selectedGrade ? (
-                              <div
-                                className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                                  selectedGrade === "A"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : selectedGrade === "B"
-                                      ? "bg-amber-100 text-amber-700"
-                                      : "bg-rose-100 text-rose-700"
-                                }`}
-                              >
-                                Grade {selectedGrade}
-                              </div>
-                            ) : (
-                              <div className="inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500">
-                                Belum Grade
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div
-                              className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                                !item.indikator_stop
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-rose-100 text-rose-700"
-                              }`}
-                            >
-                              {!item.indikator_stop ? "Normal" : "Bermasalah"}
-                            </div>
-                            {item.kategori_masalah && (
-                              <div className="text-[11px] text-rose-600 mt-1.5 font-medium max-w-xs leading-relaxed">
-                                {item.kategori_masalah} - {item.detail_masalah}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() => handleOpenDetail(item.header_id)}
-                              className="p-2 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm group"
-                              title="Lihat Detail Produksi"
-                            >
-                              <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                            </button>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => handleSelectGrade(item.id, "A")}
-                                className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "A" ? "border-emerald-500 bg-emerald-50 text-emerald-700 scale-105" : "border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500"}`}
-                              >
-                                Grade A
-                              </button>
-                              <button
-                                onClick={() => handleSelectGrade(item.id, "B")}
-                                className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "B" ? "border-amber-500 bg-amber-50 text-amber-700 scale-105" : "border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-500"}`}
-                              >
-                                Grade B
-                              </button>
-                              <button
-                                onClick={() => handleSelectGrade(item.id, "BS")}
-                                className={`px-4 py-2 flex items-center justify-center rounded-xl font-bold text-xs transition-all border-2 ${selections[item.id] === "BS" ? "border-rose-500 bg-rose-50 text-rose-700 scale-105" : "border-slate-200 text-slate-400 hover:border-rose-300 hover:text-rose-500"}`}
-                              >
-                                Grade BS
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div
-                data-tour="mending-submit"
-                className="p-5 border-t border-slate-200 bg-slate-50 flex justify-end"
-              >
-                <button
-                  disabled={!isAllSelected}
-                  onClick={() => setIsModalOpen(true)}
-                  className={`h-12 px-8 rounded-xl font-bold text-sm text-white flex items-center gap-2 transition-all duration-300 ${
-                    isAllSelected
-                      ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 active:scale-95"
-                      : "bg-slate-300 cursor-not-allowed"
-                  }`}
-                >
-                  <CheckCircle className="w-5 h-5" />
-                  Isi Rangkuman & Kirim Inspeksi
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {isModalOpen && (
-        <MendingModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          headerData={dummyHeaderData}
-          selections={selections}
-          detailData={detailsToDisplay}
-          startMendingTime={startMendingTime}
-          onSuccess={async () => {
-            setIsModalOpen(false);
-            // Refresh logic
-            const res = await getPendingMendingDetailsByBatch(
-              searchMesin,
-              searchDesain,
-              searchPotongan,
-            );
-            if (res.success && res.data) {
-              setAllDetails(res.data);
-              if (
-                res.data.filter(
-                  (d: any) => String(d.pcs_index) === selectedPcsIndex,
-                ).length === 0
-              ) {
-                setSelectedPcsIndex(""); // clear if no more panels for this pcs
-              }
-            } else {
-              setAllDetails([]);
-            }
-            setSelections({});
-
-            // Also refresh available filters to update dropdowns
-            const filterRes = await getAvailableMendingFilters();
-            if (filterRes.success && filterRes.data) {
-              setAvailableFilters(filterRes.data);
-            }
-          }}
-        />
-      )}
-
       <ProductTour
-        steps={MENDING_TOUR_STEPS}
         isOpen={isTourOpen}
         onClose={() => setIsTourOpen(false)}
-      />
-
-      {/* Production Detail Modal */}
-      <ProductionDetailModal
-        isOpen={detailModalOpen}
-        onClose={() => setDetailModalOpen(false)}
-        detailData={detailData}
-        isLoading={isDetailLoading}
-        hideEdit={true}
+        steps={MENDING_TOUR_STEPS}
       />
     </div>
   );

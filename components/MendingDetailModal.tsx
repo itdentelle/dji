@@ -162,7 +162,7 @@ export default function MendingDetailModal({
                   Tanggal Potong
                 </p>
                 <p className="font-bold text-slate-800">
-                  {header.tanggal_potong || header.tgl || "-"}
+                  {header.tanggal_potong || "-"}
                 </p>
               </div>
             </div>

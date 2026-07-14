@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   searchEmployeeHistory,
-  getEmployeeHistoryDetail,
 } from "@/actions/employee-actions";
+import CompactHeaderCard from "@/components/forms/CompactHeaderCard";
 import {
   Search,
   Loader2,
@@ -141,9 +141,14 @@ export default function EmployeeHistoryPage() {
   });
 
   const [data, setData] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [sortBy, setSortBy] = useState<"time" | "downtime" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
@@ -154,10 +159,6 @@ export default function EmployeeHistoryPage() {
     height: number;
   } | null>(null);
 
-  // Detail Modal State
-  const [selectedHeaderId, setSelectedHeaderId] = useState<string | null>(null);
-  const [detailData, setDetailData] = useState<any | null>(null);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   // Dropdown States
   const [operators, setOperators] = useState<any[]>(FALLBACK_OPERATORS);
@@ -167,33 +168,38 @@ export default function EmployeeHistoryPage() {
   // Load from session storage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+      const today = new Date().toLocaleDateString("en-CA", {
+        timeZone: "Asia/Jakarta",
+      });
       const cachedFilters = sessionStorage.getItem("dji_history_filters");
-      
-      // Always reset date to today on mount
-      let initialFilters = { ...filters, date: today };
+
+      let initialFilters = { ...filters };
       if (cachedFilters) {
         try {
           const parsed = JSON.parse(cachedFilters);
-          initialFilters = { ...parsed, date: today };
+          initialFilters = { ...parsed };
           if (!initialFilters.operator_ids) {
             initialFilters.operator_ids = [];
           }
-        } catch (e) {}
+        } catch (e) { }
       }
       setFilters(initialFilters);
 
-      // Force auto-search on mount to get fresh data for today
-      searchEmployeeHistory(initialFilters).then((res) => {
-        if (res.success && res.data) {
-          setData(res.data);
-          setHasSearched(true);
-          sessionStorage.setItem("dji_history_data", JSON.stringify(res.data));
-          sessionStorage.setItem("dji_history_searched", "true");
+      // Force auto-search on mount to get first page of data for today
+      (async () => {
+        try {
+          const res = await searchEmployeeHistory({ ...initialFilters, page: 1, perPage, sortBy: sortBy, sortDir: sortDir });
+          if (res.success && res.data) {
+            setData(res.data);
+            setTotalCount(res.total || 0);
+            setHasSearched(true);
+            sessionStorage.setItem("dji_history_data", JSON.stringify(res.data));
+            sessionStorage.setItem("dji_history_searched", "true");
+          }
+        } catch (err) {
+          console.error("Auto-search failed", err);
         }
-      }).catch(err => {
-        console.error("Auto-search failed", err);
-      });
+      })();
 
       // Load dropdowns from Supabase
       async function loadDbData() {
@@ -305,9 +311,9 @@ export default function EmployeeHistoryPage() {
     typeof window !== "undefined" ? window.innerWidth : 1024;
   const tourCardTop = tourRect
     ? Math.min(
-        Math.max(tourRect.top + tourRect.height + 16, 16),
-        Math.max(viewportHeight - 260, 16),
-      )
+      Math.max(tourRect.top + tourRect.height + 16, 16),
+      Math.max(viewportHeight - 260, 16),
+    )
     : 96;
   const tourCardLeft = tourRect
     ? Math.min(Math.max(tourRect.left, 16), Math.max(viewportWidth - 368, 16))
@@ -317,13 +323,13 @@ export default function EmployeeHistoryPage() {
     if (e) e.preventDefault();
     setIsLoading(true);
     setErrorMsg(null);
-
     try {
       sessionStorage.setItem("dji_history_filters", JSON.stringify(filters));
-
-      const res = await searchEmployeeHistory(filters);
+      setCurrentPage(1);
+      const res = await searchEmployeeHistory({ ...filters, page: 1, perPage, sortBy, sortDir });
       if (res.success && res.data) {
         setData(res.data);
+        setTotalCount(res.total || 0);
         setHasSearched(true);
         sessionStorage.setItem("dji_history_data", JSON.stringify(res.data));
         sessionStorage.setItem("dji_history_searched", "true");
@@ -337,31 +343,75 @@ export default function EmployeeHistoryPage() {
     }
   };
 
-  const handleRowClick = async (headerId: string) => {
-    setSelectedHeaderId(headerId);
-    setIsDetailLoading(true);
-    setDetailData(null);
-
-    try {
-      const res = await getEmployeeHistoryDetail(headerId);
-      if (res.success && res.data) {
-        setDetailData(res.data);
-      } else {
-        alert("Gagal memuat detail: " + (res.error || "Unknown Error"));
-        setSelectedHeaderId(null);
+  // Fetch page when pagination or sorting changes (after user has searched)
+  useEffect(() => {
+    if (!hasSearched) return;
+    let cancelled = false;
+    (async () => {
+      setIsLoading(true);
+      try {
+        const res = await searchEmployeeHistory({ ...filters, page: currentPage, perPage, sortBy, sortDir });
+        if (cancelled) return;
+        if (res.success && res.data) {
+          setData(res.data);
+          setTotalCount(res.total || 0);
+        } else {
+          setErrorMsg(res.error || "Gagal mengambil data riwayat.");
+        }
+      } catch (err) {
+        if (!cancelled) setErrorMsg("Terjadi kesalahan jaringan.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    } catch (err) {
-      alert("Terjadi kesalahan jaringan.");
-      setSelectedHeaderId(null);
-    } finally {
-      setIsDetailLoading(false);
-    }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, perPage, sortBy, sortDir]);
+
+  const handleRowClick = async (batch: any) => {
+    const searchParams = new URLSearchParams({
+      mc: batch.nomor_mc || "",
+      potongan: batch.potongan_ke || "",
+    });
+    if (batch.design_id) searchParams.set("design", batch.design_id);
+    if (batch.tgl) searchParams.set("tgl", batch.tgl);
+
+    router.push(`/history/detail?${searchParams.toString()}`);
   };
 
   const closeModal = () => {
-    setSelectedHeaderId(null);
-    setDetailData(null);
+    // Not used anymore since we moved to a dedicated detail page
   };
+
+  // Reset filters to defaults
+  const handleResetFilters = () => {
+    const reset = {
+      date: "",
+      nomor_mc: "",
+      group_id: "",
+      operator_ids: [],
+      design_id: "",
+      potongan_ke: "",
+      tanggal_potong: "",
+      no_customer: "",
+    };
+    setFilters(reset);
+    setData([]);
+    setHasSearched(false);
+    sessionStorage.removeItem("dji_history_filters");
+    sessionStorage.removeItem("dji_history_data");
+    sessionStorage.removeItem("dji_history_searched");
+  };
+
+  // Use server-side pagination/sorting. `data` holds current page items.
+  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+
+  // Reset to page 1 when filters, perPage, or sort change
+  useEffect(() => setCurrentPage(1), [filters.date, filters.nomor_mc, filters.group_id, filters.design_id, filters.potongan_ke, filters.no_customer, perPage, sortBy, sortDir]);
+
+  const pagedData = data;
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-10">
@@ -464,6 +514,15 @@ export default function EmployeeHistoryPage() {
             </button>
 
             <button
+              type="button"
+              onClick={handleResetFilters}
+              className="h-11 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
+              title="Reset filter"
+            >
+              <X className="w-4 h-4" /> Reset
+            </button>
+
+            <button
               data-tour="history-advanced-toggle"
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
@@ -481,7 +540,7 @@ export default function EmployeeHistoryPage() {
           {/* Advanced Filters */}
           {showAdvanced && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-slate-100 animate-fadeIn">
-              {user?.role === "admin" && (
+              {true && (
                 <div className="flex flex-col md:col-span-2 lg:col-span-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div className="flex flex-col gap-1">
@@ -496,14 +555,14 @@ export default function EmployeeHistoryPage() {
                           {(() => {
                             const activeShiftName = filters.group_id
                               ? groups.find(
-                                  (g) => g.id.toString() === filters.group_id,
-                                )?.name
+                                (g) => g.id.toString() === filters.group_id,
+                              )?.name
                               : null;
                             const activeOps = activeShiftName
                               ? operators.filter(
-                                  (op: any) =>
-                                    op.shift === activeShiftName || !op.shift,
-                                )
+                                (op: any) =>
+                                  op.shift === activeShiftName || !op.shift,
+                              )
                               : operators;
 
                             if (activeOps.length === 0) {
@@ -522,9 +581,9 @@ export default function EmployeeHistoryPage() {
                                 <input
                                   type="checkbox"
                                   value={op.id.toString()}
-                                  checked={(filters.operator_ids || []).includes(
-                                    op.id.toString(),
-                                  )}
+                                  checked={(
+                                    filters.operator_ids || []
+                                  ).includes(op.id.toString())}
                                   onChange={(e) => {
                                     const id = op.id.toString();
                                     setFilters((prev) => ({
@@ -532,8 +591,8 @@ export default function EmployeeHistoryPage() {
                                       operator_ids: e.target.checked
                                         ? [...(prev.operator_ids || []), id]
                                         : (prev.operator_ids || []).filter(
-                                            (x) => x !== id,
-                                          ),
+                                          (x) => x !== id,
+                                        ),
                                     }));
                                   }}
                                   className="w-3.5 h-3.5 text-sky-500 border-slate-300 rounded focus:ring-sky-400"
@@ -652,138 +711,126 @@ export default function EmployeeHistoryPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                      <th className="px-4 py-2.5 pl-6">Waktu Input</th>
+                      <th className="px-4 py-2.5 pl-6">Tanggal</th>
+                      <th
+                        className="px-4 py-2.5 cursor-pointer"
+                        onClick={() => {
+                          if (sortBy === "time")
+                            setSortDir(sortDir === "asc" ? "desc" : "asc");
+                          else {
+                            setSortBy("time");
+                            setSortDir("desc");
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          Waktu Input Terakhir
+                          {sortBy === "time" ? (
+                            sortDir === "asc" ? (
+                              <ChevronUp className="w-3 h-3" />
+                            ) : (
+                              <ChevronDown className="w-3 h-3" />
+                            )
+                          ) : null}
+                        </div>
+                      </th>
                       <th className="px-4 py-2.5">Mesin</th>
-                      {user?.role === "admin" && <th className="px-4 py-2.5">Operator</th>}
-                      {user?.role === "admin" && <th className="px-4 py-2.5">Grup</th>}
                       <th className="px-4 py-2.5">Design</th>
-                      <th className="px-4 py-2.5">Panel/Pot</th>
-                      <th className="px-4 py-2.5">Masalah</th>
-                      <th className="px-4 py-2.5">Downtime</th>
+                      <th className="px-4 py-2.5 text-center">Potongan</th>
+                      <th className="px-4 py-2.5 text-center">Total Qty</th>
+                      <th
+                        className="px-4 py-2.5 cursor-pointer text-center"
+                        onClick={() => {
+                          if (sortBy === "downtime")
+                            setSortDir(sortDir === "asc" ? "desc" : "asc");
+                          else {
+                            setSortBy("downtime");
+                            setSortDir("desc");
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2 justify-center">
+                          Total Downtime
+                          {sortBy === "downtime" ? (
+                            sortDir === "asc" ? (
+                              <ChevronUp className="w-3 h-3" />
+                            ) : (
+                              <ChevronDown className="w-3 h-3" />
+                            )
+                          ) : null}
+                        </div>
+                      </th>
                       <th className="px-4 py-2.5 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-                    {data.map((row: any, idx) => {
+                    {pagedData.map((batch: any, idx) => {
                       let jam = "-";
-                      if (row.tanggal_jam) {
-                        const dateObj = new Date(row.tanggal_jam);
+                      if (batch.waktu_input_terakhir) {
+                        const dateObj = new Date(batch.waktu_input_terakhir);
                         if (!isNaN(dateObj.getTime())) {
                           jam = dateObj.toLocaleTimeString("id-ID", {
                             hour: "2-digit",
                             minute: "2-digit",
                           });
                         } else {
-                          jam = row.tanggal_jam.split(/[ T]/)[1] || "-";
+                          jam = batch.waktu_input_terakhir.split(/[ T]/)[1] || "-";
                         }
                       }
 
-                      const operatorName =
-                        row.created_by_name ||
-                        row.pic ||
-                        (row.operators ? row.operators.nama_operator : null) || "-";
-
-                      // Extract unique problems
-                      let problems: string[] = [];
-                      if (
-                        row.production_details &&
-                        Array.isArray(row.production_details)
-                      ) {
-                        const allProbs = row.production_details
-                          .map((d: any) => d.kategori_masalah)
-                          .filter(Boolean)
-                          .flatMap((p: string) =>
-                            p.split(",").map((s) => s.trim()),
-                          );
-                        problems = Array.from(new Set(allProbs));
-                      }
+                      const operatorName = batch.operators_list || "-";
 
                       return (
                         <tr
                           key={idx}
-                          onClick={() => handleRowClick(row.id)}
+                          onClick={() => handleRowClick(batch)}
                           className="hover:bg-sky-50/50 cursor-pointer transition-colors group"
                         >
-                          <td className="px-4 py-2 pl-6 whitespace-nowrap">
+                          <td className="px-4 py-3 pl-6 whitespace-nowrap">
                             <span className="font-bold text-slate-800">
+                              {batch.tgl || "-"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="text-slate-600">
                               {jam}
                             </span>
                           </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <span className="font-bold text-[#0070bc]">
-                              {row.nomor_mc || "-"}
+                              {batch.nomor_mc || "-"}
                             </span>
                           </td>
-                          {user?.role === "admin" && (
-                            <td className="px-4 py-2 whitespace-nowrap">
-                              {operatorName || (
-                                <span className="text-slate-400 italic">
-                                  No Name
-                                </span>
-                              )}
-                            </td>
-                          )}
-                          {user?.role === "admin" && (
-                            <td className="px-4 py-2 whitespace-nowrap">
-                              <span className="font-semibold text-slate-600">
-                                {row.groups?.nama_grup || row.group_id || "-"}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {batch.design_id || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-center whitespace-nowrap font-bold text-slate-700">
+                            Ke-{batch.potongan_ke || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-700">
+                              {batch.total_panels} {batch.is_meter ? "Baris" : "Panel"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            {batch.total_downtime_detik > 0 ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700">
+                                {batch.total_downtime_detik} dtk
                               </span>
-                            </td>
-                          )}
-                          <td
-                            className="px-4 py-2 whitespace-nowrap max-w-[120px] truncate"
-                            title={
-                              row.designs?.nama_design || row.design_id || "-"
-                            }
-                          >
-                            <span className="font-semibold text-slate-600">
-                              {row.designs?.nama_design || row.design_id || "-"}
-                            </span>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
                           </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${row.panel_no === "METERAN" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700"}`}
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRowClick(batch);
+                              }}
+                              className="inline-flex items-center justify-center p-1.5 rounded-md hover:bg-sky-100 text-[#0070bc] transition-colors"
+                              title="Lihat Detail"
                             >
-                              {row.panel_no === "METERAN"
-                                ? "-"
-                                : row.panel_no || "-"}{" "}
-                              / {row.potongan_ke || "-"}
-                            </span>
-                          </td>
-                          <td
-                            className="px-4 py-2 whitespace-nowrap max-w-[150px] truncate"
-                            title={
-                              problems.length > 0
-                                ? problems.join(", ")
-                                : "Normal"
-                            }
-                          >
-                            {problems.length > 0 ? (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-600 border border-red-100">
-                                {problems.length > 1
-                                  ? `${problems[0]} +${problems.length - 1}`
-                                  : problems[0]}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                Normal
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            {row.total_downtime_detik ? (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-50 text-orange-600 border border-orange-100">
-                                {row.total_downtime_detik}s
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 font-bold">
-                                -
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap text-center">
-                            <button className="p-1 rounded-md bg-white border border-slate-200 text-slate-400 group-hover:text-[#0070bc] group-hover:border-[#0070bc]/30 transition-all shadow-sm">
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-4 h-4" />
                             </button>
                           </td>
                         </tr>
@@ -791,6 +838,48 @@ export default function EmployeeHistoryPage() {
                     })}
                   </tbody>
                 </table>
+                <div className="flex items-center justify-between gap-4 p-4 border-t border-slate-100 bg-slate-50">
+                  <div className="text-xs text-slate-600">
+                    Menampilkan{" "}
+                    {totalCount === 0
+                      ? 0
+                      : (currentPage - 1) * perPage + 1}{" "}
+                    - {Math.min(currentPage * perPage, totalCount)}{" "}
+                    dari {totalCount}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={perPage}
+                      onChange={(e) => setPerPage(Number(e.target.value))}
+                      className="h-9 px-2 rounded-lg bg-white border border-slate-200 text-xs"
+                    >
+                      {[10, 20, 50, 100].map((n) => (
+                        <option key={n} value={n}>
+                          {n} / halaman
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage <= 1}
+                      className="h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs disabled:opacity-50"
+                    >
+                      Prev
+                    </button>
+                    <span className="text-xs text-slate-600">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage >= totalPages}
+                      className="h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -810,359 +899,6 @@ export default function EmployeeHistoryPage() {
         )}
       </div>
 
-      {isTourOpen && currentTourStep && (
-        <div className="fixed inset-0 z-[70]">
-          <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[1px]" />
-          {tourRect && (
-            <div
-              className="absolute rounded-2xl border-2 border-sky-300 bg-white/10 shadow-[0_0_0_9999px_rgba(15,23,42,0.45),0_0_0_6px_rgba(14,165,233,0.18)] transition-all duration-200 pointer-events-none"
-              style={{
-                top: Math.max(tourRect.top - 8, 8),
-                left: Math.max(tourRect.left - 8, 8),
-                width: tourRect.width + 16,
-                height: tourRect.height + 16,
-              }}
-            />
-          )}
-          <div
-            className="absolute w-[calc(100vw-2rem)] max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 p-5"
-            style={{ top: tourCardTop, left: tourCardLeft }}
-          >
-            <div className="flex items-start justify-between gap-4 mb-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">
-                  Step {tourStepIndex + 1} dari {HISTORY_TOUR_STEPS.length}
-                </p>
-                <h4 className="text-base font-black text-slate-900 mt-1">
-                  {currentTourStep.title}
-                </h4>
-              </div>
-              <button
-                type="button"
-                onClick={closeTour}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors shrink-0"
-                aria-label="Tutup tour"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              {currentTourStep.description}
-            </p>
-            <div className="flex items-center gap-2 mt-5">
-              <button
-                type="button"
-                onClick={() =>
-                  setTourStepIndex((step) => Math.max(step - 1, 0))
-                }
-                disabled={tourStepIndex === 0}
-                className="h-10 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Kembali
-              </button>
-              <button
-                type="button"
-                onClick={
-                  isLastTourStep
-                    ? closeTour
-                    : () => setTourStepIndex((step) => step + 1)
-                }
-                className="flex-1 h-10 px-4 rounded-xl bg-[#0070bc] hover:bg-[#004777] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                {isLastTourStep ? "Selesai" : "Lanjut"}
-                {!isLastTourStep && <ArrowRight className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Detail */}
-      {selectedHeaderId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn overflow-y-auto"
-          onClick={closeModal}
-        >
-          <div
-            className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl flex flex-col my-auto animate-scaleIn overflow-hidden max-h-[90vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {isDetailLoading ? (
-              <div className="p-20 flex flex-col items-center justify-center">
-                <Loader2 className="w-10 h-10 animate-spin text-[#0070bc] mb-4" />
-                <span className="text-slate-500 font-medium">
-                  Memuat Detail...
-                </span>
-              </div>
-            ) : detailData ? (
-              <>
-                <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
-                  <div className="flex flex-col">
-                    <h3 className="text-lg font-bold text-slate-800">
-                      Detail Laporan Produksi
-                    </h3>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">
-                      ID: {detailData.id}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => router.push(`/edit/${detailData.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-bold text-xs transition-colors"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                      Edit Data
-                    </button>
-                    <button
-                      onClick={closeModal}
-                      className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/30">
-                  {/* Info Header */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                        Mesin & Grup
-                      </p>
-                      <p className="text-sm font-bold text-slate-800">
-                        {detailData.nomor_mc || "-"} / Grup{" "}
-                        {detailData.groups?.nama_grup || detailData.group_id}
-                      </p>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                        Operator
-                      </p>
-                      <p className="text-sm font-bold text-slate-800">
-                        {detailData.pic ||
-                          detailData.operators?.nama_operator ||
-                          "No Name"}
-                      </p>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                        Design
-                      </p>
-                      <p className="text-sm font-bold text-slate-800">
-                        {detailData.designs?.nama_design ||
-                          detailData.design_id ||
-                          "-"}
-                      </p>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                        Total PCS
-                      </p>
-                      <p className="text-sm font-bold text-[#0070bc]">
-                        {detailData.pcs} PCS
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    {/* Spesifikasi Panel */}
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                        <Box className="w-4 h-4" /> Spesifikasi Produksi
-                      </h4>
-                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm">
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">
-                            Panel / Potongan
-                          </span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.panel_no === "METERAN"
-                              ? "-"
-                              : detailData.panel_no || "-"}{" "}
-                            / {detailData.potongan_ke || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">Course / RPM</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.course || "-"} / {detailData.rpm || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">No. Customer</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.no_customer || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">No. Order</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.no_order_barang || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">Tanggal Potong</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.tanggal_potong || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">
-                            Status Matching
-                          </span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.status_matching || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3">
-                          <span className="text-slate-500">Pick</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.pick || "-"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Benang & Material */}
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                        <ClipboardList className="w-4 h-4" /> Benang & Material
-                      </h4>
-                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm">
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">Benang Dasar</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.jenis_benang_dasar || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">Liner</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.liner || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">Heavy</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.heavy || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3 border-b border-slate-100">
-                          <span className="text-slate-500">Shadow</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.shadow || "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between p-3">
-                          <span className="text-slate-500">Pinggiran</span>
-                          <span className="font-bold text-slate-800">
-                            {detailData.pinggiran || "-"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Downtime Info */}
-                  {detailData.total_downtime_detik > 0 && (
-                    <div className="mb-8 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                      <Clock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-sm font-bold text-amber-800">
-                          Total Downtime: {detailData.total_downtime_detik}{" "}
-                          Detik
-                        </h4>
-                        <p className="text-xs text-amber-700 mt-1">
-                          Terdapat waktu tunggu (downtime) selama produksi sesi
-                          ini berjalan.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Detail PCS */}
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <Package className="w-4 h-4" /> Rincian per PCS
-                    </h4>
-
-                    {detailData.details && detailData.details.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {detailData.details.map((pcs: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className={`p-4 rounded-xl border shadow-sm ${pcs.kategori_masalah ? "bg-red-50/50 border-red-200" : "bg-white border-slate-200"}`}
-                          >
-                            <div className="flex justify-between items-center mb-3">
-                              <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-                                PCS #{pcs.pcs_index}
-                              </span>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
-                                {pcs.jml_hasil_produksi || 1} Hasil
-                              </span>
-                            </div>
-
-                            {pcs.kategori_masalah ? (
-                              <div className="space-y-2 mt-2 pt-2 border-t border-red-100/50">
-                                <div className="flex gap-2">
-                                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-red-400 uppercase">
-                                      Kategori Masalah
-                                    </span>
-                                    <span className="text-xs font-semibold text-red-700">
-                                      {pcs.kategori_masalah}
-                                    </span>
-                                  </div>
-                                </div>
-                                {(pcs.spesifik_masalah ||
-                                  pcs.detail_masalah) && (
-                                  <div className="pl-6 text-xs text-slate-600">
-                                    <span className="font-semibold">
-                                      Spesifik:
-                                    </span>{" "}
-                                    {pcs.spesifik_masalah || pcs.detail_masalah}
-                                  </div>
-                                )}
-                                {pcs.keterangan_cacat && (
-                                  <div className="pl-6 text-xs text-slate-600">
-                                    <span className="font-semibold">
-                                      Cacat:
-                                    </span>{" "}
-                                    {pcs.keterangan_cacat}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2 text-emerald-600">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span className="text-xs font-semibold">
-                                  Produksi Normal / Sukses
-                                </span>
-                              </div>
-                            )}
-
-                            {pcs.meter_kain && (
-                              <div className="mt-2 text-xs font-semibold text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                Meter: {pcs.meter_kain}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-500 italic">
-                        Tidak ada rincian PCS yang disimpan.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </>
-            ) : null}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

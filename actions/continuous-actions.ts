@@ -241,9 +241,11 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
 
     const headerId = generateExcelStyleId();
 
-    // Hitung total downtime dari semua PCS
+    // Hitung total downtime dari array downtimeEvents (jika ada), atau fallback ke input manual lama
     let totalDowntimeMenit = 0;
-    if (validated.totalDowntime && parseInt(validated.totalDowntime) > 0) {
+    if (validated.downtimeEvents && validated.downtimeEvents.length > 0) {
+      totalDowntimeMenit = validated.downtimeEvents.reduce((acc, curr) => acc + curr.durasiDetik, 0);
+    } else if (validated.totalDowntime && parseInt(validated.totalDowntime) > 0) {
       totalDowntimeMenit = parseInt(validated.totalDowntime);
     }
 
@@ -279,29 +281,119 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       idempotency_key: validated.idempotencyKey || null,
       created_by_name: validated.created_by_name || null,
       pic: validated.pic || null,
+      downtime_events: validated.downtimeEvents && validated.downtimeEvents.length > 0 ? JSON.stringify(validated.downtimeEvents) : null,
     };
 
-    const detailData = validated.pcsData.map((pcsItem) => {
-      const kategoriStr =
-        pcsItem.kategoriMasalah && pcsItem.kategoriMasalah.length > 0
-          ? pcsItem.kategoriMasalah.join(", ")
-          : null;
+    const pcsDataToProcess = validated.isPanelGagal 
+      ? validated.pcsData.filter(pcs => pcs.isBs) 
+      : validated.pcsData;
+
+    // Cari index PCS yang akan menampung jml_hasil_produksi (jika ada masalah, pilih PCS tersebut, jika tidak pilih PCS pertama)
+    let targetYieldIdx = 0;
+    const idxWithProblem = pcsDataToProcess.findIndex((_, idx) => {
+      const matchedEvents = validated.downtimeEvents 
+        ? validated.downtimeEvents.filter(e => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes((idx + 1).toString()))
+        : [];
+      return matchedEvents.length > 0 || pcsDataToProcess[idx].isBs;
+    });
+
+    if (idxWithProblem !== -1) {
+      targetYieldIdx = idxWithProblem;
+    }
+
+    const detailData = pcsDataToProcess.map((pcsItem, idx) => {
+      // Filter event khusus untuk PCS ini atau "Semua"
+      const matchedEvents = validated.downtimeEvents 
+        ? validated.downtimeEvents.filter(e => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes((idx + 1).toString()))
+        : [];
+
+      let kategoriStr = null;
+      let detailStr = null;
+      let blokStr = null;
+      let indikatorStop = false;
+
+      if (matchedEvents.length > 0) {
+        const allCats = new Set<string>();
+        const allDetails = new Set<string>();
+        const allBloks = new Set<string>();
+        
+        matchedEvents.forEach((e: any) => {
+          if (e.problems && Array.isArray(e.problems)) {
+            e.problems.forEach((p: any) => {
+              if (p.kategori) allCats.add(p.kategori);
+              if (p.blok) allBloks.add(`Blok ${p.blok}`);
+              
+              let meterForThisPcs = "";
+              if (p.meter) {
+                if (pcsDataToProcess.length === 1) {
+                  meterForThisPcs = p.meter;
+                } else {
+                  const match = p.meter.match(new RegExp(`PCS ${idx + 1}:\\s*([^,]+)`));
+                  if (match) meterForThisPcs = match[1].trim();
+                }
+              }
+
+              if (p.details && Array.isArray(p.details)) {
+                p.details.forEach((d: string) => {
+                  let detailText = d;
+                  if (meterForThisPcs) {
+                    detailText += ` (Titik: ${meterForThisPcs}m)`;
+                  }
+                  allDetails.add(detailText);
+                });
+              }
+            });
+          } else if (e.kategori) {
+            allCats.add(e.kategori);
+            if (e.detail) allDetails.add(e.detail);
+            if (e.blok) allBloks.add(`Blok ${e.blok}`);
+          }
+        });
+        
+        kategoriStr = Array.from(allCats).join(", ");
+        detailStr = Array.from(allDetails).join(", ");
+        blokStr = Array.from(allBloks).join(", ");
+        indikatorStop = true;
+      }
+
+      if (pcsItem.isBs) {
+        kategoriStr = "X";
+      }
+
+      let keteranganStr: string | null = null;
+      if (blokStr) {
+        keteranganStr = blokStr;
+      }
+      if (validated.jenisLaporan === "Mulai Istirahat") {
+        keteranganStr = keteranganStr ? keteranganStr + " [SEBELUM ISTIRAHAT]" : "[SEBELUM ISTIRAHAT]";
+      }
+      if (validated.jenisLaporan === "Selesai Istirahat") {
+        keteranganStr = keteranganStr ? keteranganStr + " [LAPORAN ISTIRAHAT]" : "[LAPORAN ISTIRAHAT]";
+      }
 
       return {
         id: generateExcelStyleId(),
         header_id: headerId,
         pcs_index: parseInt(pcsItem.pcsIndex),
-        jml_hasil_produksi: pcsItem.jmlHasilProduksi
-          ? parseInt(pcsItem.jmlHasilProduksi)
-          : null,
-        indikator_stop: pcsItem.indikatorStop || false,
+        jml_hasil_produksi: (idx === targetYieldIdx) ? 1 : 0,
+        indikator_stop: indikatorStop,
         kategori_masalah: kategoriStr,
-        detail_masalah: pcsItem.detailMasalah || null,
-        spesifik_masalah: pcsItem.spesifikMasalah || null,
-        keterangan_cacat: pcsItem.keteranganCacat || null,
+        detail_masalah: detailStr,
+        spesifik_masalah: null,
+        keterangan_cacat: keteranganStr,
         meter_kain: pcsItem.meterKain || null,
         roll_no: pcsItem.rollNo || null,
       };
+    });
+
+    // Filter out completely empty rows (no yield and no problems) to prevent cluttering the database and QC table
+    const finalDetailData = detailData.filter(d => {
+      if (d.jml_hasil_produksi > 0) return true;
+      if (d.kategori_masalah || d.detail_masalah || d.keterangan_cacat || d.indikator_stop || d.meter_kain) return true;
+      // Untuk mesin METERAN (di mana operator mengisi meterAkhir), kita HARUS menyimpan semua baris PCS
+      // (termasuk PCS 2, 3 dst) agar laporan meteran (seperti 70m-100m) tersimpan untuk setiap roll.
+      if (validated.meterAkhir) return true;
+      return false;
     });
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -355,10 +447,10 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
           "Failed to insert continuous header: " + insertHeaderError.message,
         );
       }
-      if (detailData.length > 0) {
+      if (finalDetailData.length > 0) {
         const { error: detailError } = await supabase
           .from("production_details")
-          .insert(detailData as any);
+          .insert(finalDetailData as any);
 
         if (detailError)
           throw new Error(`Gagal menyimpan detail: ${detailError.message}`);
@@ -388,7 +480,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
     // Fallback/Mock Mode Trigger Google Sheets
     const sheetUrlMock = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
     if (sheetUrlMock) {
-      const payloadMock = detailData.map((detail: any) => ({
+      const payloadMock = finalDetailData.map((detail: any) => ({
         "ID Laporan": headerId,
         "Tanggal Produksi": tgl || "",
         "Tanggal & Jam": tanggalJam,
@@ -414,7 +506,6 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
         "Roll No": detail.roll_no || "",
         "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
         "Kategori Masalah": detail.kategori_masalah || "",
-        "Detail Masalah": detail.detail_masalah || "",
         "Keterangan Cacat": detail.keterangan_cacat || "",
       }));
 
@@ -446,10 +537,13 @@ export async function updateContinuousReport(
     // Parse values
     const rpmNum = data.rpm ? parseInt(data.rpm) : null;
     const potonganKeNum = data.potonganKe ? parseInt(data.potonganKe) : null;
-    const totalDowntimeNum =
-      data.totalDowntime && parseInt(data.totalDowntime) > 0
-        ? parseInt(data.totalDowntime)
-        : 0;
+    // Hitung total downtime dari array downtimeEvents (jika ada), atau fallback ke input manual lama
+    let totalDowntimeNum = 0;
+    if (data.downtimeEvents && data.downtimeEvents.length > 0) {
+      totalDowntimeNum = data.downtimeEvents.reduce((acc: number, curr: any) => acc + curr.durasiDetik, 0);
+    } else if (data.totalDowntime && parseInt(data.totalDowntime) > 0) {
+      totalDowntimeNum = parseInt(data.totalDowntime);
+    }
 
     // 1. Update Header
     const { error: headerError } = await supabase
@@ -479,6 +573,7 @@ export async function updateContinuousReport(
         shadow: data.shadow || null,
         pinggiran: data.pinggiran || null,
         total_downtime_detik: totalDowntimeNum,
+        downtime_events: data.downtimeEvents && data.downtimeEvents.length > 0 ? JSON.stringify(data.downtimeEvents) : null,
         meter_awal: data.meterAwal ? parseFloat(data.meterAwal) : null,
         meter_akhir: data.meterAkhir ? parseFloat(data.meterAkhir) : null,
         total_produksi_meter: data.hasilProduksiMeter
@@ -508,22 +603,47 @@ export async function updateContinuousReport(
           ? parseInt(pcsItem.pcsIndex)
           : null;
 
-        const kategoriStr =
-          pcsItem.kategoriMasalah && pcsItem.kategoriMasalah.length > 0
-            ? Array.isArray(pcsItem.kategoriMasalah)
-              ? pcsItem.kategoriMasalah.join(", ")
-              : pcsItem.kategoriMasalah
-            : null;
+        // Filter event khusus untuk PCS ini atau "Semua"
+        const matchedEvents = data.downtimeEvents 
+          ? data.downtimeEvents.filter((e: any) => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map((x: string) => x.trim()).includes((idx + 1).toString()))
+          : [];
+
+        let kategoriStr = null;
+        let detailStr = null;
+        let indikatorStop = false;
+
+        if (matchedEvents.length > 0) {
+          const allCats = new Set<string>();
+          const allDetails = new Set<string>();
+          
+          matchedEvents.forEach((e: any) => {
+            if (e.problems && Array.isArray(e.problems)) {
+              e.problems.forEach((p: any) => {
+                if (p.kategori) allCats.add(p.kategori);
+                if (p.details && Array.isArray(p.details)) {
+                  p.details.forEach((d: string) => allDetails.add(d));
+                }
+              });
+            } else if (e.kategori) {
+              allCats.add(e.kategori);
+              if (e.detail) allDetails.add(e.detail);
+            }
+          });
+          
+          kategoriStr = Array.from(allCats).join(", ");
+          detailStr = Array.from(allDetails).join(", ");
+          indikatorStop = true;
+        }
 
         return {
           id: detailId,
           header_id: headerId,
           pcs_index: pcsIndexNum,
           jml_hasil_produksi: jmlHasilNum,
-          indikator_stop: pcsItem.indikatorStop || false,
+          indikator_stop: indikatorStop,
           kategori_masalah: kategoriStr,
-          detail_masalah: pcsItem.detailMasalah || null,
-          keterangan_cacat: pcsItem.keteranganCacat || null,
+          detail_masalah: detailStr,
+          keterangan_cacat: null,
           meter_kain: pcsItem.meterKain || null,
           roll_no: pcsItem.rollNo || null,
         };
@@ -588,7 +708,6 @@ export async function updateContinuousReport(
           "Roll No": detail.roll_no || "",
           "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
           "Kategori Masalah": detail.kategori_masalah || "",
-          "Detail Masalah": detail.detail_masalah || "",
           "Keterangan Cacat": detail.keterangan_cacat || "",
         }));
 

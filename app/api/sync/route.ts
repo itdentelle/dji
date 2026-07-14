@@ -37,6 +37,20 @@ export async function POST(req: NextRequest) {
     const payloads = [];
     const details = header.production_details || [];
 
+    let frekuensiBerhenti = 0;
+    let downtimeEventsArray: any[] = [];
+    if (header.downtime_events) {
+      try {
+        const events = typeof header.downtime_events === 'string' 
+          ? JSON.parse(header.downtime_events) 
+          : header.downtime_events;
+        downtimeEventsArray = Array.isArray(events) ? events : [];
+        frekuensiBerhenti = downtimeEventsArray.length;
+      } catch (e) {
+        // ignore
+      }
+    }
+
     // Jika tidak ada detail (misal qc awal), kirim minimal data
     if (details.length === 0) {
       payloads.push({
@@ -60,40 +74,71 @@ export async function POST(req: NextRequest) {
         "Meter Awal": header.meter_awal ?? "",
         "Meter Akhir": header.meter_akhir ?? "",
         "Total Produksi Meter": header.total_produksi_meter ?? "",
+        "Frekuensi Masalah": frekuensiBerhenti,
         "Penanggung Jawab": header.created_by_name || ""
       });
     } else {
       for (const detail of details) {
-        payloads.push({
-          "ID Laporan": header.id,
-          "Tanggal Produksi": header.tgl || "",
-          "Tanggal & Jam": header.tanggal_jam || "",
-          "Tanggal Potong": header.tanggal_potong || "",
-          "Mesin": header.nomor_mc || "",
-          "Pick": header.pick || "",
-          "Course": header.course || "",
-          "RPM": header.rpm ?? "",
-          "Operator": header.pic || (header.operators && header.operators.nama_operator) || "",
-          "Grup": (header.groups && header.groups.nama_grup) || header.group_id || "",
-          "Design": header.design_id || "",
-          "Status Matching": header.status_matching || "",
-          "Panel": header.panel_no || "",
-          "Potongan Ke": header.potongan_ke ?? "",
-          "No Order": header.no_order_barang || "",
-          "No Customer": header.no_customer || "",
-          "Total Downtime (Detik)": header.total_downtime_detik ?? 0,
-          "Meter Awal": header.meter_awal ?? "",
-          "Meter Akhir": header.meter_akhir ?? "",
-          "Total Produksi Meter": header.total_produksi_meter ?? "",
-          "PCS Ke": detail.pcs_index || "",
-          "Hasil PCS": detail.jml_hasil_produksi ?? 0,
-          "Meter Kain": detail.meter_kain ?? "",
-          "Roll No": detail.roll_no || "",
-          "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
-          "Kategori Masalah": detail.kategori_masalah || "",
-          "Detail Masalah": detail.detail_masalah || "",
-          "Spesifik Masalah": detail.spesifik_masalah || "",
-          "Keterangan Cacat": detail.keterangan_cacat || "",
+          const pcsIndexStr = String(detail.pcs_index);
+          let categoriesSet = new Set<string>();
+          let defectSet = new Set<string>();
+          let indikatorStop = detail.indikator_stop;
+
+          downtimeEventsArray.forEach(event => {
+            const isApplicable = !event.pcsKe || event.pcsKe === "Semua" || event.pcsKe.split(",").map((s:string) => s.trim()).includes(pcsIndexStr);
+            if (isApplicable) {
+              indikatorStop = true;
+              if (event.problems && Array.isArray(event.problems)) {
+                event.problems.forEach((prob: any) => {
+                  if (prob.kategori) categoriesSet.add(prob.kategori);
+                  if (prob.details && Array.isArray(prob.details)) {
+                    prob.details.forEach((d: string) => defectSet.add(d));
+                  }
+                });
+              } else if (event.kategori) {
+                categoriesSet.add(event.kategori);
+                if (event.detail) defectSet.add(event.detail);
+              }
+            }
+          });
+
+          if (detail.kategori_masalah) detail.kategori_masalah.split(",").forEach((s:string) => categoriesSet.add(s.trim()));
+          if (detail.keterangan_cacat) detail.keterangan_cacat.split(",").forEach((s:string) => defectSet.add(s.trim()));
+
+          const combinedCategories = Array.from(categoriesSet).filter(Boolean).join(", ");
+          const combinedDefects = Array.from(defectSet).filter(Boolean).join(", ");
+
+          payloads.push({
+            "ID Laporan": header.id,
+            "Tanggal Produksi": header.tgl || "",
+            "Tanggal & Jam": header.tanggal_jam || "",
+            "Tanggal Potong": header.tanggal_potong || "",
+            "Mesin": header.nomor_mc || "",
+            "Pick": header.pick || "",
+            "Course": header.course || "",
+            "RPM": header.rpm ?? "",
+            "Operator": header.pic || (header.operators && header.operators.nama_operator) || "",
+            "Grup": (header.groups && header.groups.nama_grup) || header.group_id || "",
+            "Design": header.design_id || "",
+            "Status Matching": header.status_matching || "",
+            "Panel": header.panel_no || "",
+            "Potongan Ke": header.potongan_ke ?? "",
+            "No Order": header.no_order_barang || "",
+            "No Customer": header.no_customer || "",
+            "Total Downtime (Detik)": header.total_downtime_detik ?? 0,
+            "Meter Awal": header.meter_awal ?? "",
+            "Meter Akhir": header.meter_akhir ?? "",
+            "Total Produksi Meter": header.total_produksi_meter ?? "",
+            "PCS Ke": detail.pcs_index || "",
+            "Hasil PCS": detail.jml_hasil_produksi ?? 0,
+            "Meter Kain": detail.meter_kain ?? "",
+            "Roll No": detail.roll_no || "",
+            "Mesin Stop?": indikatorStop ? "Ya" : "Tidak",
+            "Kategori Masalah": combinedCategories,
+            "Detail Masalah": combinedDefects,
+            "Spesifik Masalah": detail.spesifik_masalah || "",
+            "Keterangan Cacat": detail.keterangan_cacat || "",
+            "Frekuensi Masalah": frekuensiBerhenti,
           "Penanggung Jawab": header.created_by_name || ""
         });
       }

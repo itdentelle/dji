@@ -15,7 +15,9 @@ function generateExcelStyleId(): string {
   return result;
 }
 
-export async function createProductionReport(inputData: ProductionFormInput): Promise<{
+export async function createProductionReport(
+  inputData: ProductionFormInput,
+): Promise<{
   success: boolean;
   productionId?: string;
   error?: string;
@@ -24,37 +26,43 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     // 1. Validasi data input secara server-side menggunakan Zod
     const validated = productionFormSchema.parse(inputData);
 
-    
     const now = new Date();
-    
+
     // Dapatkan waktu di zona WIB (Asia/Jakarta)
-    const formatter = new Intl.DateTimeFormat('sv-SE', {
-      timeZone: 'Asia/Jakarta',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
+    const formatter = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
     });
-    
+
     // Format timestamp lengkap ke YYYY-MM-DD HH:mm:ss
     const tanggalJam = formatter.format(now);
-    
+
     // Format tanggal ke YYYY-MM-DD
     const tgl = tanggalJam.split(" ")[0];
 
-    const operatorIdNum = validated.operatorId && !isNaN(parseInt(validated.operatorId)) ? parseInt(validated.operatorId) : null;
+    const operatorIdNum =
+      validated.operatorId && !isNaN(parseInt(validated.operatorId))
+        ? parseInt(validated.operatorId)
+        : null;
     const groupIdNum = validated.groupId ? parseInt(validated.groupId) : null;
-    const designIdNum = validated.designId ? parseInt(validated.designId) : null;
+    const designIdNum = validated.designId
+      ? parseInt(validated.designId)
+      : null;
 
     const rpmNum = validated.rpm ? parseInt(validated.rpm) : null;
-    const potonganKeNum = validated.potonganKe ? parseInt(validated.potonganKe) : null;
+    const potonganKeNum = validated.potonganKe
+      ? parseInt(validated.potonganKe)
+      : null;
     const statusInspeksiBool = null;
     const photoUrls = {
-        before: validated.fotoBefore || null,
-        after: validated.fotoAfter || null
+      before: validated.fotoBefore || null,
+      after: validated.fotoAfter || null,
     };
 
     // 1. Siapkan data untuk Tabel Header
@@ -62,7 +70,15 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     const panelNoNum = validated.panelNo ? parseInt(validated.panelNo) : null;
     const pcsTarget = validated.pcsData.length;
 
-    const totalDowntimeNum = validated.totalDowntime ? parseInt(validated.totalDowntime) : null;
+    let totalDowntimeNum = validated.totalDowntime
+      ? parseInt(validated.totalDowntime)
+      : 0;
+    if (validated.downtimeEvents && validated.downtimeEvents.length > 0) {
+      totalDowntimeNum = validated.downtimeEvents.reduce(
+        (acc, curr) => acc + (curr.durasiDetik || 0),
+        0,
+      );
+    }
 
     const headerData = {
       id: headerId,
@@ -76,7 +92,11 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
       course: validated.course || null,
       rpm: validated.rpm ? parseInt(validated.rpm) : null,
       potongan_ke: validated.potonganKe ? parseInt(validated.potonganKe) : null,
-      panel_no: validated.panelNo || null,
+      panel_no: validated.panelNo
+        ? validated.isPanelGagal
+          ? `${validated.panelNo} (GAGAL)`
+          : validated.panelNo
+        : null,
       pcs: pcsTarget,
       tanggal_potong: validated.tanggalPotong || null,
       pick: validated.pick || null,
@@ -93,29 +113,95 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
       idempotency_key: validated.idempotencyKey || null,
       created_by_name: validated.created_by_name || null,
       pic: validated.pic || null,
+      downtime_events:
+        validated.downtimeEvents && validated.downtimeEvents.length > 0
+          ? JSON.stringify(validated.downtimeEvents)
+          : null,
     };
 
     // 2. Siapkan Data Details
-    const detailData = validated.pcsData.map((pcsItem, idx) => {
-      const detailId = generateExcelStyleId() + "-" + idx;
-      const jmlHasilNum = pcsItem.jmlHasilProduksi ? parseInt(pcsItem.jmlHasilProduksi) : null;
-      const pcsIndexNum = pcsItem.pcsIndex ? parseInt(pcsItem.pcsIndex) : null;
+    const pcsDataToProcess = validated.isPanelGagal
+      ? validated.pcsData.filter((pcs) => pcs.isBs)
+      : validated.pcsData;
 
-      // Gabungkan array kategori menjadi string, pisahkan dengan koma
-      const kategoriStr = pcsItem.kategoriMasalah && pcsItem.kategoriMasalah.length > 0 
-        ? pcsItem.kategoriMasalah.join(', ') 
+    const detailData = pcsDataToProcess.map((pcsItem, idx) => {
+      const detailId = generateExcelStyleId() + "-" + idx;
+      const jmlHasilNum = pcsItem.jmlHasilProduksi
+        ? parseInt(pcsItem.jmlHasilProduksi)
         : null;
+      const pcsIndexStr = pcsItem.pcsIndex || (idx + 1).toString();
+      const pcsIndexNum = parseInt(pcsIndexStr);
+
+      // Filter event khusus untuk PCS ini atau "Semua"
+      const matchedEvents = validated.downtimeEvents
+        ? validated.downtimeEvents.filter(
+            (e) =>
+              !e.pcsKe ||
+              e.pcsKe === "Semua" ||
+              e.pcsKe
+                .split(",")
+                .map((x) => x.trim())
+                .includes(pcsIndexStr),
+          )
+        : [];
+
+      let kategoriStr = null;
+      let detailStr = null;
+      let blokStr = null;
+      let indikatorStop = false;
+
+      if (matchedEvents.length > 0) {
+        const allCats = new Set<string>();
+        const allDetails = new Set<string>();
+        const allBloks = new Set<string>();
+
+        matchedEvents.forEach((e: any) => {
+          if (e.problems && Array.isArray(e.problems)) {
+            e.problems.forEach((p: any) => {
+              if (p.kategori) allCats.add(p.kategori);
+              if (p.blok) allBloks.add(`Blok ${p.blok}`);
+              if (p.details && Array.isArray(p.details)) {
+                p.details.forEach((d: string) => allDetails.add(d));
+              }
+            });
+          } else if (e.kategori) {
+            allCats.add(e.kategori);
+            if (e.detail) allDetails.add(e.detail);
+            if (e.blok) allBloks.add(`Blok ${e.blok}`);
+          }
+        });
+
+        kategoriStr = Array.from(allCats).join(", ");
+        detailStr = Array.from(allDetails).join(", ");
+        blokStr = Array.from(allBloks).join(", ");
+        indikatorStop = true;
+      }
+
+      if (pcsItem.isBs) {
+        kategoriStr = "X";
+      }
+
+      let keteranganStr: string | null = null;
+      if (blokStr) {
+        keteranganStr = blokStr;
+      }
+      if (validated.jenisLaporan === "Mulai Istirahat") {
+        keteranganStr = keteranganStr ? keteranganStr + " [SEBELUM ISTIRAHAT]" : "[SEBELUM ISTIRAHAT]";
+      }
+      if (validated.jenisLaporan === "Selesai Istirahat" || validated.jenisLaporan === "Istirahat") {
+        keteranganStr = keteranganStr ? keteranganStr + " [LAPORAN ISTIRAHAT]" : "[LAPORAN ISTIRAHAT]";
+      }
 
       return {
         id: detailId,
         header_id: headerId,
         pcs_index: pcsIndexNum,
         jml_hasil_produksi: jmlHasilNum,
-        indikator_stop: pcsItem.indikatorStop || false,
+        indikator_stop: indikatorStop,
         kategori_masalah: kategoriStr,
-        detail_masalah: pcsItem.detailMasalah || null,
-        spesifik_masalah: pcsItem.spesifikMasalah || null,
-        keterangan_cacat: pcsItem.keteranganCacat || null,
+        detail_masalah: detailStr,
+        spesifik_masalah: null,
+        keterangan_cacat: keteranganStr,
         meter_kain: pcsItem.meterKain || null,
       };
     });
@@ -124,7 +210,11 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (supabaseUrl && supabaseAnonKey && supabaseAnonKey !== "your_supabase_anon_key_here") {
+    if (
+      supabaseUrl &&
+      supabaseAnonKey &&
+      supabaseAnonKey !== "your_supabase_anon_key_here"
+    ) {
       try {
         const supabase = await createClient();
 
@@ -133,7 +223,9 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
           if (validated.created_by_name) {
             headerData.created_by_name = validated.created_by_name;
           } else {
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
             if (user) {
               const adminSupabase = await createAdminClient();
               const { data: profile } = await adminSupabase
@@ -154,17 +246,24 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
 
         if (isCutOnlySubmit) {
           if (!validated.nomorMc || !potonganKeNum) {
-            return { success: false, error: "Mesin dan Potongan wajib diisi untuk potong kain." };
+            return {
+              success: false,
+              error: "Mesin dan Potongan wajib diisi untuk potong kain.",
+            };
           }
 
-          const { data: previousHeaders, error: previousHeadersError } = await supabase
-            .from("production_headers")
-            .select("*, production_details(*)")
-            .eq("nomor_mc", validated.nomorMc)
-            .eq("potongan_ke", potonganKeNum);
+          const { data: previousHeaders, error: previousHeadersError } =
+            await supabase
+              .from("production_headers")
+              .select("*, production_details(*)")
+              .eq("nomor_mc", validated.nomorMc)
+              .eq("potongan_ke", potonganKeNum);
 
           if (previousHeadersError) {
-            throw new Error("Gagal mencari data panel untuk potong kain: " + previousHeadersError.message);
+            throw new Error(
+              "Gagal mencari data panel untuk potong kain: " +
+                previousHeadersError.message,
+            );
           }
 
           if (!previousHeaders || previousHeaders.length === 0) {
@@ -181,10 +280,14 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             .eq("potongan_ke", potonganKeNum);
 
           if (cutUpdateError) {
-            throw new Error("Gagal menyimpan tanggal potong: " + cutUpdateError.message);
+            throw new Error(
+              "Gagal menyimpan tanggal potong: " + cutUpdateError.message,
+            );
           }
 
-          const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+          const sheetUrl =
+            process.env.GOOGLE_SHEET_URL ||
+            process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
           if (sheetUrl) {
             type CutSheetHeader = {
               id?: string | null;
@@ -213,7 +316,10 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "update", data: massPayload }),
               }).catch((err) =>
-                console.error("Gagal sinkron tanggal potong Google Sheets:", err),
+                console.error(
+                  "Gagal sinkron tanggal potong Google Sheets:",
+                  err,
+                ),
               );
             }
           }
@@ -222,8 +328,13 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         }
 
         // Cek duplikasi potongan_ke dan panel_no
+        // Izinkan panel yang sama jika operator berbeda (kasus Mesin Masih Stop lintas shift)
         if (potonganKeNum && validated.panelNo) {
-          const { data: existingPanel } = await supabase
+          const operatorIdNum =
+            validated.operatorId && !isNaN(parseInt(validated.operatorId))
+              ? parseInt(validated.operatorId)
+              : null;
+          let dupQuery = supabase
             .from("production_headers")
             .select("id")
             .eq("nomor_mc", validated.nomorMc)
@@ -231,8 +342,18 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             .eq("panel_no", validated.panelNo)
             .limit(1);
 
+          // Jika ada operator, cek apakah operator yang SAMA sudah submit panel ini
+          if (operatorIdNum) {
+            dupQuery = dupQuery.eq("operator_id", operatorIdNum);
+          }
+
+          const { data: existingPanel } = await dupQuery;
+
           if (existingPanel && existingPanel.length > 0) {
-            return { success: false, error: `Potongan ke-${potonganKeNum} dengan Panel ${validated.panelNo} sudah ada!` };
+            return {
+              success: false,
+              error: `Potongan ke-${potonganKeNum} dengan Panel ${validated.panelNo} sudah ada untuk operator ini!`,
+            };
           }
         }
 
@@ -243,10 +364,14 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
 
         if (insertHeaderError) {
           if (insertHeaderError.code === "23505") {
-            console.warn("Idempotency key duplicate detected. Returning success.");
+            console.warn(
+              "Idempotency key duplicate detected. Returning success.",
+            );
             return { success: true };
           }
-          throw new Error("Gagal menyimpan header: " + insertHeaderError.message);
+          throw new Error(
+            "Gagal menyimpan header: " + insertHeaderError.message,
+          );
         }
 
         // B. Insert ke Tabel Detail
@@ -254,7 +379,8 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
           .from("production_details")
           .insert(detailData as any);
 
-        if (detailError) throw new Error(`Gagal menyimpan detail PCS: ${detailError.message}`);
+        if (detailError)
+          throw new Error(`Gagal menyimpan detail PCS: ${detailError.message}`);
 
         // Update tanggal_potong massal untuk potongan_ke yang sama
         if (validated.tanggalPotong && validated.nomorMc && potonganKeNum) {
@@ -273,7 +399,9 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
             .eq("potongan_ke", potonganKeNum);
 
           // Trigger sinkronisasi update ke Google Sheets untuk panel-panel sebelumnya
-          const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+          const sheetUrl =
+            process.env.GOOGLE_SHEET_URL ||
+            process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
           if (sheetUrl && previousHeaders && previousHeaders.length > 0) {
             // Gabungkan semua payload menjadi satu array besar
             let massPayload: any[] = [];
@@ -283,17 +411,19 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
                 massPayload.push({
                   id_header: h.id,
                   pcs_index: detail.pcs_index || "",
-                  tanggal_potong: validated.tanggalPotong
+                  tanggal_potong: validated.tanggalPotong,
                 });
               }
             }
-            
+
             if (massPayload.length > 0) {
               fetch(sheetUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "update", data: massPayload })
-              }).catch(err => console.error("Gagal sinkron massal Google Sheets:", err));
+                body: JSON.stringify({ action: "update", data: massPayload }),
+              }).catch((err) =>
+                console.error("Gagal sinkron massal Google Sheets:", err),
+              );
             }
           }
         }
@@ -304,10 +434,12 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         return { success: true, productionId: headerId };
       } catch (dbErr: any) {
         console.error("Database error details:", dbErr);
-        return { success: false, error: dbErr.message || "Gagal menyimpan laporan ke database." };
+        return {
+          success: false,
+          error: dbErr.message || "Gagal menyimpan laporan ke database.",
+        };
       }
     }
-
 
     if (validated.tanggalPotong && !validated.panelNo) {
       console.log("Mock Mode: Berhasil mensimulasikan update potong kain", {
@@ -320,29 +452,33 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     }
 
     // 3. Fallback/Mock Mode jika database belum dikonfigurasi (Demo aman)
-    console.log("Mock Mode: Berhasil mensimulasikan penyimpanan produksi rajut", {
-      headerId,
-      tgl,
-      tanggalJam,
-      validated,
-    });
+    console.log(
+      "Mock Mode: Berhasil mensimulasikan penyimpanan produksi rajut",
+      {
+        headerId,
+        tgl,
+        tanggalJam,
+        validated,
+      },
+    );
 
     // C. Trigger Sinkronisasi Google Sheets (secara asinkron) bahkan di Mock Mode
-    const sheetUrlMock = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+    const sheetUrlMock =
+      process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
     if (sheetUrlMock) {
       const payloadMock = detailData.map((detail: any) => ({
         "ID Laporan": headerId,
         "Tanggal Produksi": tgl || "",
         "Tanggal & Jam": tanggalJam,
         "Tanggal Potong": validated.tanggalPotong || "",
-        "Mesin": validated.nomorMc || "",
-        "Pick": validated.pick || "",
-        "Course": validated.course || "",
-        "RPM": validated.rpm ?? "",
-        "Operator": validated.pic || validated.operatorId?.[0] || "",
-        "Grup": validated.grupName || validated.groupId || "",
-        "Design": validated.designName || validated.designId || "",
-        "Panel": validated.tanggalPotong ? "" : validated.panelNo || "",
+        Mesin: validated.nomorMc || "",
+        Pick: validated.pick || "",
+        Course: validated.course || "",
+        RPM: validated.rpm ?? "",
+        Operator: validated.pic || validated.operatorId?.[0] || "",
+        Grup: validated.grupName || validated.groupId || "",
+        Design: validated.designName || validated.designId || "",
+        Panel: validated.tanggalPotong ? "" : validated.panelNo || "",
         "Potongan Ke": validated.potonganKe ?? "",
         "No Order": validated.noOrderBarang || "",
         "No Customer": validated.noCustomer || "",
@@ -356,18 +492,17 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
         "Roll No": detail.roll_no || "",
         "Mesin Stop?": detail.indikator_stop ? "Ya" : "Tidak",
         "Kategori Masalah": detail.kategori_masalah || "",
-        "Detail Masalah": detail.detail_masalah || "",
         "Spesifik Masalah": detail.spesifik_masalah || "",
-        "Keterangan Cacat": detail.keterangan_cacat || ""
+        "Keterangan Cacat": detail.keterangan_cacat || detail.jenisLaporan || "",
       }));
 
       fetch(sheetUrlMock, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payloadMock)
-      }).catch(err => console.error("Gagal sinkron Google Sheets:", err));
+        body: JSON.stringify(payloadMock),
+      }).catch((err) => console.error("Gagal sinkron Google Sheets:", err));
     }
-    
+
     // Delay simulasi jaringan
     await new Promise((resolve) => setTimeout(resolve, 800));
 
@@ -375,13 +510,16 @@ export async function createProductionReport(inputData: ProductionFormInput): Pr
     return { success: true, productionId: headerId };
   } catch (err: any) {
     console.error("Server action error:", err);
-    return { success: false, error: err.message || "Terjadi kesalahan sistem saat memproses laporan." };
+    return {
+      success: false,
+      error: err.message || "Terjadi kesalahan sistem saat memproses laporan.",
+    };
   }
 }
 
 export async function uploadProductionPhoto(
   base64Data: string,
-  fileName: string
+  fileName: string,
 ): Promise<{ success: boolean; publicUrl?: string; error?: string }> {
   try {
     const supabase = await createClient();
@@ -410,16 +548,26 @@ export async function uploadProductionPhoto(
     return { success: true, publicUrl: publicUrlData.publicUrl };
   } catch (err: any) {
     console.error("Server photo upload failed:", err);
-    return { success: false, error: err.message || "Gagal mengunggah foto ke server." };
+    return {
+      success: false,
+      error: err.message || "Gagal mengunggah foto ke server.",
+    };
   }
 }
 
-export async function getLastPanelNoByPotongan(potonganKe: number, nomorMc: string): Promise<{ success: boolean; nextPanelNo?: number; error?: string }> {
+export async function getLastPanelNoByPotongan(
+  potonganKe: number,
+  nomorMc: string,
+): Promise<{ success: boolean; nextPanelNo?: number; error?: string }> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseAnonKey || supabaseAnonKey === "your_supabase_anon_key_here") {
+    if (
+      !supabaseUrl ||
+      !supabaseAnonKey ||
+      supabaseAnonKey === "your_supabase_anon_key_here"
+    ) {
       return { success: true, nextPanelNo: 1 };
     }
 
@@ -431,23 +579,31 @@ export async function getLastPanelNoByPotongan(potonganKe: number, nomorMc: stri
       .eq("nomor_mc", nomorMc)
       .not("panel_no", "is", null)
       .not("panel_no", "eq", "METERAN")
-      .order("tanggal_jam", { ascending: false })
-      .limit(1);
+      .not("panel_no", "like", "%GAGAL%");
 
     if (error) {
-      console.error("Error fetching last panel_no:", error);
+      console.error("Error fetching panel_no:", error);
       return { success: false, error: error.message };
     }
 
-    if (data && data.length > 0 && (data as any[])[0].panel_no != null) {
-      // Ekstrak angka jika formatnya string misal "1"
-      const lastNumberMatch = (data as any[])[0].panel_no.match(/\d+$/);
-      if (lastNumberMatch) {
-        return { success: true, nextPanelNo: parseInt(lastNumberMatch[0], 10) + 1 };
+    if (data && data.length > 0) {
+      let maxPanelNo = 0;
+      for (const row of data as any[]) {
+        if (row.panel_no != null) {
+          // Ekstrak angka jika formatnya string misal "1"
+          const lastNumberMatch = String(row.panel_no).match(/\d+$/);
+          if (lastNumberMatch) {
+            const num = parseInt(lastNumberMatch[0], 10);
+            if (num > maxPanelNo) maxPanelNo = num;
+          } else {
+            const num = parseInt(row.panel_no, 10);
+            if (!isNaN(num) && num > maxPanelNo) maxPanelNo = num;
+          }
+        }
       }
-      const num = parseInt((data as any[])[0].panel_no, 10);
-      if (!isNaN(num)) {
-        return { success: true, nextPanelNo: num + 1 };
+      
+      if (maxPanelNo > 0) {
+        return { success: true, nextPanelNo: maxPanelNo + 1 };
       }
     }
 
@@ -457,7 +613,7 @@ export async function getLastPanelNoByPotongan(potonganKe: number, nomorMc: stri
     return { success: false, error: err.message };
   }
 }
-export async function searchEmployeeHistory(filters: { 
+export async function searchEmployeeHistory(filters: {
   date?: string;
   nomor_mc?: string;
   group_id?: string;
@@ -466,46 +622,71 @@ export async function searchEmployeeHistory(filters: {
   potongan_ke?: string;
   tanggal_potong?: string;
   no_customer?: string;
-}): Promise<{ success: boolean; data?: any[]; error?: string }> {
+  page?: number;
+  perPage?: number;
+  sortBy?: "time" | "downtime" | null;
+  sortDir?: "asc" | "desc" | null;
+}): Promise<{
+  success: boolean;
+  data?: any[];
+  total?: number;
+  error?: string;
+}> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseAnonKey || supabaseAnonKey === "your_supabase_anon_key_here") {
+    if (
+      !supabaseUrl ||
+      !supabaseAnonKey ||
+      supabaseAnonKey === "your_supabase_anon_key_here"
+    ) {
       // Mock data for demo
       return { success: true, data: [] };
     }
 
     const supabase = await createClient();
+    let selectFields =
+      "id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, no_customer, panel_no, nomor_mc, total_downtime_detik, operators(nama_operator), groups(nama_grup), design_id, production_details(pcs_index, kategori_masalah, detail_masalah, keterangan_cacat, jml_hasil_produksi, meter_kain), created_by_name, tanggal_potong, pick, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir";
+
+    // Prepare base query with exact count
     let query = supabase
       .from("production_headers")
-      .select("id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, panel_no, nomor_mc, total_downtime_detik, operators(nama_operator), groups(nama_grup), design_id, production_details(kategori_masalah), created_by_name")
-      .order("tanggal_jam", { ascending: false })
-      .limit(100);
+      .select(selectFields, { count: "exact" });
 
-    // Filter by current user account (penanggung jawab) if not admin/manager
-    const { data: authData } = await supabase.auth.getUser();
-    if (authData?.user) {
-      const fullName = authData.user.user_metadata?.full_name;
-      const { data: profile } = await supabase.from('user_profiles').select('role').eq('id', authData.user.id).single();
-      const currentRole = profile?.role || 'operator';
-      
-      if (currentRole !== 'admin' && currentRole !== 'manager' && fullName) {
-         query = query.eq('created_by_name', fullName);
-      }
+    // Sorting
+    const sortField =
+      filters.sortBy === "downtime" ? "total_downtime_detik" : "tanggal_jam";
+    const ascending = filters.sortDir === "asc";
+
+    // Apply default order if not provided
+    if (filters.sortBy) {
+      query = query.order(sortField, { ascending });
+    } else {
+      query = query.order("tanggal_jam", { ascending: false });
     }
 
+    // Removed created_by_name restriction to allow searching all history
+
     if (filters.date) query = query.eq("tgl", filters.date);
-    if (filters.nomor_mc) query = query.ilike("nomor_mc", `%${filters.nomor_mc}%`);
-    if (filters.group_id) query = query.eq("group_id", parseInt(filters.group_id));
-    
+    if (filters.nomor_mc)
+      query = query.ilike("nomor_mc", `%${filters.nomor_mc}%`);
+    if (filters.group_id)
+      query = query.eq("group_id", parseInt(filters.group_id));
+
     if (filters.operator_ids && filters.operator_ids.length > 0) {
       // Fetch operator names first to search in 'pic'
-      const { data: opData } = await supabase.from("operators").select("id, nama_operator").in("id", filters.operator_ids.map(id => parseInt(id)));
-      
+      const { data: opData } = await supabase
+        .from("operators")
+        .select("id, nama_operator")
+        .in(
+          "id",
+          filters.operator_ids.map((id) => parseInt(id)),
+        );
+
       let orConditions: string[] = [];
       if (opData && opData.length > 0) {
-        opData.forEach(op => {
+        opData.forEach((op) => {
           orConditions.push(`operator_id.eq.${op.id}`);
           if (op.nama_operator) {
             orConditions.push(`pic.ilike.%${op.nama_operator}%`);
@@ -513,40 +694,159 @@ export async function searchEmployeeHistory(filters: {
         });
         query = query.or(orConditions.join(","));
       } else {
-        query = query.in("operator_id", filters.operator_ids.map(id => parseInt(id)));
+        query = query.in(
+          "operator_id",
+          filters.operator_ids.map((id) => parseInt(id)),
+        );
       }
     }
 
-    if (filters.design_id) query = query.ilike("design_id", `%${filters.design_id}%`);
-    if (filters.potongan_ke) query = query.eq("potongan_ke", parseInt(filters.potongan_ke));
-    if (filters.tanggal_potong) query = query.eq("tanggal_potong", filters.tanggal_potong);
-    if (filters.no_customer) query = query.ilike("no_customer", `%${filters.no_customer}%`);
+    if (filters.design_id)
+      query = query.ilike("design_id", `%${filters.design_id}%`);
+    if (filters.potongan_ke)
+      query = query.eq("potongan_ke", parseInt(filters.potongan_ke));
+    if (filters.tanggal_potong)
+      query = query.eq("tanggal_potong", filters.tanggal_potong);
+    if (filters.no_customer)
+      query = query.ilike("no_customer", `%${filters.no_customer}%`);
 
-    const { data, error } = await query;
+    // Removed pagination from DB query because we need to group by batch first
+    // We will fetch a large limit of matched rows and group them in memory
+    const { data, error } = await query.limit(5000);
 
     if (error) {
       console.error("Error fetching history:", error);
       return { success: false, error: error.message };
     }
 
-    return { success: true, data: data || [] };
+    // Grouping by Batch (nomor_mc + design_id + potongan_ke + tgl)
+    const batchesMap = new Map<string, any>();
+
+    (data || []).forEach((row: any) => {
+      const key = `${row.nomor_mc}_${row.design_id}_${row.potongan_ke}_${row.tgl}`;
+      if (!batchesMap.has(key)) {
+        batchesMap.set(key, {
+          batch_id: key,
+          nomor_mc: row.nomor_mc,
+          design_id: row.design_id,
+          potongan_ke: row.potongan_ke,
+          tgl: row.tgl,
+          tanggal_potong: row.tanggal_potong,
+          no_order_barang: row.no_order_barang,
+          no_customer: row.no_customer,
+          pick: row.pick,
+          course: row.course,
+          rpm: row.rpm,
+          status_matching: row.status_matching,
+          jenis_benang_dasar: row.jenis_benang_dasar,
+          liner: row.liner,
+          heavy: row.heavy,
+          shadow: row.shadow,
+          pinggiran: row.pinggiran,
+          // Aggregates
+          total_panels: 0,
+          total_downtime_detik: 0,
+          waktu_input_terakhir: row.tanggal_jam,
+          operators: new Set(),
+          panels: [], // to store individual panel info if needed
+          is_meter: false
+        });
+      }
+
+      const batch = batchesMap.get(key);
+      let currentMaxPanel = 0;
+      if (row.panel_no && !isNaN(parseInt(row.panel_no))) {
+        currentMaxPanel = Math.max(currentMaxPanel, parseInt(row.panel_no));
+      }
+      if (row.production_details && Array.isArray(row.production_details)) {
+        row.production_details.forEach((det: any) => {
+          if (det.pcs_index && !isNaN(parseInt(det.pcs_index))) {
+            currentMaxPanel = Math.max(currentMaxPanel, parseInt(det.pcs_index));
+          }
+        });
+      }
+      if (row.pcs && !isNaN(parseInt(row.pcs))) {
+        currentMaxPanel = Math.max(currentMaxPanel, parseInt(row.pcs));
+      }
+      batch.total_panels = Math.max(batch.total_panels, currentMaxPanel);
+      batch.total_downtime_detik += row.total_downtime_detik || 0;
+      if (row.panel_no === "METERAN") batch.is_meter = true;
+      
+      const opName = row.created_by_name || row.pic || (row.operators ? row.operators.nama_operator : null);
+      if (opName) batch.operators.add(opName);
+
+      // update latest input time
+      if (row.tanggal_jam > batch.waktu_input_terakhir) {
+        batch.waktu_input_terakhir = row.tanggal_jam;
+      }
+      
+      // Since we just need the batch info for the main table, we don't strictly need to return all panels.
+      // But keeping them can be useful if we want to show a preview or just pass them along.
+      // However, fetching all panels for the modal is better done via another call or we can pass it here.
+      // We will pass it here to save an API call.
+      batch.panels.push(row);
+    });
+
+    let batches = Array.from(batchesMap.values()).map(b => ({
+      ...b,
+      operators_list: Array.from(b.operators).join(", ")
+    }));
+
+    // Re-apply sorting on the grouped batches
+    const batchSortField = filters.sortBy === "downtime" ? "total_downtime_detik" : "waktu_input_terakhir";
+    const batchAscending = filters.sortDir === "asc";
+
+    batches.sort((a, b) => {
+      let valA = a[batchSortField];
+      let valB = b[batchSortField];
+
+      if (typeof valA === "string" && typeof valB === "string") {
+        return batchAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      if (typeof valA === "number" && typeof valB === "number") {
+        return batchAscending ? valA - valB : valB - valA;
+      }
+      return 0;
+    });
+
+    const totalBatches = batches.length;
+
+    // Apply pagination on batches
+    let page = filters.page || 1;
+    let perPage = filters.perPage || 20;
+    const start = (page - 1) * perPage;
+    const end = start + perPage;
+    
+    const pagedBatches = batches.slice(start, end);
+
+    return {
+      success: true,
+      data: pagedBatches,
+      total: totalBatches,
+    };
   } catch (err: any) {
     console.error("Server action error in searchEmployeeHistory:", err);
     return { success: false, error: err.message || "Gagal memuat riwayat." };
   }
 }
 
-export async function getEmployeeHistoryDetail(headerId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+export async function getEmployeeHistoryDetail(
+  headerId: string,
+): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseAnonKey || supabaseAnonKey === "your_supabase_anon_key_here") {
+    if (
+      !supabaseUrl ||
+      !supabaseAnonKey ||
+      supabaseAnonKey === "your_supabase_anon_key_here"
+    ) {
       return { success: false, error: "Database not configured." };
     }
 
     const supabase = await createClient();
-    
+
     // Fetch Header with relations
     const { data: header, error: headerError } = await supabase
       .from("production_headers")
@@ -565,32 +865,54 @@ export async function getEmployeeHistoryDetail(headerId: string): Promise<{ succ
 
     if (detailsError) return { success: false, error: detailsError.message };
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       data: {
         ...((header || {}) as Record<string, any>),
-        details: details || []
-      }
+        details: details || [],
+      },
     };
   } catch (err: any) {
     console.error("Server action error in getEmployeeHistoryDetail:", err);
-    return { success: false, error: err.message || "Gagal memuat detail riwayat." };
+    return {
+      success: false,
+      error: err.message || "Gagal memuat detail riwayat.",
+    };
   }
 }
 
-export async function updateProductionReport(headerId: string, data: any): Promise<{ success: boolean; error?: string }> {
+export async function updateProductionReport(
+  headerId: string,
+  data: any,
+): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log("UPDATE PRODUCTION REPORT DATA:", JSON.stringify(data, null, 2));
+    console.log(
+      "UPDATE PRODUCTION REPORT DATA:",
+      JSON.stringify(data, null, 2),
+    );
     const supabase = await createClient();
-    
+
     // Parse values
     const rpmNum = data.rpm ? parseInt(data.rpm) : null;
     const potonganKeNum = data.potonganKe ? parseInt(data.potonganKe) : null;
-    const totalDowntimeNum = data.totalDowntime && parseInt(data.totalDowntime) > 0 ? parseInt(data.totalDowntime) : 0;
+    let totalDowntimeNum = 0;
+    if (data.downtimeEvents && data.downtimeEvents.length > 0) {
+      totalDowntimeNum = data.downtimeEvents.reduce(
+        (acc: number, curr: any) => acc + (curr.durasiDetik || 0),
+        0,
+      );
+    } else if (data.totalDowntime && parseInt(data.totalDowntime) > 0) {
+      totalDowntimeNum = parseInt(data.totalDowntime);
+    }
 
     // Cek duplikasi potongan_ke dan panel_no
+    // Izinkan panel yang sama jika operator berbeda (kasus Mesin Masih Stop lintas shift)
     if (potonganKeNum && data.panelNo) {
-      const { data: existingPanel } = await supabase
+      const operatorIdNum =
+        data.operatorId && !isNaN(parseInt(data.operatorId))
+          ? parseInt(data.operatorId)
+          : null;
+      let dupQuery = supabase
         .from("production_headers")
         .select("id")
         .eq("nomor_mc", data.nomorMc)
@@ -599,8 +921,17 @@ export async function updateProductionReport(headerId: string, data: any): Promi
         .neq("id", headerId)
         .limit(1);
 
+      if (operatorIdNum) {
+        dupQuery = dupQuery.eq("operator_id", operatorIdNum);
+      }
+
+      const { data: existingPanel } = await dupQuery;
+
       if (existingPanel && existingPanel.length > 0) {
-        return { success: false, error: `Potongan ke-${potonganKeNum} dengan Panel ${data.panelNo} sudah ada!` };
+        return {
+          success: false,
+          error: `Potongan ke-${potonganKeNum} dengan Panel ${data.panelNo} sudah ada untuk operator ini!`,
+        };
       }
     }
 
@@ -608,7 +939,12 @@ export async function updateProductionReport(headerId: string, data: any): Promi
     const { error: headerError } = await supabase
       .from("production_headers")
       .update({
-        operator_id: data.operatorId && data.operatorId.length > 0 && !isNaN(parseInt(data.operatorId[0])) ? parseInt(data.operatorId[0]) : null,
+        operator_id:
+          data.operatorId &&
+          data.operatorId.length > 0 &&
+          !isNaN(parseInt(data.operatorId[0]))
+            ? parseInt(data.operatorId[0])
+            : null,
         group_id: data.groupId,
         design_id: data.designId,
         nomor_mc: data.nomorMc || null,
@@ -629,6 +965,10 @@ export async function updateProductionReport(headerId: string, data: any): Promi
         shadow: data.shadow || null,
         pinggiran: data.pinggiran || null,
         total_downtime_detik: totalDowntimeNum,
+        downtime_events:
+          data.downtimeEvents && data.downtimeEvents.length > 0
+            ? JSON.stringify(data.downtimeEvents)
+            : null,
       })
       .eq("id", headerId);
 
@@ -646,23 +986,62 @@ export async function updateProductionReport(headerId: string, data: any): Promi
     if (data.pcsData && data.pcsData.length > 0) {
       const detailData = data.pcsData.map((pcsItem: any, idx: number) => {
         const detailId = generateExcelStyleId() + "-" + idx;
-        const jmlHasilNum = pcsItem.jmlHasilProduksi ? parseInt(pcsItem.jmlHasilProduksi) : null;
-        const pcsIndexNum = pcsItem.pcsIndex ? parseInt(pcsItem.pcsIndex) : null;
-
-        const kategoriStr = pcsItem.kategoriMasalah && pcsItem.kategoriMasalah.length > 0 
-          ? (Array.isArray(pcsItem.kategoriMasalah) ? pcsItem.kategoriMasalah.join(', ') : pcsItem.kategoriMasalah) 
+        const jmlHasilNum = pcsItem.jmlHasilProduksi
+          ? parseInt(pcsItem.jmlHasilProduksi)
           : null;
+        const pcsIndexNum = pcsItem.pcsIndex
+          ? parseInt(pcsItem.pcsIndex)
+          : null;
+
+        // Filter event khusus untuk PCS ini atau "Semua"
+        const matchedEvents = data.downtimeEvents
+          ? data.downtimeEvents.filter(
+              (e: any) =>
+                !e.pcsKe ||
+                e.pcsKe === "Semua" ||
+                e.pcsKe
+                  .split(",")
+                  .map((x: string) => x.trim())
+                  .includes((idx + 1).toString()),
+            )
+          : [];
+
+        let kategoriStr = null;
+        let detailStr = null;
+        let indikatorStop = false;
+
+        if (matchedEvents.length > 0) {
+          const allCats = new Set<string>();
+          const allDetails = new Set<string>();
+
+          matchedEvents.forEach((e: any) => {
+            if (e.problems && Array.isArray(e.problems)) {
+              e.problems.forEach((p: any) => {
+                if (p.kategori) allCats.add(p.kategori);
+                if (p.details && Array.isArray(p.details)) {
+                  p.details.forEach((d: string) => allDetails.add(d));
+                }
+              });
+            } else if (e.kategori) {
+              allCats.add(e.kategori);
+              if (e.detail) allDetails.add(e.detail);
+            }
+          });
+
+          kategoriStr = Array.from(allCats).join(", ");
+          detailStr = Array.from(allDetails).join(", ");
+          indikatorStop = true;
+        }
 
         return {
           id: detailId,
           header_id: headerId,
           pcs_index: pcsIndexNum,
           jml_hasil_produksi: jmlHasilNum,
-          indikator_stop: pcsItem.indikatorStop || false,
+          indikator_stop: indikatorStop,
           kategori_masalah: kategoriStr,
-          detail_masalah: pcsItem.detailMasalah || null,
-          spesifik_masalah: pcsItem.spesifikMasalah || null,
-          keterangan_cacat: pcsItem.keteranganCacat || null,
+          detail_masalah: detailStr,
+          keterangan_cacat: null,
           meter_kain: pcsItem.meterKain || null,
           roll_no: pcsItem.rollNo || null,
         };
@@ -673,7 +1052,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
         .insert(detailData);
 
       if (insertError) throw new Error(insertError.message);
-      
+
       // Update tanggal_potong massal untuk potongan_ke yang sama
       if (data.tanggalPotong && data.nomorMc && potonganKeNum) {
         // Ambil ID laporan sebelumnya yang terkait
@@ -691,7 +1070,9 @@ export async function updateProductionReport(headerId: string, data: any): Promi
           .eq("potongan_ke", potonganKeNum);
 
         // Trigger sinkronisasi update ke Google Sheets untuk panel-panel sebelumnya
-        const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+        const sheetUrl =
+          process.env.GOOGLE_SHEET_URL ||
+          process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
         if (sheetUrl && previousHeaders && previousHeaders.length > 0) {
           let massPayload: any[] = [];
           for (const h of previousHeaders as any[]) {
@@ -700,7 +1081,7 @@ export async function updateProductionReport(headerId: string, data: any): Promi
               massPayload.push({
                 id_header: h.id,
                 pcs_index: detail.pcs_index || "",
-                tanggal_potong: data.tanggalPotong
+                tanggal_potong: data.tanggalPotong,
               });
             }
           }
@@ -709,17 +1090,32 @@ export async function updateProductionReport(headerId: string, data: any): Promi
             fetch(sheetUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "update", data: massPayload })
-            }).catch(err => console.error("Gagal sinkron massal Google Sheets:", err));
+              body: JSON.stringify({ action: "update", data: massPayload }),
+            }).catch((err) =>
+              console.error("Gagal sinkron massal Google Sheets:", err),
+            );
           }
         }
       }
-      
-      const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+
+      const sheetUrl =
+        process.env.GOOGLE_SHEET_URL ||
+        process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
       if (sheetUrl) {
         const payload = detailData.map((detail: any) => ({
           id_header: headerId,
-          tanggal_jam: data.tanggalJam || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()),
+          tanggal_jam:
+            data.tanggalJam ||
+            new Intl.DateTimeFormat("sv-SE", {
+              timeZone: "Asia/Jakarta",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: false,
+            }).format(new Date()),
           mesin: data.nomorMc || "",
           pick: data.pick || "",
           course: data.course || "",
@@ -744,19 +1140,28 @@ export async function updateProductionReport(headerId: string, data: any): Promi
           meter_awal: "",
           meter_akhir: "",
           total_produksi_meter: "",
-          tanggal_potong: data.tanggalPotong || ""
+          tanggal_potong: data.tanggalPotong || "",
         }));
 
         fetch(sheetUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update", id_header: headerId, data: payload })
-        }).then(async (res) => {
-          if (res.ok) {
-            const client = await createClient();
-            await client.from("production_headers").update({ is_synced_to_sheet: true }).eq("id", headerId);
-          }
-        }).catch(err => console.error("Gagal sinkron Google Sheets:", err));
+          body: JSON.stringify({
+            action: "update",
+            id_header: headerId,
+            data: payload,
+          }),
+        })
+          .then(async (res) => {
+            if (res.ok) {
+              const client = await createClient();
+              await client
+                .from("production_headers")
+                .update({ is_synced_to_sheet: true })
+                .eq("id", headerId);
+            }
+          })
+          .catch((err) => console.error("Gagal sinkron Google Sheets:", err));
       }
     }
 
@@ -764,7 +1169,9 @@ export async function updateProductionReport(headerId: string, data: any): Promi
     return { success: true };
   } catch (err: any) {
     console.error("Error updating report:", err);
-    return { success: false, error: err.message || "Gagal memperbarui data laporan." };
+    return {
+      success: false,
+      error: err.message || "Gagal memperbarui data laporan.",
+    };
   }
 }
-

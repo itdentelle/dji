@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Save, Settings2, Trash2 } from "lucide-react";
+import { X, Save, Settings2, Trash2, Plus, Minus } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { UseFormRegister, FieldErrors, UseFormWatch } from "react-hook-form";
 import { ProductionFormInput } from "@/lib/schemas";
@@ -15,6 +15,8 @@ interface ProductionHeaderModalProps {
   activeShiftName: string;
   onClearHeader: () => void;
   highlightPotonganKe?: boolean;
+  pcsCount?: number;
+  onChangePcsCount?: (count: number) => void;
 }
 
 export default function ProductionHeaderModal({
@@ -27,7 +29,9 @@ export default function ProductionHeaderModal({
   operators,
   activeShiftName,
   onClearHeader,
-  highlightPotonganKe
+  highlightPotonganKe,
+  pcsCount,
+  onChangePcsCount,
 }: ProductionHeaderModalProps) {
   const { user } = useAuth();
   
@@ -72,11 +76,48 @@ export default function ProductionHeaderModal({
             
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nama Operator (Shift {activeShiftName}) *</label>
-              <div className="h-11 px-4 rounded-xl bg-slate-100 border border-slate-200 text-sm font-bold text-slate-500 flex items-center shadow-inner cursor-not-allowed">
-                {user?.fullName || "Memuat..."}
-              </div>
-              <input type="hidden" value="AUTO" {...register("operatorId")} />
+              <select {...register("operatorId")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all">
+                <option value="">-- Pilih Operator --</option>
+                {operators.map(op => <option key={op.id} value={op.id.toString()}>{op.name}</option>)}
+              </select>
+              {errors.operatorId && <span className="text-red-500 text-[10px] font-bold">{errors.operatorId.message as string}</span>}
             </div>
+
+            {/* Target Jumlah PCS Stepper (Eye-catching) */}
+            {pcsCount !== undefined && onChangePcsCount && (
+              <div className="mt-2 p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/5 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-xs font-black text-amber-800 uppercase tracking-wider">
+                    Jumlah PCS per Panel *
+                  </h4>
+                  <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
+                    Konfigurasi jumlah target potongan PCS dalam satu panel/roll kain.
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 bg-white p-1 rounded-xl border border-amber-200 shadow-sm shrink-0 self-center sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (pcsCount > 1) onChangePcsCount(pcsCount - 1);
+                    }}
+                    disabled={pcsCount <= 1}
+                    className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-50 border border-slate-200 text-slate-600 hover:bg-amber-100 hover:text-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 shadow-sm"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <div className="text-2xl font-black text-amber-700 min-w-[2.5rem] text-center">
+                    {pcsCount}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onChangePcsCount(pcsCount + 1)}
+                    className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-50 border border-slate-200 text-slate-600 hover:bg-amber-100 hover:text-amber-700 transition-all active:scale-95 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">

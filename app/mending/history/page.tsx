@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { searchMendingHistory } from "@/actions/mending-actions";
 import {
   Search,
@@ -25,7 +26,6 @@ import {
   HelpCircle,
 } from "lucide-react";
 import ProductTour, { ProductTourStep } from "@/components/ProductTour";
-import MendingDetailModal from "@/components/MendingDetailModal";
 
 const MENDING_HISTORY_TOUR_STEPS: ProductTourStep[] = [
   {
@@ -61,6 +61,8 @@ const MENDING_OPERATORS = [
 ];
 
 export default function MendingHistoryPage() {
+  const router = useRouter();
+  
   const [filters, setFilters] = useState<{
     date: string;
     nomor_mc: string;
@@ -84,19 +86,21 @@ export default function MendingHistoryPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
 
-  // Detail Modal State
-  const [selectedData, setSelectedData] = useState<any | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalData, setTotalData] = useState(0);
+
+  // Removed Detail Modal State
 
   // Load from session storage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const today = new Date().toISOString().split("T")[0];
       const cachedFilters = sessionStorage.getItem("dji_mending_history_filters");
-      const cachedData = sessionStorage.getItem("dji_mending_history_data");
+      const cachedData = sessionStorage.getItem("dji_mending_history_data_v2");
       const cachedSearched = sessionStorage.getItem("dji_mending_history_searched");
 
-      let initialFilters = { ...filters, date: today };
+      let initialFilters = { ...filters };
 
       if (cachedFilters) {
         try {
@@ -119,12 +123,15 @@ export default function MendingHistoryPage() {
       } else {
         // Auto fetch today's data on initial mount
         setIsLoading(true);
-        searchMendingHistory(initialFilters).then((res) => {
+        searchMendingHistory({ ...initialFilters, page: 1, limit: 15 }).then((res) => {
           if (res.success && res.data) {
             setData(res.data);
+            setCurrentPage(res.page || 1);
+            setTotalPages(res.totalPages || 1);
+            setTotalData(res.total || 0);
             setHasSearched(true);
             sessionStorage.setItem("dji_mending_history_filters", JSON.stringify(initialFilters));
-            sessionStorage.setItem("dji_mending_history_data", JSON.stringify(res.data));
+            sessionStorage.setItem("dji_mending_history_data_v2", JSON.stringify(res.data));
             sessionStorage.setItem("dji_mending_history_searched", "true");
           }
           setIsLoading(false);
@@ -135,7 +142,7 @@ export default function MendingHistoryPage() {
     }
   }, []);
 
-  const handleSearch = async (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent, page: number = 1) => {
     if (e) e.preventDefault();
     setIsLoading(true);
     setErrorMsg(null);
@@ -146,12 +153,15 @@ export default function MendingHistoryPage() {
         JSON.stringify(filters),
       );
 
-      const res = await searchMendingHistory(filters);
+      const res = await searchMendingHistory({ ...filters, page, limit: 15 });
       if (res.success && res.data) {
         setData(res.data);
+        setCurrentPage(res.page || 1);
+        setTotalPages(res.totalPages || 1);
+        setTotalData(res.total || 0);
         setHasSearched(true);
         sessionStorage.setItem(
-          "dji_mending_history_data",
+          "dji_mending_history_data_v2",
           JSON.stringify(res.data),
         );
         sessionStorage.setItem("dji_mending_history_searched", "true");
@@ -166,8 +176,7 @@ export default function MendingHistoryPage() {
   };
 
   const handleOpenDetail = (d: any) => {
-    setSelectedData(d);
-    setIsModalOpen(true);
+    router.push(`/mending/history/detail?id=${d.id}`);
   };
 
   return (
@@ -433,7 +442,7 @@ export default function MendingHistoryPage() {
               Hasil Pencarian
             </h2>
             <div className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
-              {data.length} Data Ditemukan
+              {totalData} Data Ditemukan
             </div>
           </div>
 
@@ -462,6 +471,11 @@ export default function MendingHistoryPage() {
                         if (item.hasil_mending === "BS") gradeBS++;
                       });
 
+                      const isMeteran = d.items?.[0]?.detail?.header?.panel_no === "METERAN";
+                      const gradeAVal = isMeteran ? (d.mending_grade_a ?? 0) : gradeA;
+                      const gradeBVal = isMeteran ? (d.mending_grade_b ?? 0) : gradeB;
+                      const gradeBSVal = isMeteran ? (d.mending_grade_bs ?? 0) : gradeBS;
+
                       return (
                         <tr
                           key={d.id || idx}
@@ -481,8 +495,8 @@ export default function MendingHistoryPage() {
                             <div className="font-bold text-slate-800">
                               {d.nomor_mc || "-"}
                             </div>
-                            <div className="text-xs text-slate-500">
-                              {d.design_id || "-"}
+                            <div className="text-xs text-slate-500 font-medium">
+                              {d.design_id || "-"} {d.potongan_ke ? <span className="ml-1 opacity-75">• Potongan Ke-{d.potongan_ke}</span> : ""}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -496,30 +510,30 @@ export default function MendingHistoryPage() {
                                 PCS Ke-{d.pcs_index || d.detail?.pcs_index}
                               </span>
                               <span className="text-xs text-slate-500 font-medium mt-0.5">
-                                {d.total_panel || d.items?.length || 0} Panel
+                                {isMeteran ? `${d.mending_grade_a ?? 0} Meter` : `${d.total_panel || d.items?.length || 0} Panel`}
                               </span>
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
                             <div className="text-sm font-bold text-slate-800 flex flex-wrap items-center justify-center gap-3">
-                              {gradeA > 0 && (
+                              {gradeAVal > 0 && (
                                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 text-emerald-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
-                                  A: {gradeA}
+                                  A: {gradeAVal}{isMeteran ? " M" : ""}
                                 </span>
                               )}
-                              {gradeB > 0 && (
+                              {gradeBVal > 0 && (
                                 <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 text-amber-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
-                                  B: {gradeB}
+                                  B: {gradeBVal}{isMeteran ? " T" : ""}
                                 </span>
                               )}
-                              {gradeBS > 0 && (
+                              {gradeBSVal > 0 && (
                                 <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 text-rose-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
-                                  BS: {gradeBS}
+                                  BS: {gradeBSVal}{isMeteran ? " T" : ""}
                                 </span>
                               )}
-                              {gradeA === 0 &&
-                                gradeB === 0 &&
-                                gradeBS === 0 && <span>-</span>}
+                              {gradeAVal === 0 &&
+                                gradeBVal === 0 &&
+                                gradeBSVal === 0 && <span>-</span>}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
@@ -537,6 +551,34 @@ export default function MendingHistoryPage() {
                   </tbody>
                 </table>
               </div>
+              
+              {/* Pagination UI */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50">
+                  <div className="text-sm text-slate-500 font-medium">
+                    Menampilkan <span className="text-slate-900 font-bold">{(currentPage - 1) * 15 + 1}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * 15, totalData)}</span> dari <span className="text-slate-900 font-bold">{totalData}</span> riwayat
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleSearch(undefined, currentPage - 1)}
+                      disabled={currentPage === 1 || isLoading}
+                      className="px-3 py-1.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      Sebelumnya
+                    </button>
+                    <div className="px-3 py-1.5 text-sm font-black text-sky-700 bg-sky-50 border border-sky-100 rounded-lg min-w-[2.5rem] text-center">
+                      {currentPage}
+                    </div>
+                    <button
+                      onClick={() => handleSearch(undefined, currentPage + 1)}
+                      disabled={currentPage >= totalPages || isLoading}
+                      className="px-3 py-1.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      Selanjutnya
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
@@ -561,12 +603,6 @@ export default function MendingHistoryPage() {
         onClose={() => setIsTourOpen(false)}
       />
 
-      {/* Detail Modal */}
-      <MendingDetailModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        mendingData={selectedData}
-      />
     </div>
   );
 }

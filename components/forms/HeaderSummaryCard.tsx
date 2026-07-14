@@ -16,6 +16,7 @@ interface HeaderSummaryCardProps {
   onEdit: () => void;
   statusMatching: string;
   potonganKe?: string | number;
+  pcsCount?: number;
   showEditButton?: boolean;
   showEditButtonPlacement?: "right" | "bottom";
 }
@@ -28,6 +29,7 @@ export default function HeaderSummaryCard({
   onEdit,
   statusMatching,
   potonganKe,
+  pcsCount,
   showEditButton = true,
   showEditButtonPlacement = "right",
 }: HeaderSummaryCardProps) {
@@ -86,6 +88,20 @@ export default function HeaderSummaryCard({
               {potonganKe || "-"}
             </p>
           </div>
+
+          {pcsCount !== undefined && (
+            <div className="p-2.5 sm:p-3 lg:p-5 bg-amber-50/70 sm:col-span-2 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                  PCS:
+                </span>
+              </div>
+              <span className="px-3 py-1 bg-amber-500 text-white font-black text-sm rounded-lg shadow-sm">
+                {pcsCount} Pcs
+              </span>
+            </div>
+          )}
         </div>
 
         {showEditButton && (
@@ -106,13 +122,12 @@ export default function HeaderSummaryCard({
 
   return (
     <div
-      className={`bg-sky-50/80 border border-sky-100 rounded-2xl p-5 sm:p-6 shadow-sm mb-0 ${
-        isBottom
+      className={`bg-sky-50/80 border border-sky-100 rounded-2xl p-5 sm:p-6 shadow-sm mb-0 ${isBottom
           ? "flex flex-col items-stretch gap-3"
           : "flex flex-col lg:flex-row lg:items-center justify-between gap-5"
-      }`}
+        }`}
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 flex-1">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${pcsCount !== undefined ? 'xl:grid-cols-5' : 'xl:grid-cols-4'} gap-5 flex-1`}>
         {/* Mesin & Desain */}
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
@@ -174,6 +189,23 @@ export default function HeaderSummaryCard({
               </span>
               <span className="text-xl font-black text-slate-900 leading-tight truncate">
                 {potonganKe}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Jumlah PCS */}
+        {pcsCount !== undefined && (
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+              <FileText className="w-6 h-6" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Target PCS
+              </span>
+              <span className="text-xl font-black text-amber-700 leading-tight truncate">
+                {pcsCount} Pcs
               </span>
             </div>
           </div>

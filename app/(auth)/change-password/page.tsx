@@ -115,6 +115,7 @@ export default function ChangePasswordPage() {
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">Password Baru</label>
               <input
+                suppressHydrationWarning
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -127,6 +128,7 @@ export default function ChangePasswordPage() {
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">Konfirmasi Password Baru</label>
               <input
+                suppressHydrationWarning
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

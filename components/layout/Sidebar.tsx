@@ -23,6 +23,8 @@ import {
   Wrench,
   MoreHorizontal,
   QrCode,
+  PowerOff,
+  FileSpreadsheet,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -50,6 +52,12 @@ export default function Sidebar() {
           roles: ["admin", "manager"],
         },
         {
+          name: "Laporan Bulanan",
+          href: "/reports/monthly-machine",
+          icon: FileSpreadsheet,
+          roles: ["admin", "manager"],
+        },
+        {
           name: "Dashboard Pegawai",
           href: "/dashboard",
           icon: LayoutDashboard,
@@ -71,6 +79,12 @@ export default function Sidebar() {
           name: "Riwayat Input",
           href: "/history",
           icon: History,
+          roles: ["admin", "operator"],
+        },
+        {
+          name: "Lapor Mesin Off",
+          href: "/status-mesin",
+          icon: PowerOff,
           roles: ["admin", "operator"],
         },
       ],
@@ -121,6 +135,12 @@ export default function Sidebar() {
           icon: History,
           roles: ["admin", "mending"],
         },
+        {
+          name: "Laporan Produksi",
+          href: "/reports/mending-production",
+          icon: FileSpreadsheet,
+          roles: ["admin", "manager"],
+        },
       ],
     },
     {
@@ -131,6 +151,12 @@ export default function Sidebar() {
           name: "Chatbot AI",
           href: "/chatbot",
           icon: MessageSquare,
+          roles: ["admin", "manager"],
+        },
+        {
+          name: "Master Data",
+          href: "/master-data",
+          icon: FileSpreadsheet,
           roles: ["admin", "manager"],
         },
         {

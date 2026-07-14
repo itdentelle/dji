@@ -37,32 +37,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const fetchUser = async (session: any) => {
-      if (session?.user) {
-        // Fetch role from user_profiles table via server action to bypass RLS issues
-        const result = await getUserProfile(session.user.id);
-        const profile = result.success ? result.data : null;
-        const error = result.error;
+      try {
+        if (session?.user) {
+          // Fetch role from user_profiles table via server action to bypass RLS issues
+          const result = await getUserProfile(session.user.id);
+          const profile = result.success ? result.data : null;
+          const error = result.error;
 
-        if (profile && !error) {
-          const authUser: User = {
-            id: session.user.id,
-            email: session.user.email,
-            fullName: profile.full_name,
-            employeeId: profile.employee_id,
-            role: profile.role as UserRole,
-            forcePasswordChange: profile.force_password_change,
-          };
-          setUser(authUser);
-          setIsLoggedIn(true);
+          if (profile && !error) {
+            const authUser: User = {
+              id: session.user.id,
+              email: session.user.email,
+              fullName: profile.full_name,
+              employeeId: profile.employee_id,
+              role: profile.role as UserRole,
+              forcePasswordChange: profile.force_password_change,
+            };
+            setUser(authUser);
+            setIsLoggedIn(true);
+          } else {
+            setUser(null);
+            setIsLoggedIn(false);
+          }
         } else {
           setUser(null);
           setIsLoggedIn(false);
         }
-      } else {
+      } catch (err) {
+        console.error("Failed to fetch user:", err);
         setUser(null);
         setIsLoggedIn(false);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     // Check initial session

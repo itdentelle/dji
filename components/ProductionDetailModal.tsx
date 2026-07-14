@@ -248,6 +248,14 @@ export default function ProductionDetailModal({
                             {pcs.jml_hasil_produksi || 1} Hasil
                           </span>
                         </div>
+                        
+                        {(() => {
+                          const meterMatch = pcs.detail_masalah?.match(/\(Titik:\s*([\d.]+[a-zA-Z]*)\)/);
+                          const defectMeter = meterMatch ? meterMatch[1] : null;
+                          const cleanDetail = pcs.detail_masalah?.replace(/\s*\(Titik:\s*[\d.]+[a-zA-Z]*\)/g, '').trim();
+                          
+                          return (
+                            <>
 
                         {pcs.kategori_masalah ? (
                           <div className="space-y-2 mt-2 pt-2 border-t border-red-100/50">
@@ -262,10 +270,10 @@ export default function ProductionDetailModal({
                                 </span>
                               </div>
                             </div>
-                            {(pcs.spesifik_masalah || pcs.detail_masalah) && (
+                            {(pcs.spesifik_masalah || cleanDetail || pcs.detail_masalah) && (
                               <div className="pl-6 text-xs text-slate-600">
                                 <span className="font-semibold">Spesifik:</span>{" "}
-                                {pcs.spesifik_masalah || pcs.detail_masalah}
+                                {pcs.spesifik_masalah || cleanDetail || pcs.detail_masalah}
                               </div>
                             )}
                             {pcs.keterangan_cacat && (
@@ -286,9 +294,17 @@ export default function ProductionDetailModal({
 
                         {pcs.meter_kain && (
                           <div className="mt-2 text-xs font-semibold text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                            Meter: {pcs.meter_kain}
+                            Meter Total: {pcs.meter_kain}
                           </div>
                         )}
+                        {defectMeter && (
+                          <div className="mt-2 inline-flex items-center px-2.5 py-1 rounded-lg bg-orange-50 text-orange-600 border border-orange-200 text-xs font-bold gap-1.5">
+                            Titik Cacat: {defectMeter}
+                          </div>
+                        )}
+                        </>
+                      );
+                    })()}
                       </div>
                     ))}
                   </div>

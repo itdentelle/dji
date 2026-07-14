@@ -68,7 +68,7 @@ export async function getRealProductionsData(): Promise<{
       
       const mesinId = item.mesin_id || `KNIT-001`;
       
-      const actualOperator = item.created_by_name || item.pic || item.nama_operator || "Operator Unknown";
+      const actualOperator = item.pic || item.nama_operator || item.created_by_name || "Operator Unknown";
       
       return {
         id: item.id || `header_${item.header_id}_${Math.random().toString().slice(2, 8)}`,

@@ -22,6 +22,51 @@ import {
 import { getRealProductionsData } from "@/actions/dashboard-actions";
 import ProductTour, { ProductTourStep } from "@/components/ProductTour";
 
+const FALLBACK_OPERATORS = [
+  // Shift A
+  { id: 1, name: "Rohmat", shift: "A" },
+  { id: 2, name: "M.Alwi", shift: "A" },
+  { id: 3, name: "Anwar", shift: "A" },
+  { id: 4, name: "Jaya", shift: "A" },
+  { id: 5, name: "Riki S", shift: "A" },
+  { id: 6, name: "Sandi M", shift: "A" },
+  { id: 7, name: "Padlan", shift: "A" },
+  { id: 8, name: "Rissa A", shift: "A" },
+  { id: 9, name: "Devi K", shift: "A" },
+  { id: 10, name: "Novi S", shift: "A" },
+  { id: 11, name: "Udin", shift: "A" },
+  // Shift B
+  { id: 12, name: "Irfan", shift: "B" },
+  { id: 13, name: "Anton", shift: "B" },
+  { id: 14, name: "Ahmad S", shift: "B" },
+  { id: 15, name: "Saepudin", shift: "B" },
+  { id: 16, name: "Parid", shift: "B" },
+  { id: 17, name: "Noval", shift: "B" },
+  { id: 18, name: "Sigit", shift: "B" },
+  { id: 19, name: "Rani Y", shift: "B" },
+  { id: 20, name: "Yanti P", shift: "B" },
+  { id: 21, name: "Irma P", shift: "B" },
+  { id: 22, name: "Aris W", shift: "B" },
+  // Shift C
+  { id: 23, name: "Tubagus", shift: "C" },
+  { id: 24, name: "Andri Y", shift: "C" },
+  { id: 25, name: "Royana", shift: "C" },
+  { id: 26, name: "Komara", shift: "C" },
+  { id: 27, name: "Sopian", shift: "C" },
+  { id: 28, name: "Iki S", shift: "C" },
+  { id: 29, name: "Hardi", shift: "C" },
+  { id: 30, name: "Rini D", shift: "C" },
+  { id: 31, name: "Neneng", shift: "C" },
+  { id: 32, name: "Rina R", shift: "C" },
+  { id: 33, name: "Farhan", shift: "C" },
+];
+
+const FALLBACK_GROUPS = [
+  { id: 1, name: "A" },
+  { id: 2, name: "B" },
+  { id: 3, name: "C" },
+];
+
 const EMPLOYEE_DASHBOARD_TOUR_STEPS: ProductTourStep[] = [
   {
     target: "employee-dashboard-header",
@@ -276,6 +321,7 @@ const dummyData: Transaction[] = [
 export default function DashboardPage() {
   const { user } = useAuth();
   const [isTourOpen, setIsTourOpen] = useState(false);
+  const [selectedGrupId, setSelectedGrupId] = useState("");
   const [activeFilter, setActiveFilter] = useState<
     "ALL" | "LOLOS" | "EFISIENSI" | "PROBLEMS" | "NOL_PRODUKSI"
   >("ALL");
@@ -358,9 +404,6 @@ export default function DashboardPage() {
     }
     if (user) {
       loadLiveData();
-      if (user.role === "operator" && user.fullName) {
-        setActiveEmployeeName(user.fullName);
-      }
     }
   }, [user]);
 
@@ -776,36 +819,66 @@ export default function DashboardPage() {
 
   // KIOSK IDENTITY SELECTOR UI
   if (!activeEmployeeName) {
-    const filteredOperators = uniqueOperators.filter((op) =>
-      op.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
+    const filteredOperators = uniqueOperators.filter((op) => {
+      const matchSearch = op.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      let matchGroup = true;
+      if (selectedGrupId) {
+        const activeShiftName = FALLBACK_GROUPS.find(g => g.id.toString() === selectedGrupId)?.name;
+        const fallbackOp = FALLBACK_OPERATORS.find(f => f.name.toLowerCase() === op.toLowerCase());
+        if (fallbackOp) {
+          matchGroup = fallbackOp.shift === activeShiftName;
+        } else {
+          // If operator not in fallback list but a group is selected, hide them
+          matchGroup = false; 
+        }
+      }
+
+      return matchSearch && matchGroup;
+    });
 
     return (
       <div className="min-h-[80vh] flex items-center justify-center animate-fadeIn p-4">
-        <div className="bg-white rounded-[32px] p-8 sm:p-12 max-w-xl w-full shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col items-center text-center">
-          <div className="w-24 h-24 bg-sky-50 rounded-full flex items-center justify-center mb-6">
-            <Users className="w-12 h-12 text-sky-500" />
+        <div className="bg-white rounded-[32px] p-6 sm:p-8 max-w-7xl w-full shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col items-center text-center">
+          <div className="w-12 h-12 bg-sky-50 rounded-full flex items-center justify-center mb-3">
+            <Users className="w-6 h-6 text-sky-500" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-3">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight mb-1">
             Pilih Nama Anda
           </h1>
-          <p className="text-slate-500 mb-8 max-w-md font-medium">
-            Silakan temukan dan pilih nama Anda pada daftar di bawah ini untuk
-            mengakses Dashboard pribadi Anda.
+          <p className="text-sm text-slate-500 mb-5 max-w-md font-medium">
+            Silakan temukan dan pilih nama Anda pada daftar di bawah ini.
           </p>
 
-          <div className="w-full relative mb-6">
-            <Search className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Ketik nama Anda di sini..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-14 pr-5 py-4 bg-slate-50/50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 font-bold text-slate-700 transition-all text-lg"
-            />
+          <div className="w-full flex flex-col gap-3 mb-6">
+            <div className="w-full">
+              <select
+                value={selectedGrupId}
+                onChange={(e) => {
+                  setSelectedGrupId(e.target.value);
+                  setSearchQuery(""); // Reset pencarian teks jika ganti grup
+                }}
+                className="w-full px-5 py-4 bg-slate-50/50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 font-bold text-slate-700 transition-all text-lg appearance-none cursor-pointer"
+              >
+                <option value="">-- Semua Grup / Shift --</option>
+                {FALLBACK_GROUPS.map(g => (
+                  <option key={g.id} value={g.id.toString()}>Grup / Shift {g.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-full relative">
+              <Search className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Ketik nama Anda di sini..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-14 pr-5 py-4 bg-slate-50/50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 font-bold text-slate-700 transition-all text-lg"
+              />
+            </div>
           </div>
 
-          <div className="w-full max-h-[350px] overflow-y-auto custom-scrollbar flex flex-col gap-3 p-1 text-left pr-2">
+          <div className="w-full max-h-[60vh] overflow-y-auto custom-scrollbar grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-1 text-left pr-2">
             {filteredOperators.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-sm font-semibold border-2 border-dashed border-slate-100 rounded-2xl">
                 Tidak ada pegawai yang cocok dengan pencarian.

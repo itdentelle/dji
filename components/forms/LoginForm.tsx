@@ -48,6 +48,7 @@ export default function LoginForm() {
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">No Induk Pegawai (NIP)</label>
           <input
+            suppressHydrationWarning
             type="text"
             value={nip}
             onChange={(e) => setNip(e.target.value)}
@@ -60,6 +61,7 @@ export default function LoginForm() {
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">Password</label>
           <input
+            suppressHydrationWarning
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

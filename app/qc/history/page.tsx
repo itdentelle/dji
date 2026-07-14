@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { searchQCHistory } from "@/actions/qc-actions";
 import {
   Search,
@@ -24,7 +25,6 @@ import {
   XCircle,
   HelpCircle,
 } from "lucide-react";
-import QCDetailModal from "@/components/QCDetailModal";
 import ProductTour, { ProductTourStep } from "@/components/ProductTour";
 
 const QC_HISTORY_TOUR_STEPS: ProductTourStep[] = [
@@ -67,6 +67,8 @@ const QC_OPERATORS = [
 ];
 
 export default function QCHistoryPage() {
+  const router = useRouter();
+
   const [filters, setFilters] = useState<{
     date: string;
     nomor_mc: string;
@@ -90,55 +92,32 @@ export default function QCHistoryPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
 
-  // Detail Modal State
-  const [selectedData, setSelectedData] = useState<any | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   // Load from session storage on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const today = new Date().toISOString().split("T")[0];
-      const cachedFilters = sessionStorage.getItem("dji_qc_history_filters");
-      const cachedData = sessionStorage.getItem("dji_qc_history_data");
-      const cachedSearched = sessionStorage.getItem("dji_qc_history_searched");
-
-      let initialFilters = { ...filters, date: today };
-
-      if (cachedFilters) {
-        try {
-          const parsed = JSON.parse(cachedFilters);
-          if (!parsed.petugas_ids) parsed.petugas_ids = [];
-          initialFilters = parsed;
-          setFilters(parsed);
-        } catch (e) {}
-      } else {
-        setFilters(initialFilters);
+    // Auto fetch all history data on initial mount
+    setIsLoading(true);
+    const initialFilters = {
+      date: "",
+      nomor_mc: "",
+      petugas_ids: [],
+      design_id: "",
+      potongan_ke: "",
+      no_customer: "",
+    };
+    setFilters(initialFilters);
+    searchQCHistory(initialFilters).then((res) => {
+      if (res.success && res.data) {
+        setData(res.data);
+        setHasSearched(true);
       }
-
-      if (cachedData && cachedSearched === "true") {
-        try {
-          setData(JSON.parse(cachedData));
-          setHasSearched(true);
-        } catch (e) {
-          console.error("Failed to parse cached history");
-        }
-      } else {
-        // Auto fetch today's data on initial mount
-        setIsLoading(true);
-        searchQCHistory(initialFilters).then((res) => {
-          if (res.success && res.data) {
-            setData(res.data);
-            setHasSearched(true);
-            sessionStorage.setItem("dji_qc_history_filters", JSON.stringify(initialFilters));
-            sessionStorage.setItem("dji_qc_history_data", JSON.stringify(res.data));
-            sessionStorage.setItem("dji_qc_history_searched", "true");
-          }
-          setIsLoading(false);
-        }).catch(() => {
-          setIsLoading(false);
-        });
-      }
-    }
+      setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
+    });
   }, []);
 
   const handleSearch = async (e?: React.FormEvent) => {
@@ -147,14 +126,11 @@ export default function QCHistoryPage() {
     setErrorMsg(null);
 
     try {
-      sessionStorage.setItem("dji_qc_history_filters", JSON.stringify(filters));
-
       const res = await searchQCHistory(filters);
       if (res.success && res.data) {
         setData(res.data);
         setHasSearched(true);
-        sessionStorage.setItem("dji_qc_history_data", JSON.stringify(res.data));
-        sessionStorage.setItem("dji_qc_history_searched", "true");
+        setCurrentPage(1); // Reset to first page on new search
       } else {
         setErrorMsg(res.error || "Gagal mengambil data riwayat.");
       }
@@ -166,11 +142,15 @@ export default function QCHistoryPage() {
   };
 
   const handleOpenDetail = (group: any) => {
-    setSelectedData(group);
-    setIsModalOpen(true);
+    router.push(`/qc/history/detail?id=${group.id}`);
   };
 
   const groupedData = data;
+  const totalPages = Math.ceil(groupedData.length / itemsPerPage);
+  const paginatedData = groupedData.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20 animate-fadeIn">
@@ -452,7 +432,7 @@ export default function QCHistoryPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {groupedData.map((group: any, idx: number) => {
+                    {paginatedData.map((group: any, idx: number) => {
                       const header = group.header || {};
 
                       return (
@@ -487,6 +467,11 @@ export default function QCHistoryPage() {
                                 & {group.petugas_inspeksi_2}
                               </div>
                             )}
+                            {group.petugas_inspeksi_3 && (
+                              <div className="text-xs text-slate-500">
+                                & {group.petugas_inspeksi_3}
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <div className="font-bold text-slate-800 flex flex-col">
@@ -495,7 +480,9 @@ export default function QCHistoryPage() {
                                 {group.pcs_index || group.detail?.pcs_index}
                               </span>
                               <span className="text-xs text-slate-500 font-medium mt-0.5">
-                                {group.items?.length || 0} Panel
+                                {header?.panel_no === "METERAN"
+                                  ? `${group.inspeksi_ceklis || 0} Meter`
+                                  : `${group.items?.length || 0} Panel`}
                               </span>
                             </div>
                           </td>
@@ -535,6 +522,63 @@ export default function QCHistoryPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50">
+                  <div className="text-xs text-slate-500 font-medium">
+                    Menampilkan <span className="font-bold text-slate-700">{(currentPage - 1) * itemsPerPage + 1}</span> - <span className="font-bold text-slate-700">{Math.min(currentPage * itemsPerPage, groupedData.length)}</span> dari <span className="font-bold text-slate-700">{groupedData.length}</span> data
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Sebelumnya
+                    </button>
+                    
+                    <div className="flex items-center gap-1 hidden sm:flex">
+                      {Array.from({ length: totalPages }).map((_, i) => {
+                        const pageNum = i + 1;
+                        if (
+                          pageNum === 1 || 
+                          pageNum === totalPages || 
+                          (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                        ) {
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors flex items-center justify-center ${
+                                currentPage === pageNum
+                                  ? "bg-[#0070bc] text-white border border-[#0070bc]"
+                                  : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        } else if (
+                          pageNum === currentPage - 2 || 
+                          pageNum === currentPage + 2
+                        ) {
+                          return <span key={pageNum} className="text-slate-400 text-xs px-1">...</span>;
+                        }
+                        return null;
+                      })}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Selanjutnya
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
@@ -557,13 +601,6 @@ export default function QCHistoryPage() {
         steps={QC_HISTORY_TOUR_STEPS}
         isOpen={isTourOpen}
         onClose={() => setIsTourOpen(false)}
-      />
-
-      {/* Detail Modal */}
-      <QCDetailModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        qcData={selectedData}
       />
     </div>
   );

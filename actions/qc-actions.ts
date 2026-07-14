@@ -1,11 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 export async function searchPendingQCHeaders(designId: string, potonganKe: string) {
   try {
     const supabase = await createClient();
-    
+
     // We want to find production_headers matching designId and potonganKe
     // that have pending details.
     const { data, error } = await supabase
@@ -56,7 +56,7 @@ export async function searchPendingQCHeaders(designId: string, potonganKe: strin
 export async function getPendingQCDetails(headerId: string) {
   try {
     const supabase = await createClient();
-    
+
     const { data, error } = await supabase
       .from("production_details")
       .select(`
@@ -90,6 +90,7 @@ export async function submitQCInspection(params: {
   details: { detailId: string; finalInspectionId: number }[];
   petugas_inspeksi: string;
   petugas_inspeksi_2?: string;
+  petugas_inspeksi_3?: string;
   tanggal_inspeksi: string;
   start_inspect: string;
   finish_inspect: string;
@@ -103,7 +104,7 @@ export async function submitQCInspection(params: {
 }) {
   try {
     const supabase = await createClient();
-    
+
     // 1. Dapatkan informasi mesin, dll dari production_details
     const detailIds = params.details.map(d => d.detailId);
     const { data: detailsInfo } = await supabase
@@ -132,6 +133,7 @@ export async function submitQCInspection(params: {
         finish_inspect: params.finish_inspect,
         petugas_inspeksi: params.petugas_inspeksi,
         petugas_inspeksi_2: params.petugas_inspeksi_2 || null,
+        petugas_inspeksi_3: params.petugas_inspeksi_3 || null,
         nomor_mc,
         design_id,
         potongan_ke,
@@ -162,62 +164,68 @@ export async function submitQCInspection(params: {
       throw new Error("Gagal menyimpan data rincian inspeksi: " + insertError.message);
     }
 
-    // Bulk update final_inspection_id in production_details
-    // Supabase JS doesn't have a direct bulk update via array easily,
-    // so we iterate (it's safe enough for a few dozen rows)
-    for (const d of params.details) {
-      const { error: updateError } = await supabase
-        .from("production_details")
-        .update({
-          final_inspection_id: d.finalInspectionId,
-          status_inspeksi: d.finalInspectionId === 1 ? 'Ceklis' : 'Silang',
-          keterangan_qc: params.notes || null
-        })
-        .eq("id", d.detailId);
+      // Bulk update final_inspection_id in production_details
+      // Supabase JS doesn't have a direct bulk update via array easily,
+      // so we iterate (it's safe enough for a few dozen rows)
+      for (const d of params.details) {
+        let statusInspeksi = "Ceklis";
+        if (d.finalInspectionId === 3) statusInspeksi = "Silang";
+        if (d.finalInspectionId === 4) statusInspeksi = "BS";
         
-      if (updateError) {
-        throw new Error("Gagal mengupdate status detail: " + updateError.message);
-      }
-    }
+        const { error: updateError } = await supabase
+          .from("production_details")
+          .update({
+            final_inspection_id: d.finalInspectionId,
+            status_inspeksi: statusInspeksi,
+            keterangan_qc: params.notes || null
+          })
+          .eq("id", d.detailId);
 
-    // Sync to Google Sheets
-    try {
-      const detailIds = params.details.map(d => d.detailId);
-      const { data: detailRecordsRaw } = await supabase
-        .from("production_details")
-        .select("id, header_id, pcs_index")
-        .in("id", detailIds);
-      
-      const detailRecords = (detailRecordsRaw || []) as any[];
-
-      // Update tanggal_potong on production_headers
-      if (params.tanggal_potong) {
-        const uniqueHeaderIds = Array.from(new Set(detailRecords.map(r => r.header_id))).filter(Boolean);
-        if (uniqueHeaderIds.length > 0) {
-          const { error: updateHeaderError } = await supabase
-            .from("production_headers")
-            .update({ tanggal_potong: params.tanggal_potong })
-            .in("id", uniqueHeaderIds);
-            
-          if (updateHeaderError) {
-            console.error("Gagal update tanggal potong:", updateHeaderError);
-          }
+        if (updateError) {
+          throw new Error("Gagal mengupdate status detail: " + updateError.message);
         }
       }
 
-      const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
-      if (sheetUrl && detailRecords && detailRecords.length > 0) {
-        const payloadData = params.details.map(d => {
-          const dbRecord = detailRecords.find((r: any) => r.id === d.detailId);
-          let gradeStr = "";
-          if (d.finalInspectionId === 1) gradeStr = "Ceklis";
-          else if (d.finalInspectionId === 3) gradeStr = "Silang";
+      // Sync to Google Sheets
+      try {
+        const detailIds = params.details.map(d => d.detailId);
+        const { data: detailRecordsRaw } = await supabase
+          .from("production_details")
+          .select("id, header_id, pcs_index")
+          .in("id", detailIds);
 
-          return {
+        const detailRecords = (detailRecordsRaw || []) as any[];
+
+        // Update tanggal_potong on production_headers
+        if (params.tanggal_potong) {
+          const uniqueHeaderIds = Array.from(new Set(detailRecords.map(r => r.header_id))).filter(Boolean);
+          if (uniqueHeaderIds.length > 0) {
+            const { error: updateHeaderError } = await supabase
+              .from("production_headers")
+              .update({ tanggal_potong: params.tanggal_potong })
+              .in("id", uniqueHeaderIds);
+
+            if (updateHeaderError) {
+              console.error("Gagal update tanggal potong:", updateHeaderError);
+            }
+          }
+        }
+
+        const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
+        if (sheetUrl && detailRecords && detailRecords.length > 0) {
+          const payloadData = params.details.map(d => {
+            const dbRecord = detailRecords.find((r: any) => r.id === d.detailId);
+            let gradeStr = "";
+            if (d.finalInspectionId === 1) gradeStr = "Ceklis";
+            else if (d.finalInspectionId === 2 || d.finalInspectionId === 3) gradeStr = "Silang";
+            else if (d.finalInspectionId === 4) gradeStr = "BS";
+
+            return {
             id_header: dbRecord?.header_id || "",
             pcs_index: dbRecord?.pcs_index || "",
             petugas_qc1: params.petugas_inspeksi || "",
             petugas_qc2: params.petugas_inspeksi_2 || "",
+            petugas_qc3: params.petugas_inspeksi_3 || "",
             tanggal_qc: params.tanggal_inspeksi || "",
             waktu_qc: `${params.start_inspect || ""} - ${params.finish_inspect || ""}`,
             hasil_qc: gradeStr,
@@ -237,7 +245,7 @@ export async function submitQCInspection(params: {
         };
 
         console.log("[QC Sheet Sync] Sending payload:", JSON.stringify(payload));
-        
+
         fetch(sheetUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -270,7 +278,7 @@ export async function getAvailableQCFilters() {
         potongan_ke,
         tgl
       )
-    `).is("final_inspection_id", null);
+    `).is("status_inspeksi", null);
 
     if (error) return { success: false, error: error.message };
 
@@ -294,14 +302,14 @@ export async function getAvailableQCFilters() {
 export async function getPendingQCDetailsByBatch(mesin: string, designId: string, potonganKe: string, tanggal?: string) {
   try {
     const supabase = await createClient();
-    
+
     let query = supabase
       .from("production_headers")
-      .select("id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, operators(nama_operator)")
+      .select("id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operators(nama_operator), groups(nama_grup), production_details(id, pcs_index, meter_kain, detail_masalah)")
       .eq("nomor_mc", mesin)
       .eq("design_id", designId)
       .eq("potongan_ke", parseInt(potonganKe));
-      
+
     if (tanggal) {
       query = query.eq("tgl", tanggal);
     }
@@ -326,15 +334,49 @@ export async function getPendingQCDetailsByBatch(mesin: string, designId: string
       return { ...d, production_headers: h };
     });
 
-    // Untuk jenis METERAN, hanya baris detail yang memiliki cacat/masalah (kategori_masalah tidak kosong) yang perlu diinspeksi.
-    // Baris rangkuman start/finish tidak akan diinspeksi.
-    const filteredDetails = detailsWithHeader.filter((d: any) => {
-      const h = d.production_headers;
-      if (h && h.panel_no === "METERAN") {
-        return d.kategori_masalah !== null && d.kategori_masalah !== undefined && d.kategori_masalah.trim() !== "";
-      }
-      return true;
+    // Tampilkan semua baris agar PCS yang tidak punya cacat tetap muncul di antrean QC
+    const filteredDetails = detailsWithHeader;
+
+    return { success: true, data: filteredDetails };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getAllPendingQCDetails(tanggal?: string) {
+  try {
+    const supabase = await createClient();
+
+    let query = supabase
+      .from("production_headers")
+      .select("id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, groups(nama_grup), operators(nama_operator), tanggal_jam")
+      .order("tgl", { ascending: false });
+
+    if (tanggal) {
+      query = query.eq("tgl", tanggal);
+    }
+
+    const { data: headers, error: headerError } = await query;
+
+    if (headerError) return { success: false, error: headerError.message };
+    if (!headers || headers.length === 0) return { success: true, data: [] };
+
+    const headerIds = headers.map((h: any) => h.id);
+
+    const { data: details, error: detailsError } = await supabase
+      .from("production_details")
+      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id")
+      .in("header_id", headerIds)
+      .is("final_inspection_id", null);
+
+    if (detailsError) return { success: false, error: detailsError.message };
+
+    const detailsWithHeader = (details || []).map((d: any) => {
+      const h = headers.find((h: any) => h.id === d.header_id);
+      return { ...d, production_headers: h };
     });
+
+    const filteredDetails = detailsWithHeader;
 
     return { success: true, data: filteredDetails };
   } catch (err: any) {
@@ -343,9 +385,10 @@ export async function getPendingQCDetailsByBatch(mesin: string, designId: string
 }
 
 export async function getQCHistory() {
+
   try {
     const supabase = await createClient();
-    
+
     const { data, error } = await supabase
       .from("qc_inspection_batches")
       .select(`
@@ -390,34 +433,34 @@ export async function getAvailableHistoryQCDesignPotongan() {
     const { data: details, error } = await supabase.from("production_details").select("header_id").not("final_inspection_id", "is", null);
     if (error) return { success: false, error: error.message };
     if (!details || details.length === 0) return { success: true, data: [] };
-    
+
     const headerIds = Array.from(new Set(details.map((d: any) => d.header_id)));
-    
+
     const { data: headers, error: headersError } = await supabase.from("production_headers").select("id, design_id, potongan_ke").in("id", headerIds);
     if (headersError) return { success: false, error: headersError.message };
-    
+
     return { success: true, data: headers };
-  } catch (err: any) { 
-    return { success: false, error: err.message }; 
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
 
 export async function getQCHistoryByBatch(designId: string, potonganKe: string) {
   try {
     const supabase = await createClient();
-    
+
     const { data: headers, error: hErr } = await supabase.from("production_headers").select("id").eq("design_id", designId).eq("potongan_ke", parseInt(potonganKe));
     if (hErr) return { success: false, error: hErr.message };
     if (!headers || headers.length === 0) return { success: true, data: [] };
-    
+
     const headerIds = headers.map((h: any) => h.id);
-    
+
     const { data: details, error: dErr } = await supabase.from("production_details").select("id").in("header_id", headerIds).not("final_inspection_id", "is", null);
     if (dErr) return { success: false, error: dErr.message };
     if (!details || details.length === 0) return { success: true, data: [] };
-    
+
     const detailIds = details.map((d: any) => d.id);
-    
+
     const { data: qcData, error: qcErr } = await supabase.from("qc_inspection_batches").select(`
       *,
       qc_inspection_items!inner (
@@ -428,21 +471,21 @@ export async function getQCHistoryByBatch(designId: string, potonganKe: string) 
         )
       )
     `).in("qc_inspection_items.production_detail_id", detailIds).order("created_at", { ascending: false });
-    
+
     if (qcErr) return { success: false, error: qcErr.message };
-    
+
     const formattedData = (qcData || []).map((row: any) => {
       const firstItem = row.qc_inspection_items && row.qc_inspection_items.length > 0 ? row.qc_inspection_items[0] : null;
-      return { 
-        ...row, 
-        detail: firstItem?.production_details || {}, 
-        header: firstItem?.production_details?.production_headers || {} 
+      return {
+        ...row,
+        detail: firstItem?.production_details || {},
+        header: firstItem?.production_details?.production_headers || {}
       };
     });
-    
+
     return { success: true, data: formattedData };
-  } catch (err: any) { 
-    return { success: false, error: err.message }; 
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
 
@@ -462,7 +505,7 @@ export async function searchQCHistory(filters: {
     }
 
     const supabase = await createClient();
-    
+
     let query = supabase
       .from("qc_inspection_batches")
       .select(`
@@ -470,18 +513,17 @@ export async function searchQCHistory(filters: {
         items:qc_inspection_items!inner (
           id, final_inspection_id,
           detail:production_details!inner (
-            id, pcs_index, final_inspection_id, header_id, roll_no, meter_kain, keterangan_qc,
-            header:production_headers!inner (id, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, status_matching)
+            id, pcs_index, final_inspection_id, header_id, roll_no, meter_kain, keterangan_qc, keterangan_cacat, kategori_masalah, detail_masalah,
+            header:production_headers!inner (id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operators(nama_operator), groups(nama_grup))
           )
         )
       `)
       .order("created_at", { ascending: false })
-      .limit(100);
-
+      .limit(1000);
     if (filters.date) {
       query = query.eq("tanggal_inspeksi", filters.date);
     }
-    
+
     if (filters.nomor_mc) {
       query = query.ilike("nomor_mc", `%${filters.nomor_mc}%`);
     }
@@ -489,15 +531,15 @@ export async function searchQCHistory(filters: {
     if (filters.design_id) {
       query = query.ilike("design_id", `%${filters.design_id}%`);
     }
-    
+
     if (filters.potongan_ke) {
       query = query.eq("potongan_ke", parseInt(filters.potongan_ke));
     }
-    
+
     if (filters.no_customer) {
       query = query.ilike("items.detail.header.no_order_barang", `%${filters.no_customer}%`);
     }
-    
+
     if (filters.petugas_ids && filters.petugas_ids.length > 0) {
       const orConds = filters.petugas_ids.map(p => `petugas_inspeksi.eq."${p}",petugas_inspeksi_2.eq."${p}"`).join(",");
       query = query.or(orConds);
@@ -515,7 +557,7 @@ export async function searchQCHistory(filters: {
       // Extract the header from the first item, as all items in a batch share the same batch info
       const firstItem = batch.items && batch.items.length > 0 ? batch.items[0] : null;
       const header = firstItem?.detail?.header || {};
-      
+
       // Map items to match the old detail structure slightly if needed, but UI will mostly use batch.items
       const formattedItems = (batch.items || []).map((item: any) => ({
         id: item.id,
@@ -546,10 +588,11 @@ export async function addQCDefectDetail(params: {
   kategoriMasalah: string[];
   detailMasalah?: string;
   keteranganCacat?: string;
+  pcsIndex?: number;
 }) {
   try {
-    const supabase = await createClient();
-    
+    const supabase = await createAdminClient();
+
     // Generate a unique detail id
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let randId = "";
@@ -559,8 +602,8 @@ export async function addQCDefectDetail(params: {
     const detailId = randId.toLowerCase();
 
     // Map kategoriMasalah array to comma-separated string
-    const kategoriStr = params.kategoriMasalah && params.kategoriMasalah.length > 0 
-      ? params.kategoriMasalah.join(', ') 
+    const kategoriStr = params.kategoriMasalah && params.kategoriMasalah.length > 0
+      ? params.kategoriMasalah.join(', ')
       : null;
 
     const { data, error } = await supabase
@@ -568,12 +611,12 @@ export async function addQCDefectDetail(params: {
       .insert({
         id: detailId,
         header_id: params.headerId,
-        pcs_index: 1, // default index for meteran
+        pcs_index: params.pcsIndex || 1,
         meter_kain: parseFloat(params.meterKain) || null,
         roll_no: params.rollNo || null,
         kategori_masalah: kategoriStr,
         detail_masalah: params.detailMasalah || null,
-        keterangan_cacat: params.keteranganCacat || null,
+        keterangan_cacat: params.keteranganCacat ? `${params.keteranganCacat} [TAMBAHAN QC]` : "[TAMBAHAN QC]",
         indikator_stop: true,
       })
       .select()
@@ -590,22 +633,22 @@ export async function addQCDefectDetail(params: {
         // Fetch header info for the payload
         const { data: headerData } = await supabase
           .from("production_headers")
-          .select("*")
+          .select("*, groups(nama_grup)")
           .eq("id", params.headerId)
           .single();
 
         if (headerData) {
           const payload = [{
-            "ID Laporan": headerData.id,
+            "ID Laporan": detailId,
             "Tanggal Produksi": headerData.tgl || "",
-            "Tanggal & Jam": new Date().toISOString(),
+            "Tanggal & Jam": headerData.tanggal_jam || new Date().toISOString(),
             "Tanggal Potong": headerData.tanggal_potong || "",
             "Mesin": headerData.nomor_mc || "",
             "Pick": headerData.pick || "",
             "Course": headerData.course || "",
             "RPM": headerData.rpm || "",
             "Operator": headerData.pic || headerData.created_by_name || "",
-            "Grup": headerData.group_id || "",
+            "Grup": headerData.groups?.nama_grup || headerData.group_id || "",
             "Design": headerData.design_id || "",
             "Panel": headerData.panel_no || "METERAN",
             "Potongan Ke": headerData.potongan_ke || "",
@@ -615,7 +658,7 @@ export async function addQCDefectDetail(params: {
             "Meter Awal": headerData.meter_awal || "",
             "Meter Akhir": headerData.meter_akhir || "",
             "Total Produksi Meter": headerData.hasil_produksi_meter || "",
-            "PCS Ke": 1,
+            "PCS Ke": params.pcsIndex || 1,
             "Hasil PCS": 0,
             "Meter Kain": params.meterKain || "",
             "Roll No": params.rollNo || "",
@@ -627,7 +670,7 @@ export async function addQCDefectDetail(params: {
           }];
 
           console.log("[QC Defect Sync] Sending payload:", JSON.stringify(payload));
-          
+
           fetch(sheetUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -647,4 +690,582 @@ export async function addQCDefectDetail(params: {
     return { success: false, error: err.message };
   }
 }
+
+export async function getPendingQCDetailsByDate(tanggal: string) {
+  try {
+    const supabase = await createClient();
+
+    // We fetch details that have final_inspection_id IS NULL
+    // and join with headers where tgl equals the given date
+    let query = supabase
+      .from("production_details")
+      .select(`
+        id, 
+        pcs_index, 
+        jml_hasil_produksi, 
+        kategori_masalah, 
+        detail_masalah, 
+        keterangan_cacat, 
+        meter_kain, 
+        roll_no, 
+        indikator_stop, 
+        final_inspection_id, 
+        header_id,
+        production_headers!inner (
+          id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operators(nama_operator), groups(nama_grup)
+        )
+      `)
+      .is("final_inspection_id", null);
+
+    const { data, error } = await query;
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data || data.length === 0) {
+      return { success: true, data: [], pendingCount: 0 };
+    }
+
+    let filteredData = data;
+    if (tanggal && tanggal !== "all") {
+      const groupsOnDate = new Set(data.filter((d: any) => d.production_headers?.tgl === tanggal).map((d: any) => `${d.production_headers?.nomor_mc}_${d.production_headers?.design_id}_${d.production_headers?.potongan_ke}_${d.pcs_index}`));
+      filteredData = data.filter((d: any) => groupsOnDate.has(`${d.production_headers?.nomor_mc}_${d.production_headers?.design_id}_${d.production_headers?.potongan_ke}_${d.pcs_index}`));
+    }
+
+    // Sort by mesin -> design -> potongan -> pcs
+    filteredData.sort((a: any, b: any) => {
+      const hA = a.production_headers;
+      const hB = b.production_headers;
+      if (hA.nomor_mc !== hB.nomor_mc) return String(hA.nomor_mc).localeCompare(String(hB.nomor_mc));
+      if (hA.potongan_ke !== hB.potongan_ke) return (hA.potongan_ke || 0) - (hB.potongan_ke || 0);
+      return (a.pcs_index || 0) - (b.pcs_index || 0);
+    });
+
+    return { success: true, data: filteredData, pendingCount: filteredData.length };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteProductionDetailRow(detailId: string) {
+  try {
+    const supabase = await createAdminClient();
+
+    // 1. Fetch the detail to get its header_id and pcs_index
+    const { data: detail, error: detailErr } = await supabase
+      .from("production_details")
+      .select("header_id, pcs_index")
+      .eq("id", detailId)
+      .single();
+
+    if (detailErr) {
+      return { success: false, error: "Gagal menemukan detail: " + detailErr.message };
+    }
+
+    const headerId = detail?.header_id;
+    const pcsIndex = detail?.pcs_index;
+
+    // 2. We will delete all details associated with this header, then the header itself
+    // But first, let's get the header info to know which batch and panel to shift
+    let headerWasDeleted = false;
+    let deletedPanelNoStr = null;
+    let batchInfo = null;
+
+    if (headerId) {
+      const { data: headerInfo } = await supabase
+        .from("production_headers")
+        .select("panel_no, nomor_mc, design_id, potongan_ke")
+        .eq("id", headerId)
+        .single();
+
+      if (headerInfo) {
+        deletedPanelNoStr = headerInfo.panel_no;
+        batchInfo = {
+          nomor_mc: headerInfo.nomor_mc,
+          design_id: headerInfo.design_id,
+          potongan_ke: headerInfo.potongan_ke,
+        };
+      }
+
+      // 2. Delete ONLY the specific detail row
+      const { error: delErr } = await supabase
+        .from("production_details")
+        .delete()
+        .eq("id", detailId);
+
+      if (delErr) {
+        return { success: false, error: delErr.message };
+      }
+
+      // Check if there are any remaining details for this header
+      const { count } = await supabase
+        .from("production_details")
+        .select("id", { count: "exact", head: true })
+        .eq("header_id", headerId);
+
+      if (count === 0) {
+        // Delete the header since no details remain
+        const { error: hdrDelErr } = await supabase
+          .from("production_headers")
+          .delete()
+          .eq("id", headerId);
+
+        if (!hdrDelErr) {
+          headerWasDeleted = true;
+        }
+      }
+    } else {
+      // If no header_id (unlikely), just delete the detail
+      const { error: delErr } = await supabase
+        .from("production_details")
+        .delete()
+        .eq("id", detailId);
+
+      if (delErr) {
+        return { success: false, error: delErr.message };
+      }
+    }
+
+    // 3. Shift subsequent panels down by 1 to fill the void for current PCS
+    if (deletedPanelNoStr && deletedPanelNoStr !== "METERAN" && batchInfo && pcsIndex !== undefined) {
+      const deletedPanelNo = parseInt(deletedPanelNoStr);
+      if (!isNaN(deletedPanelNo)) {
+        const { data: allHeaders } = await supabase
+          .from("production_headers")
+          .select("*, production_details(pcs_index)")
+          .eq("nomor_mc", batchInfo.nomor_mc)
+          .eq("design_id", batchInfo.design_id)
+          .eq("potongan_ke", batchInfo.potongan_ke)
+          .neq("panel_no", "METERAN")
+          .order("panel_no", { ascending: true });
+
+        const panelHeaders = (allHeaders || []).filter((h: any) => {
+          const p = parseInt(h.panel_no);
+          return !isNaN(p);
+        });
+
+        if (panelHeaders.length > 0) {
+          const toShift = panelHeaders
+            .filter((h: any) => parseInt(h.panel_no) > deletedPanelNo)
+            .sort((a: any, b: any) => parseInt(a.panel_no) - parseInt(b.panel_no)); // Ascending to safely shift down
+
+          for (const h of toShift) {
+            // Cek apakah header ini dipakai oleh PCS lain
+            const { data: detailsForH } = await supabase
+              .from("production_details")
+              .select("id, pcs_index")
+              .eq("header_id", h.id);
+
+            const otherPcsDetails = (detailsForH || []).filter(d => String(d.pcs_index) !== String(pcsIndex));
+            const currentPcsDetail = (detailsForH || []).find(d => String(d.pcs_index) === String(pcsIndex));
+
+            if (!currentPcsDetail) continue;
+
+            if (otherPcsDetails.length > 0) {
+              // Header ini di-share dengan PCS lain. Kita tidak boleh menggeser header aslinya.
+              // Buat kloningan header khusus untuk PCS ini dengan panel_no - 1.
+              const clonedHeaderId = genId();
+              const clonedHeaderPayload = { ...h };
+              delete clonedHeaderPayload.production_details;
+              delete clonedHeaderPayload.idempotency_key;
+              clonedHeaderPayload.id = clonedHeaderId;
+              clonedHeaderPayload.panel_no = String(parseInt(h.panel_no) - 1);
+
+              const { error: cloneErr } = await supabase.from("production_headers").insert(clonedHeaderPayload);
+              if (cloneErr) {
+                return { success: false, error: `Gagal kloning header ${h.panel_no}: ${cloneErr.message}` };
+              }
+
+              // Update detail PCS ini agar menunjuk ke header yang baru dikloning
+              await supabase.from("production_details").update({ header_id: clonedHeaderId }).eq("id", currentPcsDetail.id);
+            } else {
+              // Header ini hanya dipakai oleh PCS ini, aman untuk digeser
+              const { error: shiftErr } = await supabase
+                .from("production_headers")
+                .update({ panel_no: String(parseInt(h.panel_no) - 1) })
+                .eq("id", h.id);
+
+              if (shiftErr) {
+                return { success: false, error: `Gagal menggeser panel ${h.panel_no}: ${shiftErr.message}` };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// Helper to generate 8-char random id
+function genId(): string {
+  const chars = "abcdef0123456789";
+  let r = "";
+  for (let i = 0; i < 8; i++) r += chars[Math.floor(Math.random() * chars.length)];
+  return r;
+}
+
+export async function insertMissingPanel(params: {
+  /** Sample header id to copy metadata from */
+  refHeaderId: string;
+  /** Insert at this panel number; all panels >= insertAt get shifted +1 */
+  insertAt?: number;
+  /** If true, just append after the last panel */
+  appendToEnd?: boolean;
+  /** Index of PCS to insert the detail for */
+  pcsIndex?: number;
+  /** Kategori cacat (optional) */
+  kategoriMasalah?: string[];
+  /** Detail cacat (optional) */
+  detailMasalah?: string;
+  /** Keterangan cacat (optional) */
+  keteranganCacat?: string;
+}) {
+  try {
+    const supabase = await createAdminClient();
+
+    // 1. Fetch the reference header to copy its metadata
+    const { data: refHeader, error: refErr } = await supabase
+      .from("production_headers")
+      .select("*")
+      .eq("id", params.refHeaderId)
+      .single();
+
+    if (refErr || !refHeader) {
+      return { success: false, error: "Gagal mengambil data header referensi: " + (refErr?.message || "tidak ditemukan") };
+    }
+
+    const { nomor_mc, design_id, potongan_ke, tgl } = refHeader as any;
+
+    if (!nomor_mc || !design_id || !potongan_ke) {
+      return { success: false, error: "Data header referensi tidak lengkap (mesin/desain/potongan)." };
+    }
+
+    // 2. Fetch all panel headers in this batch
+    const { data: allHeaders, error: allErr } = await supabase
+      .from("production_headers")
+      .select("*, production_details(pcs_index)")
+      .eq("nomor_mc", nomor_mc)
+      .eq("design_id", design_id)
+      .eq("potongan_ke", potongan_ke)
+      .neq("panel_no", "METERAN")
+      .order("panel_no", { ascending: true });
+
+    if (allErr) {
+      return { success: false, error: "Gagal mengambil data panel: " + allErr.message };
+    }
+
+    const panelHeaders = (allHeaders || []).filter((h: any) => {
+      const p = parseInt(h.panel_no);
+      return !isNaN(p);
+    });
+
+    // Determine the max panel for the CURRENT PCS
+    const headersForCurrentPcs = panelHeaders.filter(h => 
+      h.production_details && h.production_details.some((d: any) => String(d.pcs_index) === String(params.pcsIndex))
+    );
+    const maxPanelCurrentPcs = headersForCurrentPcs.reduce((max: number, h: any) => {
+      const p = parseInt(h.panel_no);
+      return p > max ? p : max;
+    }, 0);
+
+    // 3. Determine the target panel number
+    let newPanelNo: number;
+    if (params.appendToEnd) {
+      newPanelNo = maxPanelCurrentPcs + 1;
+    } else if (params.insertAt !== undefined) {
+      newPanelNo = params.insertAt;
+    } else {
+      return { success: false, error: "Harus menyebutkan insertAt atau appendToEnd." };
+    }
+
+    // Check if header already exists
+    const existingHeader = panelHeaders.find(h => parseInt(h.panel_no) === newPanelNo);
+    const isAlreadyLinkedToCurrentPcs = existingHeader?.production_details?.some((d: any) => String(d.pcs_index) === String(params.pcsIndex));
+
+    let targetHeaderId = existingHeader?.id;
+    
+    // Kita HANYA perlu menggeser (shift) jika panel tersebut sudah ada DAN sudah dipakai oleh PCS ini.
+    // Jika panel tersebut belum ada (gap), kita cukup membuat panel baru tanpa menggeser panel setelahnya.
+    let needsShift = existingHeader && isAlreadyLinkedToCurrentPcs;
+    let needsNewHeader = !existingHeader || isAlreadyLinkedToCurrentPcs;
+
+    console.log("INSERT PANEL:", {
+      newPanelNo,
+      existingHeaderFound: !!existingHeader,
+      existingHeaderId: existingHeader?.id,
+      isAlreadyLinkedToCurrentPcs,
+      needsShift,
+      needsNewHeader,
+    });
+
+    if (needsShift) {
+      // 4. Shift all panels >= newPanelNo by +1, from highest to lowest to avoid unique constraint clashes
+      const toShift = panelHeaders
+        .filter((h: any) => parseInt(h.panel_no) >= newPanelNo)
+        .sort((a: any, b: any) => parseInt(b.panel_no) - parseInt(a.panel_no));
+
+      for (const h of toShift) {
+        // Cek apakah header ini dipakai oleh PCS lain
+        const { data: detailsForH } = await supabase
+          .from("production_details")
+          .select("id, pcs_index")
+          .eq("header_id", (h as any).id);
+
+        const otherPcsDetails = (detailsForH || []).filter(d => String(d.pcs_index) !== String(params.pcsIndex));
+        const currentPcsDetail = (detailsForH || []).find(d => String(d.pcs_index) === String(params.pcsIndex));
+
+        if (!currentPcsDetail) continue;
+
+        if (otherPcsDetails.length > 0) {
+          // Header ini di-share dengan PCS lain. Kita tidak boleh menggeser header aslinya.
+          // Buat kloningan header khusus untuk PCS ini.
+          const clonedHeaderId = genId();
+          const clonedHeaderPayload = { ...h };
+          delete clonedHeaderPayload.production_details; // Hapus relasi jika ada
+          delete clonedHeaderPayload.idempotency_key; // Hapus agar tidak duplikat
+          clonedHeaderPayload.id = clonedHeaderId;
+          clonedHeaderPayload.panel_no = String(parseInt(h.panel_no) + 1);
+
+          const { error: cloneErr } = await supabase.from("production_headers").insert(clonedHeaderPayload);
+          if (cloneErr) {
+            return { success: false, error: `Gagal kloning header ${(h as any).panel_no}: ${cloneErr.message}` };
+          }
+          
+          // Update detail PCS ini agar menunjuk ke header yang baru dikloning
+          await supabase.from("production_details").update({ header_id: clonedHeaderId }).eq("id", currentPcsDetail.id);
+        } else {
+          // Header ini hanya dipakai oleh PCS ini, aman untuk digeser
+          const { error: shiftErr } = await supabase
+            .from("production_headers")
+            .update({ panel_no: String(parseInt((h as any).panel_no) + 1) })
+            .eq("id", (h as any).id);
+
+          if (shiftErr) {
+            return { success: false, error: `Gagal menggeser panel ${(h as any).panel_no}: ${shiftErr.message}` };
+          }
+        }
+      }
+    }
+
+    // 5. Get current datetime in WIB
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    });
+    const tanggalJam = fmt.format(now);
+
+    // Find the most appropriate header to copy metadata from
+    let sourceHeader = refHeader;
+    if (panelHeaders && panelHeaders.length > 0) {
+      if (params.appendToEnd) {
+        const maxPanelHeader = panelHeaders.reduce((prev: any, current: any) => {
+          return (parseInt(prev.panel_no) > parseInt(current.panel_no)) ? prev : current;
+        });
+        if (maxPanelHeader) sourceHeader = maxPanelHeader;
+      } else {
+        const currentAtPos = panelHeaders.find((h: any) => parseInt(h.panel_no) === newPanelNo);
+        if (currentAtPos) {
+          sourceHeader = currentAtPos;
+        } else {
+          const prevPanel = panelHeaders.find((h: any) => parseInt(h.panel_no) === newPanelNo - 1);
+          if (prevPanel) sourceHeader = prevPanel;
+        }
+      }
+    }
+
+    // 6. Create new header (copy metadata from sourceHeader) if needed
+    if (needsNewHeader) {
+      const newHeaderId = genId();
+      const newHeaderPayload: any = {
+        id: newHeaderId,
+        tgl: (sourceHeader as any).tgl || tanggalJam.split(" ")[0],
+        tanggal_jam: tanggalJam,
+        nomor_mc: (sourceHeader as any).nomor_mc,
+        design_id: (sourceHeader as any).design_id,
+        potongan_ke: (sourceHeader as any).potongan_ke,
+        panel_no: String(newPanelNo),
+        operator_id: (sourceHeader as any).operator_id || null,
+        group_id: (sourceHeader as any).group_id || null,
+        course: (sourceHeader as any).course || null,
+        rpm: (sourceHeader as any).rpm || null,
+        pick: (sourceHeader as any).pick || null,
+        pic: (sourceHeader as any).pic || null,
+        no_order_barang: (sourceHeader as any).no_order_barang || null,
+        no_customer: (sourceHeader as any).no_customer || null,
+        jenis_benang_dasar: (sourceHeader as any).jenis_benang_dasar || null,
+        liner: (sourceHeader as any).liner || null,
+        heavy: (sourceHeader as any).heavy || null,
+        shadow: (sourceHeader as any).shadow || null,
+        pinggiran: (sourceHeader as any).pinggiran || null,
+        created_by_name: (sourceHeader as any).created_by_name || null,
+        pcs: (sourceHeader as any).pcs || 1,
+      };
+
+      const { error: insertHeaderErr } = await supabase
+        .from("production_headers")
+        .insert(newHeaderPayload);
+
+      if (insertHeaderErr) {
+        return { success: false, error: "Gagal membuat header panel baru: " + insertHeaderErr.message };
+      }
+      
+      targetHeaderId = newHeaderId;
+    }
+
+    // 7. Create production_detail(s)
+    // Only create for current PCS as requested
+    const newDetailId = genId() + "-0";
+    const { error: insertDetailErr } = await supabase
+      .from("production_details")
+      .insert({
+        id: newDetailId,
+        header_id: targetHeaderId,
+        pcs_index: params.pcsIndex || 1,
+        jml_hasil_produksi: 1,
+        indikator_stop: false,
+        kategori_masalah: params.kategoriMasalah && params.kategoriMasalah.length > 0 ? params.kategoriMasalah.join(", ") : null,
+        detail_masalah: params.detailMasalah || null,
+        keterangan_cacat: params.keteranganCacat ? `${params.keteranganCacat} [TAMBAHAN QC]` : "[TAMBAHAN QC]",
+        meter_kain: null,
+        roll_no: null,
+      });
+
+    if (insertDetailErr) {
+      return { success: false, error: "Gagal membuat detail panel baru: " + insertDetailErr.message };
+    }
+
+    return { success: true, newPanelNo, newHeaderId: targetHeaderId };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getQCDetailsByGroup(nomor_mc: string, design_id: string, potongan_ke: string, pcs_index: string) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("production_details")
+      .select(`
+        id, 
+        pcs_index, 
+        jml_hasil_produksi, 
+        kategori_masalah, 
+        detail_masalah, 
+        keterangan_cacat, 
+        meter_kain, 
+        roll_no, 
+        indikator_stop, 
+        final_inspection_id, 
+        header_id,
+        production_headers!inner (
+          id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operators(nama_operator), groups(nama_grup)
+        )
+      `)
+      .is("final_inspection_id", null)
+      .eq("production_headers.nomor_mc", nomor_mc)
+      .eq("production_headers.design_id", design_id)
+      .eq("production_headers.potongan_ke", potongan_ke)
+      .eq("pcs_index", pcs_index);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return { success: true, data: [] };
+    }
+
+    // Sort by panel_no (numeric string) or METERAN
+    data.sort((a: any, b: any) => {
+      const panelA = a.production_headers?.panel_no;
+      const panelB = b.production_headers?.panel_no;
+
+      if (panelA === "METERAN" && panelB === "METERAN") {
+        const meterA = parseFloat(a.meter_kain ?? "");
+        const meterB = parseFloat(b.meter_kain ?? "");
+        return (isNaN(meterA) ? 0 : meterA) - (isNaN(meterB) ? 0 : meterB);
+      }
+      if (panelA === "METERAN") return 1;
+      if (panelB === "METERAN") return -1;
+
+      const numA = parseInt(panelA, 10);
+      const numB = parseInt(panelB, 10);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+
+      return String(panelA || "").localeCompare(
+        String(panelB || ""),
+        undefined,
+        { numeric: true },
+      );
+    });
+
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getQCHistoryDetailById(batchId: string) {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("qc_inspection_batches")
+      .select(`
+        *,
+        items:qc_inspection_items (
+          id, final_inspection_id,
+          detail:production_details (
+            id, pcs_index, final_inspection_id, header_id, roll_no, meter_kain, keterangan_qc, keterangan_cacat, kategori_masalah, detail_masalah,
+            header:production_headers (id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operators(nama_operator), groups(nama_grup))
+          )
+        )
+      `)
+      .eq("id", batchId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching QC batch by ID:", error);
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return { success: false, error: "Data batch tidak ditemukan." };
+    }
+
+    // Format the batch to match the expected format
+    const firstItem = data.items && data.items.length > 0 ? data.items[0] : null;
+    const header = firstItem?.detail?.header || {};
+
+    const formattedItems = (data.items || []).map((item: any) => ({
+      id: item.id,
+      final_inspection_id: item.final_inspection_id,
+      detail: item.detail || {},
+      header: item.detail?.header || {}
+    }));
+
+    const formattedData = {
+      ...data,
+      header,
+      detail: { pcs_index: data.pcs_index },
+      items: formattedItems
+    };
+
+    return { success: true, data: formattedData };
+  } catch (err: any) {
+    console.error("Server action error in getQCHistoryDetailById:", err);
+    return { success: false, error: err.message };
+  }
+}
+
 

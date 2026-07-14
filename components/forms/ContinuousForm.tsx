@@ -41,6 +41,7 @@ import {
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
 import ProductionHeaderModal from "./ProductionHeaderModal";
+import DowntimeTracker from "./DowntimeTracker";
 
 // DATA FALLBACK DARI EXCEL
 const FALLBACK_OPERATORS = [
@@ -363,6 +364,7 @@ export default function ContinuousForm({
   // Pop-up Modal State
   const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
   const [isLastRoll, setIsLastRoll] = useState(false);
+  const [showAdvancedActions, setShowAdvancedActions] = useState(false);
 
   // States untuk upload foto
   const [isUploading, setIsUploading] = useState<{
@@ -586,10 +588,6 @@ export default function ContinuousForm({
           pcsIndex: "1",
           jmlHasilProduksi: "0",
           meterKain: "",
-          indikatorStop: false,
-          kategoriMasalah: [],
-          detailMasalah: "",
-          keteranganCacat: "",
           rollNo: "",
         },
       ],
@@ -603,6 +601,7 @@ export default function ContinuousForm({
         groupId: String(initialData.group_id || ""),
         designId: String(initialData.design_id || ""),
         nomorMc: initialData.nomor_mc || "",
+        statusMatching: initialData.status_matching || "",
         tanggalProduksi:
           initialData.tgl || new Date().toISOString().split("T")[0],
         tanggalPotong: initialData.tanggal_potong || "",
@@ -630,12 +629,6 @@ export default function ContinuousForm({
               pcsIndex: String(d.pcs_index || "1"),
               jmlHasilProduksi: "0",
               meterKain: d.meter_kain || "",
-              indikatorStop: d.kategori_masalah ? true : false,
-              kategoriMasalah: d.kategori_masalah
-                ? d.kategori_masalah.split(", ")
-                : [],
-              detailMasalah: d.detail_masalah || "",
-              keteranganCacat: d.keterangan_cacat || "",
               rollNo: d.roll_no || "",
             }))
             : [
@@ -643,10 +636,6 @@ export default function ContinuousForm({
                 pcsIndex: "1",
                 jmlHasilProduksi: "0",
                 meterKain: "",
-                indikatorStop: false,
-                kategoriMasalah: [],
-                detailMasalah: "",
-                keteranganCacat: "",
                 rollNo: "",
               },
             ],
@@ -655,6 +644,7 @@ export default function ContinuousForm({
   }, [initialData, isEdit, reset]);
 
   const watchGroupId = watch("groupId");
+  const watchJenisLaporan = watch("jenisLaporan") || "";
   const selectedGroup = groups.find((g) => g.id.toString() === watchGroupId);
   const activeShiftName = selectedGroup ? selectedGroup.name : "A";
 
@@ -666,6 +656,36 @@ export default function ContinuousForm({
     control,
     name: "pcsData",
   });
+
+  const [pcsConfirmModal, setPcsConfirmModal] = useState<{
+    isOpen: boolean;
+    targetCount: number;
+    actionType: "increment" | "decrement";
+  }>({
+    isOpen: false,
+    targetCount: 0,
+    actionType: "increment",
+  });
+
+  const handleChangePcsCount = (targetCount: number) => {
+    if (targetCount > fields.length) {
+      // Append directly without confirmation for increasing
+      for (let i = fields.length; i < targetCount; i++) {
+        append({
+          pcsIndex: String(i + 1),
+          jmlHasilProduksi: "1",
+          meterKain: "",
+        });
+      }
+    } else if (targetCount < fields.length) {
+      // Show confirmation dialog before reducing PCS count since it deletes data
+      setPcsConfirmModal({
+        isOpen: true,
+        targetCount,
+        actionType: "decrement",
+      });
+    }
+  };
 
   // Auto calculate total hasil produksi meter
   const watchMeterAwal = watch("meterAwal");
@@ -830,10 +850,6 @@ export default function ContinuousForm({
                   pcsIndex: "1",
                   jmlHasilProduksi: "1",
                   meterKain: "",
-                  indikatorStop: false,
-                  kategoriMasalah: [],
-                  detailMasalah: "",
-                  keteranganCacat: "",
                   rollNo: rollVal,
                 },
               ];
@@ -915,9 +931,13 @@ export default function ContinuousForm({
     // Gunakan idempotency key dari ref yang stabil
     data.idempotencyKey = idempotencyKeyRef.current;
 
-    // Ambil nama operator dan simpan ke PIC (dari auth context)
-    data.pic = user?.fullName || "";
-    data.operatorId = "AUTO";
+    // Otomatis set isPanelGagal jika ada PCS yang BS
+    if (data.pcsData?.some((p) => p.isBs)) {
+      data.isPanelGagal = true;
+    }
+
+    // Ambil nama operator asli
+    data.pic = getOperatorName(data.operatorId) || "";
     data.grupName = getGroupName(data.groupId);
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;
@@ -951,30 +971,7 @@ export default function ContinuousForm({
       }
     }
 
-    // Gabungkan detailMasalahMap ke spesifikMasalah, dan set detailMasalah ke nama kategori lengkap
-    if (data.pcsData) {
-      data.pcsData.forEach((pcs) => {
-        if (pcs.indikatorStop && pcs.kategoriMasalah && pcs.detailMasalahMap) {
-          const detailNames = pcs.kategoriMasalah
-            .map(
-              (cat) =>
-                NEW_PROBLEM_CATEGORIES.find((c) => c.id === cat)?.name || cat,
-            )
-            .join(", ");
-
-          const combinedSpesifik = pcs.kategoriMasalah
-            .map((cat) => {
-              const details = pcs.detailMasalahMap?.[cat];
-              return Array.isArray(details) ? details.join(", ") : details;
-            })
-            .filter(Boolean)
-            .join(", ");
-
-          pcs.detailMasalah = detailNames || null;
-          pcs.spesifikMasalah = combinedSpesifik || null;
-        }
-      });
-    }
+    // Gabungkan detailMasalahMap ke spesifikMasalah (Logic lama, sekarang diambil alih Backend jika pakai downtimeEvents)
 
     // Save Header Data to LocalStorage automatically on submit
     const lastRollNo =
@@ -997,8 +994,10 @@ export default function ContinuousForm({
       pinggiran: data.pinggiran,
       course: data.course,
       rpm: data.rpm,
+      targetMeter: data.targetMeter,
       pic: data.pic,
       potonganKe: data.potonganKe,
+      isPanelGagal: data.isPanelGagal || false,
       meterAwal:
         data.meterAkhir && !effectiveIsLastRoll
           ? data.meterAkhir
@@ -1008,7 +1007,21 @@ export default function ContinuousForm({
       meterAkhir: "",
       hasilProduksiMeter: "",
       lastRollNo: lastRollNo,
+      mesinMasihStop: data.mesinMasihStop || false,
     };
+
+    if (data.mesinMasihStop) {
+      if (data.downtimeEvents && data.downtimeEvents.length > 0) {
+        const lastEvent = data.downtimeEvents[data.downtimeEvents.length - 1];
+        localStorage.setItem("dji_unresolved_downtime", JSON.stringify({
+          ...lastEvent,
+          durasiDetik: 0
+        }));
+      }
+    } else {
+      localStorage.removeItem("dji_unresolved_downtime");
+    }
+
     localStorage.setItem("dji_form_header", JSON.stringify(headerDataToSave));
 
     try {
@@ -1092,11 +1105,7 @@ export default function ContinuousForm({
         pcsData: [
           {
             pcsIndex: "1",
-            jmlHasilProduksi: "",
-            indikatorStop: false,
-            kategoriMasalah: [],
-            detailMasalah: "",
-            keteranganCacat: "",
+            meterKain: "",
           },
         ],
       });
@@ -1125,24 +1134,44 @@ export default function ContinuousForm({
     const currentPcsData = watch("pcsData") || [];
     const newPcsData = currentPcsData.map((pcs, index) => ({
       pcsIndex: (index + 1).toString(),
-      jmlHasilProduksi: "1",
       meterKain: "",
-      rollNo: pcs.rollNo || "",
-      indikatorStop: false,
-      kategoriMasalah: [],
-      detailMasalah: "",
-      keteranganCacat: "",
     }));
+
+    // Jika mesinMasihStop, potonganKe tidak naik agar Shift 2 bisa lanjutkan panel yang sama
+    const wasMesinMasihStop = (() => {
+      try {
+        const h = localStorage.getItem("dji_form_header");
+        if (h) return JSON.parse(h).mesinMasihStop || false;
+      } catch (e) { }
+      return false;
+    })();
+
+    const wasPanelGagal = (() => {
+      try {
+        const h = localStorage.getItem("dji_form_header");
+        if (h) return JSON.parse(h).isPanelGagal || false;
+      } catch (e) { }
+      return false;
+    })();
 
     const currentPotongan = parseInt(watch("potonganKe") || "0", 10);
     const nextPotongan =
-      wasLastRoll && !isNaN(currentPotongan)
+      wasLastRoll && !isNaN(currentPotongan) && !wasMesinMasihStop && !wasPanelGagal
         ? String(currentPotongan + 1)
         : watch("potonganKe");
 
+    let nextJenisLaporan = watch("jenisLaporan");
+    if (nextJenisLaporan === "Mulai Istirahat") {
+      nextJenisLaporan = "Selesai Istirahat";
+    } else if (nextJenisLaporan === "Selesai Istirahat") {
+      nextJenisLaporan = "";
+    }
+
     reset({
       ...watch(),
+      jenisLaporan: nextJenisLaporan,
       potonganKe: nextPotongan,
+      mesinMasihStop: false,
 
       pcsData:
         newPcsData.length > 0
@@ -1150,13 +1179,7 @@ export default function ContinuousForm({
           : [
             {
               pcsIndex: "1",
-              jmlHasilProduksi: "1",
               meterKain: "",
-              rollNo: "",
-              indikatorStop: false,
-              kategoriMasalah: [],
-              detailMasalah: "",
-              keteranganCacat: "",
             },
           ],
       totalDowntime: "",
@@ -1165,6 +1188,7 @@ export default function ContinuousForm({
       hasilProduksiMeter: "",
       tanggalPotong: "",
       targetMeter: wasLastRoll ? "" : watch("targetMeter"),
+      downtimeEvents: [],
     });
 
     // Refresh idempotency key setelah sukses submit
@@ -1266,9 +1290,9 @@ export default function ContinuousForm({
   return (
     <div className="w-full bg-gradient-to-br from-emerald-50/40 via-white to-white border border-[#e9ecef] rounded-[24px] p-6 sm:p-8 shadow-[0_8px_30px_rgba(16,185,129,0.06)] text-slate-800 relative overflow-hidden">
       {/* Decorative background shape */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+      <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none -z-10"></div>
 
-      <div className="relative z-10">
+      <div className="relative">
         {/* Segmented Control for Mode Switching */}
         <div
           data-tour="meter-mode-switch"
@@ -1333,12 +1357,13 @@ export default function ContinuousForm({
             <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-3 sm:gap-4 lg:gap-5 items-stretch">
               <div data-tour="meter-header-summary" className="w-full h-full">
                 <HeaderSummaryCard
-                  operatorName={user?.fullName || ""}
+                  operatorName={getOperatorName(watch("operatorId"))}
                   shiftName={activeShiftName}
                   nomorMc={watch("nomorMc") || ""}
                   design={watch("designId") || ""}
                   statusMatching={watch("statusMatching") || ""}
                   potonganKe={watch("potonganKe")}
+                  pcsCount={fields.length}
                   onEdit={() => {
                     setIsHeaderModalOpen(true);
                     setHighlightPotonganKe(false);
@@ -1362,6 +1387,8 @@ export default function ContinuousForm({
                 activeShiftName={activeShiftName}
                 onClearHeader={handleClearHeader}
                 highlightPotonganKe={highlightPotonganKe}
+                pcsCount={fields.length}
+                onChangePcsCount={handleChangePcsCount}
               />
 
               {/* Tombol Pemicu Pop-up Meteran */}
@@ -1372,7 +1399,7 @@ export default function ContinuousForm({
                 <div className="absolute -top-3.5 lg:-top-4 left-1/2 -translate-x-1/2 bg-emerald-600 px-3 lg:px-5 py-1 lg:py-1.5 text-[9px] lg:text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md whitespace-nowrap">
                   {watch("nomorMc") === "T2A"
                     ? "Laporan Meter"
-                    : "Laporan Hasil Akhir"}
+                    : "Laporan Hasil"}
                 </div>
 
                 <div className="mt-3 flex flex-col items-center justify-center text-center gap-4">
@@ -1380,12 +1407,12 @@ export default function ContinuousForm({
                     <h4 className="text-sm sm:text-base lg:text-lg font-black text-emerald-900">
                       {watch("nomorMc") === "T2A"
                         ? "Laporan Meter"
-                        : "Laporan Hasil Akhir (Shift)"}
+                        : "Laporan Istirahat dan Shift"}
                     </h4>
                     <p className="text-[10px] sm:text-xs text-emerald-700 mt-1 sm:mt-2 max-w-sm mx-auto">
                       {watch("nomorMc") === "T2A"
                         ? "Gunakan tombol di bawah untuk melaporkan meter produksi."
-                        : "Gunakan tombol di bawah jika beres potongan atau shift selesai."}
+                        : "Gunakan tombol di bawah jika ingin istirahat, jika beres potongan atau shift selesai."}
                     </p>
                   </div>
                   <button
@@ -1396,310 +1423,37 @@ export default function ContinuousForm({
                     <FileText className="w-5 h-5" />
                     {watch("nomorMc") === "T2A"
                       ? "Lapor Meter"
-                      : "Lapor Meteran Akhir"}
+                      : "Lapor Meter Terakhir"}
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* ARRAY OF PCS */}
-            <div data-tour="meter-pcs-detail" className="mt-8">
-              <div className="text-center mb-6">
-                <h4 className="text-sm font-bold text-slate-700">
-                  Detail per PCS
-                </h4>
-              </div>
-
-              <div className="space-y-6">
-                {fields.map((field, index) => {
-                  const watchIndikator = watch(
-                    `pcsData.${index}.indikatorStop` as any,
-                  );
-                  return (
-                    <div
-                      key={field.id}
-                      className="border-t-2 border-slate-200/60 relative pt-6 pb-2"
-                    >
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-3 py-0.5 text-[10px] font-bold text-sky-500 uppercase tracking-widest border border-slate-200 rounded-full flex gap-3 items-center shadow-sm">
-                        <span>PCS Ke-{index + 1}</span>
-                        <button
-                          type="button"
-                          onClick={() => remove(index)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded-full transition-colors"
-                          title="Hapus PCS"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-
-                      <div className="mt-4">
-                        {/* Hidden Jml Hasil Produksi */}
-                        <input
-                          type="hidden"
-                          {...register(
-                            `pcsData.${index}.jmlHasilProduksi` as const,
-                          )}
-                        />
-                        <div className="flex flex-col gap-1 w-full">
-                          <label className="text-[10px] font-semibold text-slate-500 uppercase">
-                            Posisi Meter Kain
-                          </label>
-                          <input
-                            type="text"
-                            {...register(`pcsData.${index}.meterKain` as const)}
-                            className="h-11 px-4 rounded-xl bg-white border border-slate-300 text-sm focus:border-sky-400 outline-none transition-all shadow-sm"
-                            placeholder="Contoh: 15.5"
-                          />
-                          {errors.pcsData?.[index]?.meterKain && (
-                            <span className="text-red-500 text-[10px] font-bold">
-                              {errors.pcsData[index]?.meterKain?.message}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div
-                        className={`mt-4 border rounded-xl overflow-hidden transition-all duration-300 ${watchIndikator ? "border-red-200 bg-red-50/20" : "border-slate-200 bg-slate-50/50"}`}
-                      >
-                        <label className="flex items-center justify-between p-4 cursor-pointer select-none">
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              {...register(
-                                `pcsData.${index}.indikatorStop` as const,
-                              )}
-                              onChange={(e) => {
-                                register(
-                                  `pcsData.${index}.indikatorStop` as const,
-                                ).onChange(e);
-                                if (e.target.checked) {
-                                  if (!isTimerRunning) handleStartTimer();
-                                } else {
-                                  setTimeout(() => {
-                                    const currentPcsData =
-                                      getValues("pcsData") || [];
-                                    if (
-                                      !currentPcsData.some(
-                                        (p) => p.indikatorStop,
-                                      )
-                                    ) {
-                                      setIsTimerRunning(false);
-                                      setTimerStartRef(null);
-                                      setTimerStopRef(null);
-                                      setFirstProblemTime(null);
-                                      setLiveTimerSeconds(0);
-                                      setValue("totalDowntime", "");
-                                    }
-                                  }, 10);
-                                }
-                              }}
-                              className="w-5 h-5 rounded text-red-600 focus:ring-red-500 border-slate-300 cursor-pointer"
-                            />
-                            <div>
-                              <h5
-                                className={`text-sm font-bold ${watchIndikator ? "text-red-650" : "text-slate-600"}`}
-                              >
-                                Terdapat Cacat / Kendala pada PCS ini?
-                              </h5>
-                            </div>
-                          </div>
-                        </label>
-
-                        {watchIndikator && (
-                          <div className="p-4 border-t border-red-100/50 space-y-4 animate-fadeIn">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[10px] font-bold text-red-600 uppercase">
-                                Kategori Masalah (Pilih lebih dari 1)
-                              </label>
-                              <div className="flex flex-col gap-2 mt-1">
-                                {NEW_PROBLEM_CATEGORIES.map((c) => {
-                                  const isChecked = watch(
-                                    `pcsData.${index}.kategoriMasalah`,
-                                  )?.includes(c.id);
-                                  return (
-                                    <div
-                                      key={c.id}
-                                      className="flex flex-col gap-2 p-3 bg-white border border-red-100 rounded-lg shadow-sm"
-                                    >
-                                      <label className="flex items-center gap-2 cursor-pointer hover:text-red-500 transition-colors">
-                                        <input
-                                          type="checkbox"
-                                          value={c.id}
-                                          {...register(
-                                            `pcsData.${index}.kategoriMasalah` as const,
-                                          )}
-                                          className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500"
-                                        />
-                                        <span className="text-xs font-bold text-slate-700">
-                                          {c.name}
-                                        </span>
-                                      </label>
-
-                                      {isChecked && (
-                                        <div className="pl-6 animate-fadeIn mt-2">
-                                          <div className="w-full rounded-md bg-white border border-red-200 overflow-hidden flex flex-col shadow-inner">
-                                            <div className="px-3 py-1.5 bg-slate-50 border-b border-red-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                              Pilih Detail Masalah
-                                            </div>
-                                            <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                                              {NEW_PROBLEMS[c.id]?.map((p) => {
-                                                const currentSelections =
-                                                  watch(
-                                                    `pcsData.${index}.detailMasalahMap.${c.id}`,
-                                                  ) || [];
-                                                const isSelected =
-                                                  Array.isArray(
-                                                    currentSelections,
-                                                  )
-                                                    ? currentSelections.includes(
-                                                      p,
-                                                    )
-                                                    : currentSelections === p;
-                                                return (
-                                                  <label
-                                                    key={p}
-                                                    className={`px-3 py-2 cursor-pointer text-xs transition-colors border-b last:border-0 border-slate-100 flex items-center justify-between ${isSelected
-                                                      ? "bg-red-50 text-red-700 font-bold"
-                                                      : "hover:bg-slate-50 text-slate-600"
-                                                      }`}
-                                                  >
-                                                    <input
-                                                      type="checkbox"
-                                                      value={p}
-                                                      {...register(
-                                                        `pcsData.${index}.detailMasalahMap.${c.id}` as const,
-                                                      )}
-                                                      className="hidden"
-                                                    />
-                                                    <span>{p}</span>
-                                                    {isSelected && (
-                                                      <CheckCircle2 className="w-4 h-4 text-red-500 shrink-0 ml-2" />
-                                                    )}
-                                                  </label>
-                                                );
-                                              })}
-                                            </div>
-                                          </div>
-                                          {errors.pcsData?.[index]
-                                            ?.detailMasalahMap?.[c.id] && (
-                                              <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                                                {
-                                                  errors.pcsData[index]
-                                                    ?.detailMasalahMap?.[c.id]
-                                                    ?.message
-                                                }
-                                              </span>
-                                            )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                              {errors.pcsData?.[index]?.kategoriMasalah && (
-                                <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                                  {
-                                    errors.pcsData[index]?.kategoriMasalah
-                                      ?.message
-                                  }
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-6 flex justify-center">
-                {fields.length === 0 && (
-                  <div className="w-full p-6 border-2 border-dashed border-slate-200 rounded-2xl flex justify-center mb-4">
-                    <p className="text-sm text-slate-400 font-medium">
-                      Belum ada PCS yang dicatat.
-                    </p>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    append({
-                      pcsIndex: String(fields.length + 1),
-                      jmlHasilProduksi: "0",
-                      meterKain: "",
-                      indikatorStop: false, // Default is not a defect
-                      kategoriMasalah: [],
-                      detailMasalah: "",
-                      keteranganCacat: "",
-                    })
-                  }
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition-all shadow-sm"
-                >
-                  <Plus className="w-4 h-4 text-slate-400" />
-                  Tambah PCS Baru
-                </button>
-              </div>
+            {/* ARRAY OF PCS (HIDDEN) */}
+            <div className="hidden">
+              {fields.map((field, index) => (
+                <input
+                  key={field.id}
+                  type="hidden"
+                  {...register(`pcsData.${index}.pcsIndex` as const)}
+                  value={index + 1}
+                />
+              ))}
             </div>
           </div>
 
-          {/* Global Downtime Input */}
-          {watch("pcsData")?.some((pcs) => pcs.indikatorStop) && (
-            <div className="p-5 bg-orange-50 border border-orange-200 rounded-2xl shadow-sm mb-6">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-orange-800 uppercase flex items-center gap-2">
-                  Total Estimasi Waktu Mesin Berhenti (Downtime)
-                </label>
-                <p className="text-[10px] text-orange-600">
-                  Waktu henti mesin akan tercatat otomatis saat timer berjalan.
-                </p>
-                <div className="relative flex items-center gap-4 mt-2">
-                  <div className="relative w-32 shrink-0">
-                    <input
-                      type="number"
-                      {...register("totalDowntime")}
-                      className="w-full h-14 pl-4 pr-12 rounded-2xl bg-white/50 border-2 border-orange-200 text-xl font-black text-orange-700 focus:outline-none transition-all shadow-inner cursor-not-allowed"
-                      placeholder="0"
-                      readOnly
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-500 text-[10px] font-bold uppercase">
-                      Detik
-                    </span>
-                  </div>
-
-                  {/* Timer Controls */}
-                  <div className="flex-1">
-                    {!isTimerRunning ? (
-                      <button
-                        type="button"
-                        onClick={handleStartTimer}
-                        className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
-                      >
-                        <Play className="w-5 h-5 fill-current" />
-                        Mulai Timer
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleStopTimer}
-                        className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-red-500/20 animate-pulse active:scale-[0.98]"
-                      >
-                        <Square className="w-5 h-5 fill-current" />
-                        Stop ({formatTimer(liveTimerSeconds)})
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {errors.totalDowntime && (
-                  <span className="text-red-500 text-[10px] font-bold mt-1 block">
-                    {errors.totalDowntime.message}
-                  </span>
-                )}
-              </div>
+          <div className="flex flex-col w-full mb-6">
+            <div data-tour="downtime" className="w-full">
+              <DowntimeTracker
+                control={control}
+                setValue={setValue}
+                watch={watch}
+                showBlockInput={true}
+                showMeterInput={true}
+              />
             </div>
-          )}
+          </div>
 
-          {/* Global Error Validation for PCS Data */}
           {(errors.pcsData as any)?.message && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 mb-6 animate-pulse">
               <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
@@ -1717,79 +1471,137 @@ export default function ContinuousForm({
             </div>
           )}
 
-          {/* Potong Kain Toggle */}
-          <div
-            data-tour="meter-cut-roll"
-            className={`p-5 border rounded-2xl transition-all duration-300 mb-6 ${isLastRoll ? "bg-emerald-50 border-emerald-300 shadow-sm" : "bg-slate-50 border-slate-200"}`}
+          {/* Tindakan Akhir Panel Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShowAdvancedActions(!showAdvancedActions)}
+            className="w-full flex items-center justify-center gap-2 py-3 mb-4 rounded-xl border-2 border-slate-200 border-dashed text-slate-500 font-bold text-sm hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300 transition-all duration-200"
           >
-            <label className="flex items-center justify-between cursor-pointer select-none">
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={isLastRoll}
-                  onChange={(e) => {
-                    setIsLastRoll(e.target.checked);
-                    if (e.target.checked) {
-                      setValue(
-                        "tanggalPotong",
-                        new Date().toISOString().split("T")[0],
-                      );
-                    } else {
-                      setValue("tanggalPotong", "");
-                    }
-                  }}
-                  className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
-                />
-                <div>
-                  <h5
-                    className={`text-sm font-bold ${isLastRoll ? "text-emerald-700" : "text-slate-600"}`}
-                  >
-                    Potong Kain
-                  </h5>
-                </div>
-              </div>
-              <Scissors
-                className={`w-5 h-5 shrink-0 scale-x-[-1] ${isLastRoll ? "text-emerald-600" : "text-slate-400"}`}
-              />
-            </label>
-
-            {isLastRoll && (
-              <div className="mt-4 pt-4 border-t border-emerald-200/60 animate-fadeIn">
-                <div className="flex flex-col md:flex-row md:items-end gap-4">
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] font-bold text-emerald-600 uppercase">
-                      Tanggal Potong
-                    </label>
-                    <input
-                      type="date"
-                      {...register("tanggalPotong")}
-                      className="h-12 px-4 rounded-xl bg-white border border-emerald-200 text-sm font-semibold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none shadow-sm"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await refreshAutomaticMeterStart();
-                      setIsMeterModalOpen(true);
-                    }}
-                    className="flex-[2] h-12 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm md:text-base font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <Save className="w-5 h-5" /> Lanjut Isi Total Produksi
-                    (Meteran)
-                  </button>
-                </div>
-              </div>
+            {showAdvancedActions ? (
+              <>Tutup Opsi Lanjutan</>
+            ) : (
+              <>Buka Opsi Lanjutan (Potong / Lanjut Shift)</>
             )}
-          </div>
+          </button>
 
-          {/* Buttons Action */}
+          {/* Tindakan Akhir Panel */}
+          {showAdvancedActions && (
+            <div className="flex flex-col gap-3 mb-6 animate-fadeIn">
+              <div
+                data-tour="meter-cut-roll"
+                className={`p-4 border rounded-2xl transition-all duration-300 ${isLastRoll ? "bg-emerald-50 border-emerald-300 shadow-sm" : "bg-slate-50 border-slate-200"}`}
+              >
+                <label className="flex items-center justify-between cursor-pointer select-none">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isLastRoll}
+                      onChange={(e) => {
+                        setIsLastRoll(e.target.checked);
+                        if (e.target.checked) {
+                          setValue(
+                            "tanggalPotong",
+                            new Date().toISOString().split("T")[0],
+                          );
+                        } else {
+                          setValue("tanggalPotong", "");
+                        }
+                      }}
+                      className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                    />
+                    <div>
+                      <h5
+                        className={`text-sm font-bold ${isLastRoll ? "text-emerald-700" : "text-slate-600"}`}
+                      >
+                        Potong Kain
+                      </h5>
+                    </div>
+                  </div>
+                  <Scissors
+                    className={`w-5 h-5 shrink-0 scale-x-[-1] ${isLastRoll ? "text-emerald-600" : "text-slate-400"}`}
+                  />
+                </label>
+
+                {isLastRoll && (
+                  <div className="mt-4 pt-4 border-t border-emerald-200/60 animate-fadeIn">
+                    <div className="flex flex-col md:flex-row md:items-end gap-4">
+                      <div className="flex flex-col gap-1 flex-1">
+                        <label className="text-[10px] font-bold text-emerald-600 uppercase">
+                          Tanggal Potong
+                        </label>
+                        <input
+                          type="date"
+                          {...register("tanggalPotong")}
+                          className="h-12 px-4 rounded-xl bg-white border border-emerald-200 text-sm font-semibold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none shadow-sm"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await refreshAutomaticMeterStart();
+                          setIsMeterModalOpen(true);
+                        }}
+                        className="flex-[2] h-12 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm md:text-base font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        <Save className="w-5 h-5" /> Lanjut Isi Total Produksi
+                        (Meteran)
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pilih PCS yang BS */}
+              {fields.length > 0 && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 transition-all duration-300 shadow-sm mb-4">
+                  <h5 className="text-xs font-black text-rose-800 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4" />
+                    Tandai PCS BS
+                  </h5>
+                  <p className="text-[10px] font-medium text-rose-600 mb-4">
+                    Centang PCS yang rusak. Jika ada 1 saja yang dicentang, nomor potongan akan otomatis diulang untuk roll/potongan selanjutnya.
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    {fields.map((field, index) => (
+                      <label key={field.id} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
+                        <input
+                          type="checkbox"
+                          {...register(`pcsData.${index}.isBs` as const)}
+                          className="w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-rose-700">
+                          PCS {index + 1}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Lanjut Shift Checkbox */}
+              {!isEdit && (
+                <div className="bg-orange-50/80 border border-orange-200/60 rounded-2xl p-4 transition-all duration-300">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      {...register("mesinMasihStop")}
+                      className="w-5 h-5 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-orange-800 uppercase tracking-wide">Masalah Lanjut Shift (Mesin Stop)</span>
+                      <span className="text-[10px] font-medium text-orange-600/80">Centang jika masalah belum selesai dan panel dilanjutkan shift berikutnya.</span>
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-4 mt-6">
-            {/* Kirim Laporan Cacat Button */}
             <button
               data-tour="meter-submit-defect"
               type="button"
               onClick={() => {
-                // Karena ini tombol kirim form cacat, kosongkan meterAkhir agar validasi skema tetap masuk akal
                 if (watch("nomorMc") !== "T2A") {
                   setValue("meterAwal", "");
                 }
@@ -1814,7 +1626,6 @@ export default function ContinuousForm({
             </button>
           </div>
 
-          {/* Modal Pop-up Meteran */}
           {isMeterModalOpen && (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
@@ -1822,10 +1633,9 @@ export default function ContinuousForm({
             >
               <div
                 data-tour="meter-modal"
-                className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col animate-scaleIn relative overflow-hidden"
+                className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col animate-scaleIn relative overflow-hidden max-h-[95vh] md:max-h-[90vh]"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Background accent */}
                 <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-br from-emerald-400 to-emerald-600 opacity-10"></div>
 
                 <div className="flex justify-between items-center mb-6 relative z-10">
@@ -1851,11 +1661,9 @@ export default function ContinuousForm({
                   </button>
                 </div>
 
-                <div className="space-y-4 relative z-10">
-                  {/* T2A: target-first flow */}
+                <div className="space-y-4 relative z-10 overflow-y-auto max-h-[48vh] sm:max-h-[58vh] pr-1 -mr-1 custom-scrollbar">
                   {watch("nomorMc") === "T2A" ? (
                     <div className="space-y-3">
-                      {/* Info Target Produksi Awal (saat lanjutan shift) */}
                       {isMeterAwalLocked && originalT2ATarget !== null && (
                         <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
@@ -1993,8 +1801,57 @@ export default function ContinuousForm({
                   )}
                 </div>
 
-                <div className="flex gap-3 mt-8 relative z-10">
-                  {/* T2A potongan baru: Simpan (blue) + Kirim (green) sejajar */}
+                <div className="mt-4 relative z-10 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase">
+                    Jenis Laporan Meter
+                  </label>
+                  <input type="hidden" id="jenisLaporan" {...register("jenisLaporan")} />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setValue("jenisLaporan", "", { shouldDirty: true, shouldValidate: true })}
+                      className={`px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-1 shadow-sm active:scale-[0.98] ${
+                        watchJenisLaporan === ""
+                          ? "border-[#0070bc] bg-sky-50 text-[#0070bc] scale-[1.01]"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="block font-black uppercase">Laporan Normal</span>
+                      <span className="block text-[9px] font-medium text-slate-400">Akhir Shift / Potong</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setValue("jenisLaporan", "Mulai Istirahat", { shouldDirty: true, shouldValidate: true })}
+                      className={`px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-1 shadow-sm active:scale-[0.98] ${
+                        watchJenisLaporan === "Mulai Istirahat"
+                          ? "border-amber-500 bg-amber-50 text-amber-700 scale-[1.01]"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="block font-black uppercase">Mulai Istirahat</span>
+                      <span className="block text-[9px] font-medium text-slate-400">Akan Ditinggal</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setValue("jenisLaporan", "Selesai Istirahat", { shouldDirty: true, shouldValidate: true })}
+                      className={`px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-1 shadow-sm active:scale-[0.98] ${
+                        watchJenisLaporan === "Selesai Istirahat"
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-700 scale-[1.01]"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="block font-black uppercase">Selesai Istirahat</span>
+                      <span className="block text-[9px] font-medium text-slate-400">Kembali Bekerja</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                    Pilih <strong>Mulai Istirahat</strong> saat Anda akan pergi istirahat. Pilih <strong>Selesai Istirahat</strong> saat Anda kembali bekerja (meteran akan ditandai dikerjakan helper/saat istirahat).
+                  </p>
+                </div>
+
+                <div className="flex gap-3 mt-6 relative z-10">
                   {watch("nomorMc") === "T2A" && !isMeterAwalLocked ? (
                     <>
                       <button
@@ -2291,6 +2148,59 @@ export default function ContinuousForm({
               >
                 Tutup & Perbaiki
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Konfirmasi Perubahan Jumlah PCS */}
+        {pcsConfirmModal.isOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+            <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl flex flex-col items-center animate-scaleIn text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-sky-500"></div>
+              <div className="w-14 h-14 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center mb-4">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h4 className="text-lg font-bold text-slate-800">
+                {pcsConfirmModal.actionType === "increment"
+                  ? "Tambah PCS?"
+                  : "Hapus PCS?"}
+              </h4>
+              <p className="text-sm text-slate-600 mt-2 mb-6 leading-relaxed">
+                {pcsConfirmModal.actionType === "increment"
+                  ? `Apakah Anda yakin ingin menambah jumlah PCS menjadi ${pcsConfirmModal.targetCount} pcs?`
+                  : `Apakah Anda yakin ingin mengurangi jumlah PCS menjadi ${pcsConfirmModal.targetCount} pcs? Kolom isian meter untuk PCS di atas nomor tersebut akan hilang.`}
+              </p>
+              <div className="flex w-full gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPcsConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-95 transition-all text-sm"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pcsConfirmModal.actionType === "increment") {
+                      for (let i = fields.length; i < pcsConfirmModal.targetCount; i++) {
+                        append({
+                          pcsIndex: String(i + 1),
+                          jmlHasilProduksi: "1",
+                          meterKain: "",
+                        });
+                      }
+                    } else {
+                      for (let i = fields.length - 1; i >= pcsConfirmModal.targetCount; i--) {
+                        remove(i);
+                      }
+                    }
+                    setPcsConfirmModal(prev => ({ ...prev, isOpen: false }));
+                  }}
+                  className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl active:scale-95 transition-all text-sm"
+                >
+                  Ya, Ubah
+                </button>
+              </div>
             </div>
           </div>
         )}

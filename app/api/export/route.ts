@@ -47,7 +47,8 @@ export async function GET(req: NextRequest) {
           keterangan_cacat,
           final_inspection_id,
           meter_kain
-        )
+        ),
+        downtime_events
       `)
       .gte("tgl", startDate)
       .lte("tgl", endDate);
@@ -172,11 +173,32 @@ export async function GET(req: NextRequest) {
                 h.production_details.forEach((d: any) => {
                   totalHasil += Number(d.jml_hasil_produksi || d.meter_kain || 0);
                   if (d.keterangan_cacat) keteranganSet.add(d.keterangan_cacat);
-                  // Basic cacat count if final_inspection_id === 3 (BS) or 2 (B)
                   if (d.final_inspection_id === 3 || d.final_inspection_id === 2) {
                      totalCacat += 1;
                   }
                 });
+              }
+
+              // Tambahan dari downtime_events
+              if (h.downtime_events) {
+                try {
+                  const events = typeof h.downtime_events === 'string' ? JSON.parse(h.downtime_events) : h.downtime_events;
+                  if (Array.isArray(events)) {
+                    events.forEach((event: any) => {
+                      if (event.problems && Array.isArray(event.problems)) {
+                        event.problems.forEach((prob: any) => {
+                          if (prob.details && Array.isArray(prob.details)) {
+                            prob.details.forEach((det: string) => keteranganSet.add(det));
+                          }
+                        });
+                      } else if (event.detail) {
+                        keteranganSet.add(event.detail);
+                      }
+                    });
+                  }
+                } catch(e) {
+                  // ignore
+                }
               }
             });
 
