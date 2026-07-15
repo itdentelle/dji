@@ -1113,19 +1113,19 @@ export default function MendingPage() {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="bg-slate-50">
-                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12" rowSpan={2}>PNL NO</th>
-                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-20 whitespace-nowrap" rowSpan={2}>TGL</th>
-                        <th className="px-1.5 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12 text-center" rowSpan={2}>Group</th>
-                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-24" rowSpan={2}>Operator</th>
-                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-16 text-center" rowSpan={2}>KET ✓/X</th>
-                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-64 whitespace-nowrap" rowSpan={2}>KETERANGAN CACAT</th>
-                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-16 text-center" rowSpan={2}>AKSI</th>
-                        <th className="px-2 py-1 border-b border-slate-200 font-extrabold text-slate-600 text-center" colSpan={3}>MENDING</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12 border-r border-slate-100" rowSpan={2}>PNL NO</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-20 whitespace-nowrap border-r border-slate-100" rowSpan={2}>TGL</th>
+                        <th className="px-1.5 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12 text-center border-r border-slate-100" rowSpan={2}>Group</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-24 border-r border-slate-100" rowSpan={2}>Operator</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-16 text-center border-r border-slate-100" rowSpan={2}>KET ✓/X</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-64 whitespace-nowrap border-r border-slate-100" rowSpan={2}>KETERANGAN CACAT</th>
+                        <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-16 text-center border-r border-slate-100" rowSpan={2}>AKSI</th>
+                        <th className="px-2 py-1 border-b border-slate-200 font-extrabold text-slate-600 text-center border-r border-slate-100" colSpan={3}>MENDING</th>
                       </tr>
                       <tr className="bg-slate-50">
-                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-emerald-600">A</th>
-                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-amber-600">B</th>
-                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-rose-600">BS</th>
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-emerald-600 border-r border-slate-100">A</th>
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-amber-600 border-r border-slate-100">B</th>
+                        <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-rose-600 border-r border-slate-100">BS</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
@@ -1133,17 +1133,17 @@ export default function MendingPage() {
                         if (item.isTotalRow) {
                           return (
                             <tr key={item.id || index} className="bg-slate-100 border-t border-b border-slate-200 font-semibold text-slate-700">
-                              <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap">
+                              <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap border-r border-slate-100">
                                 {item.totalLabel}
                               </td>
-                              <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap">
+                              <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap border-r border-slate-100">
                                 {item.totalCount} Panel
                               </td>
-                              <td colSpan={2} className="bg-slate-100"></td>
-                              <td className="px-1 py-2 text-center text-emerald-600 bg-emerald-50/20 font-black">
+                              <td colSpan={2} className="bg-slate-100 border-r border-slate-100"></td>
+                              <td className="px-1 py-2 text-center text-emerald-600 bg-emerald-50/20 font-black border-r border-slate-100">
                                 {item.countA}
                               </td>
-                              <td className="px-1 py-2 text-center text-amber-600 bg-amber-50/20 font-black">
+                              <td className="px-1 py-2 text-center text-amber-600 bg-amber-50/20 font-black border-r border-slate-100">
                                 {item.countB}
                               </td>
                               <td className="px-1 py-2 text-center text-rose-600 bg-rose-50/20 font-black">
@@ -1155,25 +1155,25 @@ export default function MendingPage() {
 
                         return (
                           <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${item.final_inspection_id === 1 ? "bg-emerald-50/20" : ""}`}>
-                            <td className="px-2 py-1 font-bold text-slate-800">
+                            <td className="px-2 py-1 font-bold text-slate-800 border-r border-slate-100 border-b border-slate-100">
                               {item.displayNo}
                             </td>
-                            <td className="px-2 py-1 text-slate-600 whitespace-nowrap">
+                            <td className="px-2 py-1 text-slate-600 whitespace-nowrap border-r border-slate-100 border-b border-slate-100">
                               {item.showTgl ? (item.tglStr || "-") : ""}
                             </td>
-                            <td className="px-1.5 py-1 font-medium text-slate-700 text-center">
+                            <td className="px-1.5 py-1 font-medium text-slate-700 text-center border-r border-slate-100 border-b border-slate-100">
                               {item.showGrp ? (item.grpStr || "-") : ""}
                             </td>
-                            <td className="px-2 py-1 font-medium text-slate-700 leading-tight">
+                            <td className="px-2 py-1 font-medium text-slate-700 leading-tight border-r border-slate-100 border-b border-slate-100">
                               {item.showOpr ? (item.oprStr || "-") : ""}
                             </td>
-                            <td className="px-2 py-1 text-center font-bold text-sm">
+                            <td className="px-2 py-1 text-center font-bold text-sm border-r border-slate-100 border-b border-slate-100">
                               {item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>}
                             </td>
-                            <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight">
+                            <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
                               {item.cacatDisplay || "-"}
                             </td>
-                            <td className="px-2 py-1">
+                            <td className="px-2 py-1 border-r border-slate-100 border-b border-slate-100">
                               {item.isGradable ? (
                                 <div className="flex items-center justify-center gap-1">
                                   <button
@@ -1192,7 +1192,7 @@ export default function MendingPage() {
                                 </div>
                               ) : null}
                             </td>
-                            <td className="px-1 py-1 text-center">
+                            <td className="px-1 py-1 text-center border-r border-slate-100 border-b border-slate-100">
                               {item.isGradable ? (
                                 <button
                                   onClick={() => handleSelectGrade(item.id, "A")}
@@ -1202,7 +1202,7 @@ export default function MendingPage() {
                                 </button>
                               ) : null}
                             </td>
-                            <td className="px-1 py-1 text-center">
+                            <td className="px-1 py-1 text-center border-r border-slate-100 border-b border-slate-100">
                               {item.isGradable ? (
                                 <button
                                   onClick={() => handleSelectGrade(item.id, "B")}
@@ -1212,7 +1212,7 @@ export default function MendingPage() {
                                 </button>
                               ) : null}
                             </td>
-                            <td className="px-1 py-1 text-center">
+                            <td className="px-1 py-1 text-center border-b border-slate-100">
                               {item.isGradable ? (
                                 <button
                                   onClick={() => handleSelectGrade(item.id, "BS")}
@@ -1227,13 +1227,13 @@ export default function MendingPage() {
                       })}
                       {totalGradable > 0 && (
                         <tr className="bg-slate-50 font-bold border-t border-slate-200 text-[11px] text-slate-700 uppercase tracking-wider">
-                          <td className="px-2 py-3 text-right font-extrabold" colSpan={7}>
+                          <td className="px-2 py-3 text-right font-extrabold border-r border-slate-100" colSpan={7}>
                             Total ({totalGradable} Panel):
                           </td>
-                          <td className="px-1 py-3 text-center text-emerald-600 bg-emerald-50/40 font-black">
+                          <td className="px-1 py-3 text-center text-emerald-600 bg-emerald-50/40 font-black border-r border-slate-100">
                             {totalA}
                           </td>
-                          <td className="px-1 py-3 text-center text-amber-600 bg-amber-50/40 font-black">
+                          <td className="px-1 py-3 text-center text-amber-600 bg-amber-50/40 font-black border-r border-slate-100">
                             {totalB}
                           </td>
                           <td className="px-1 py-3 text-center text-rose-600 bg-rose-50/40 font-black">
