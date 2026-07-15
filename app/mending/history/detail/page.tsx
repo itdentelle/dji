@@ -118,6 +118,7 @@ function MendingDetailContent() {
     if (item.hasil_mending === "B") gradeB++;
     if (item.hasil_mending === "BS") gradeBS++;
   });
+  const totalGradable = gradeA + gradeB + gradeBS;
 
   const detailsToDisplay = React.useMemo(() => {
     if (!mendingData) return [];
@@ -641,15 +642,20 @@ function MendingDetailContent() {
               {isMeteran ? (
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-                      <th className="px-1 py-2 w-7 text-center border-r border-slate-200">No</th>
-                      <th className="px-2 py-2 w-24 border-r border-slate-200">Tgl</th>
-                      <th className="px-1 py-2 w-12 text-center border-r border-slate-200">Group</th>
-                      <th className="px-2 py-2 w-28 border-r border-slate-200">Operator</th>
-                      <th className="px-1 py-2 text-center w-14 border-r border-slate-200">Meter</th>
-                      <th className="px-1 py-2 text-center w-14 border-r border-slate-200">KET ✓/X</th>
-                      <th className="px-3 py-2 min-w-[220px] w-full border-r border-slate-200">Keterangan Cacat</th>
-                      <th className="px-2 py-2 text-center w-24">Hasil Mending</th>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                      <th className="px-2 py-2 w-8 text-center border-r border-slate-100" rowSpan={2}>NO</th>
+                      <th className="px-2 py-2 w-20 border-r border-slate-100 whitespace-nowrap" rowSpan={2}>TGL</th>
+                      <th className="px-1.5 py-2 w-10 text-center border-r border-slate-100" rowSpan={2}>Group</th>
+                      <th className="px-2 py-2 w-24 border-r border-slate-100" rowSpan={2}>Operator</th>
+                      <th className="px-1.5 py-2 text-center w-12 border-r border-slate-100" rowSpan={2}>METER</th>
+                      <th className="px-1.5 py-2 text-center w-12 border-r border-slate-100" rowSpan={2}>KET ✓/X</th>
+                      <th className="px-2 py-2 min-w-[200px] w-full border-r border-slate-100" rowSpan={2}>KETERANGAN CACAT</th>
+                      <th className="px-2 py-1 border-b border-slate-200 font-extrabold text-slate-600 text-center border-r border-slate-100" colSpan={3}>MENDING</th>
+                    </tr>
+                    <tr className="bg-slate-50">
+                      <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-emerald-600 border-r border-slate-100">A</th>
+                      <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-amber-600 border-r border-slate-100">B</th>
+                      <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-rose-600 border-r border-slate-100">BS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
@@ -657,49 +663,87 @@ function MendingDetailContent() {
                       if (item.isTotalRow) {
                         return (
                           <tr key={item.id || index} className="bg-slate-100 border-t-2 border-b-2 border-slate-300">
-                            <td colSpan={8} className="px-3 py-2 text-center text-xs font-semibold text-slate-600">
+                            <td colSpan={10} className="px-3 py-2 text-center text-xs font-semibold text-slate-600">
                               {item.totalLabel} <span className="font-extrabold text-slate-800 ml-1">{item.totalMeter}</span>
                             </td>
                           </tr>
                         );
                       }
 
-                      let hasilMendingClass = "border-slate-200 bg-slate-50 text-slate-300";
-                      if (item.hasil_mending_original === "A") hasilMendingClass = "border-emerald-500 bg-emerald-50 text-emerald-600";
-                      else if (item.hasil_mending_original === "B") hasilMendingClass = "border-amber-500 bg-amber-50 text-amber-500";
-                      else if (item.hasil_mending_original === "BS") hasilMendingClass = "border-rose-500 bg-rose-50 text-rose-600";
+                      if (item.isStartRow) {
+                        return (
+                          <tr key={item.id || index} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-1 py-1.5 font-bold text-slate-800 text-center text-xs w-7 border-r border-slate-100 border-b border-slate-100">
+                              {item.displayNo}
+                            </td>
+                            <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100 border-b border-slate-100">
+                              {item.showTgl ? item.tglStr : ""}
+                            </td>
+                            <td className="px-1.5 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
+                              {item.showGrp ? item.grpStr : ""}
+                            </td>
+                            <td className="px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100">
+                              {item.showOpr ? item.oprStr : ""}
+                            </td>
+                            <td className="px-1.5 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100 border-b border-slate-100">
+                              {item.meterDisplay}
+                            </td>
+                            <td className="px-1.5 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100 border-b border-slate-100">
+                              {/* Empty KET for START */}
+                            </td>
+                            <td className="px-3 py-1.5 text-[11px] font-bold text-slate-400 whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
+                              START
+                            </td>
+                            <td className="px-1 py-1.5 border-b border-slate-100 border-r border-slate-100"></td>
+                            <td className="px-1 py-1.5 border-b border-slate-100 border-r border-slate-100"></td>
+                            <td className="px-1 py-1.5 border-b border-slate-100"></td>
+                          </tr>
+                        );
+                      }
 
                       return (
                         <tr key={item.id || index} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-1 py-1.5 font-bold text-slate-800 text-center text-xs w-7 border-r border-slate-100">
+                          <td className="px-1 py-1.5 font-bold text-slate-800 text-center text-xs w-7 border-r border-slate-100 border-b border-slate-100">
                             {item.displayNo}
                           </td>
-                          <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100">
+                          <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100 border-b border-slate-100">
                             {item.showTgl ? item.tglStr : ""}
                           </td>
-                          <td className="px-1 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100">
+                          <td className="px-1.5 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
                             {item.showGrp ? item.grpStr : ""}
                           </td>
-                          <td className="px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100">
+                          <td className="px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100">
                             {item.showOpr ? item.oprStr : ""}
                           </td>
-                          <td className="px-1 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100">
+                          <td className="px-1.5 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100 border-b border-slate-100">
                             {item.meterDisplay}
                           </td>
-                          <td className="px-1 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100">
+                          <td className="px-1.5 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100 border-b border-slate-100">
                             {!item.isGradable ? "" : (item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
                           </td>
-                          <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${(!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600'}`}>
+                          <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${(!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600'}`}>
                             {item.cacatDisplay || "-"}
                           </td>
-                          <td className="px-1 py-1.5 text-center w-24 border-b border-slate-50">
+                          <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
                             {item.isGradable ? (
-                              <div className={`mx-auto w-6 h-6 rounded border flex items-center justify-center ${hasilMendingClass}`}>
-                                <span className="text-[10px] font-black">{item.hasil_mending_original || "-"}</span>
+                              <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending_original === "A" ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                <CheckCircle className="w-3.5 h-3.5" />
                               </div>
-                            ) : (
-                              <span className="text-slate-300">-</span>
-                            )}
+                            ) : null}
+                          </td>
+                          <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
+                            {item.isGradable ? (
+                              <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending_original === "B" ? "border-amber-500 bg-amber-100 text-amber-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                <span className="text-[10px] font-black">B</span>
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-1 py-1.5 text-center border-b border-slate-100">
+                            {item.isGradable ? (
+                              <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending_original === "BS" ? "border-rose-500 bg-rose-100 text-rose-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                <span className="text-[10px] font-black">BS</span>
+                              </div>
+                            ) : null}
                           </td>
                         </tr>
                       );
@@ -707,33 +751,24 @@ function MendingDetailContent() {
                   </tbody>
                 </table>
               ) : (
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200">
-                      <th className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider pb-3">
-                        PNL NO
-                      </th>
-                      <th className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider pb-3">
-                        TGL
-                      </th>
-                      <th className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider pb-3">
-                        Group
-                      </th>
-                      <th className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider pb-3">
-                        Operator
-                      </th>
-                      <th className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider pb-3 text-center">
-                        QC KET
-                      </th>
-                      <th className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider pb-3">
-                        KETERANGAN CACAT
-                      </th>
-                      <th className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider pb-3 text-center border-l border-slate-100">
-                        HASIL MENDING
-                      </th>
+                    <tr className="bg-slate-50">
+                      <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12 border-r border-slate-100" rowSpan={2}>PNL NO</th>
+                      <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-20 whitespace-nowrap border-r border-slate-100" rowSpan={2}>TGL</th>
+                      <th className="px-1.5 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12 text-center border-r border-slate-100" rowSpan={2}>Group</th>
+                      <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-24 border-r border-slate-100" rowSpan={2}>Operator</th>
+                      <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-16 text-center border-r border-slate-100" rowSpan={2}>KET ✓/X</th>
+                      <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-64 whitespace-nowrap border-r border-slate-100" rowSpan={2}>KETERANGAN CACAT</th>
+                      <th className="px-2 py-1 border-b border-slate-200 font-extrabold text-slate-600 text-center border-r border-slate-100" colSpan={3}>MENDING</th>
+                    </tr>
+                    <tr className="bg-slate-50">
+                      <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-emerald-600 border-r border-slate-100">A</th>
+                      <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-amber-600 border-r border-slate-100">B</th>
+                      <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-rose-600 border-r border-slate-100">BS</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-slate-100 text-xs">
                     {(() => {
                       const sortedItems = [...(group.items || [])].sort((a: any, b: any) => {
                         const aHeader = a.header || header;
@@ -760,27 +795,11 @@ function MendingDetailContent() {
                         return aOp.localeCompare(bOp);
                       });
 
-                      const filteredItems = sortedItems.filter((item: any) => {
+                      const filteredItems = sortedItems; // Show all panel items, including istirahat
+
+                      const itemsRows = filteredItems.map((item: any, idx: number) => {
                         const detail = item.detail || {};
                         const itemHeader = item.header || header;
-                        const isIstirahat = (detail.kategori_masalah?.includes("ISTIRAHAT") || detail.keterangan_cacat?.includes("ISTIRAHAT")) && !detail.kategori_masalah && !detail.detail_masalah;
-                        if (!isIstirahat) return true;
-                        
-                        const hasMeter = (detail.meter_kain !== null && detail.meter_kain !== undefined && String(detail.meter_kain).trim() !== "") ||
-                                         (itemHeader.meter_akhir !== null && itemHeader.meter_akhir !== undefined && String(itemHeader.meter_akhir).trim() !== "") ||
-                                         (itemHeader.meter_awal !== null && itemHeader.meter_awal !== undefined && String(itemHeader.meter_awal).trim() !== "");
-                        return hasMeter;
-                      });
-
-                      return filteredItems.map((item: any, idx: number) => {
-                        const detail = item.detail || {};
-                        const itemHeader = item.header || header;
-
-                        const prevItem = idx > 0 ? sortedItems[idx - 1] : null;
-                        const prevHeader = prevItem?.header || header;
-                        const prevOp = prevItem ? (prevHeader.operators?.nama_operator || prevHeader.pic || "-") : null;
-                        const prevTgl = prevItem ? (prevHeader.tgl || "-") : null;
-                        const prevGrp = prevItem ? (prevHeader.groups?.nama_grup || "-") : null;
 
                         const currOp = itemHeader.operators?.nama_operator || itemHeader.pic || "-";
                         const currTgl = itemHeader.tgl || "-";
@@ -1029,31 +1048,29 @@ function MendingDetailContent() {
                         }
                         if (masalahLines.length === 0) masalahLines.push("-");
 
-                        let hasilMendingClass = "border-slate-200 bg-slate-50 text-slate-300";
-                        if (item.hasil_mending === "A") hasilMendingClass = "border-emerald-500 bg-emerald-50 text-emerald-600";
-                        else if (item.hasil_mending === "B") hasilMendingClass = "border-amber-500 bg-amber-50 text-amber-500";
-                        else if (item.hasil_mending === "BS") hasilMendingClass = "border-rose-500 bg-rose-50 text-rose-600";
+                        const isStartOrFinish = itemHeader.panel_no === "START" || itemHeader.panel_no === "FINISH" || detail.meter_kain === "START" || detail.meter_kain === "FINISH";
+                        const isGradable = !isStartOrFinish;
 
                         return (
                           <tr key={item.id || idx} className="hover:bg-sky-50/30 transition-colors group">
-                            <td className="px-2 py-1.5 border-b border-slate-50">
+                            <td className="px-2 py-1 font-bold text-slate-800 border-r border-slate-100 border-b border-slate-100">
                               <span className="text-[11px] font-extrabold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
                                 {itemHeader.panel_no === "METERAN" ? (detail.meter_kain ?? "-") : itemHeader.panel_no}
                               </span>
                             </td>
-                            <td className="px-2 py-1.5 text-[11px] text-slate-600 font-medium whitespace-nowrap border-b border-slate-50">
+                            <td className="px-2 py-1 text-slate-600 whitespace-nowrap border-r border-slate-100 border-b border-slate-100">
                               {displayTgl}
                             </td>
-                            <td className="px-2 py-1.5 text-[11px] text-slate-600 font-medium border-b border-slate-50">
+                            <td className="px-1.5 py-1 font-medium text-slate-700 text-center border-r border-slate-100 border-b border-slate-100">
                               {displayGrp}
                             </td>
-                            <td className="px-2 py-1.5 text-[11px] text-slate-600 font-medium border-b border-slate-50">
+                            <td className="px-2 py-1 font-medium text-slate-700 leading-tight border-r border-slate-100 border-b border-slate-100">
                               {displayOp}
                             </td>
-                            <td className="px-2 py-1.5 text-center border-b border-slate-50">
+                            <td className="px-2 py-1 text-center font-bold text-sm border-r border-slate-100 border-b border-slate-100">
                               {Icon ? <Icon className={`w-3.5 h-3.5 mx-auto ${iconColor}`} /> : <span className="text-slate-300">-</span>}
                             </td>
-                            <td className="px-2 py-1.5 text-[11px] text-rose-500 border-b border-slate-50 whitespace-nowrap">
+                            <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
                               <div className="flex flex-col gap-0.5">
                                 {masalahLines.map((line: string, i: number) => (
                                   <span key={i} title={line}>
@@ -1062,19 +1079,52 @@ function MendingDetailContent() {
                                 ))}
                               </div>
                             </td>
-
-                            <td className="px-2 py-1.5 text-center border-b border-slate-50 border-l border-slate-100">
-                             {(!isIstirahat && itemHeader.panel_no !== "START" && itemHeader.panel_no !== "FINISH" && detail.meter_kain !== "START" && detail.meter_kain !== "FINISH") ? (
-                               <div className={`mx-auto w-6 h-6 rounded border flex items-center justify-center ${hasilMendingClass}`}>
-                                 <span className="text-[10px] font-black">{item.hasil_mending || "-"}</span>
-                               </div>
-                             ) : (
-                               <span className="text-slate-300">-</span>
-                             )}
+                            <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
+                              {isGradable ? (
+                                <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending === "A" ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
+                              {isGradable ? (
+                                <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending === "B" ? "border-amber-500 bg-amber-100 text-amber-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                  <span className="text-[10px] font-black">B</span>
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1.5 text-center border-b border-slate-100">
+                              {isGradable ? (
+                                <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending === "BS" ? "border-rose-500 bg-rose-100 text-rose-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                  <span className="text-[10px] font-black">BS</span>
+                                </div>
+                              ) : null}
                             </td>
                           </tr>
                         );
                       });
+
+                      return (
+                        <>
+                          {itemsRows}
+                          {totalGradable > 0 && (
+                            <tr className="bg-slate-50 font-bold border-t border-slate-200 text-[11px] text-slate-700 uppercase tracking-wider">
+                              <td className="px-2 py-3 text-right font-extrabold border-r border-slate-100 border-b border-slate-100" colSpan={6}>
+                                Total ({totalGradable} Panel):
+                              </td>
+                              <td className="px-1 py-3 text-center text-emerald-600 bg-emerald-50/40 font-black border-r border-slate-100 border-b border-slate-100">
+                                {gradeA}
+                              </td>
+                              <td className="px-1 py-3 text-center text-amber-600 bg-amber-50/40 font-black border-r border-slate-100 border-b border-slate-100">
+                                {gradeB}
+                              </td>
+                              <td className="px-1 py-3 text-center text-rose-600 bg-rose-50/40 font-black border-b border-slate-100">
+                                {gradeBS}
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
                     })()}
                   </tbody>
                 </table>
