@@ -315,7 +315,7 @@ export default function MendingPage() {
         const isIstirahat = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT");
         const isFinish = item.keterangan_cacat === "FINISH" || item.production_headers?.panel_no === "FINISH";
         const isStart = item.keterangan_cacat === "START" || item.production_headers?.panel_no === "START";
-        const isGradable = !isIstirahat && !isFinish && !isStart;
+        const isGradable = !isFinish && !isStart;
 
         let displayDetail = item.detail_masalah || "";
         let displayKeterangan = item.keterangan_cacat || "";
