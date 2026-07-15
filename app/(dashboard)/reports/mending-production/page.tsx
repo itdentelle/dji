@@ -10,10 +10,11 @@ import {
   FileSpreadsheet, 
   Search, 
   Loader2, 
-  AlertTriangle,
-  Download,
-  Filter,
-  Package
+  AlertTriangle, 
+  Download, 
+  Filter, 
+  Package,
+  ArrowLeft
 } from "lucide-react";
 import * as xlsx from "xlsx";
 import { PROBLEM_DETAILS } from "../../../qc/page";
@@ -52,27 +53,57 @@ const getActualMeter = (item: any, h: any) => {
 };
 
 export default function MendingProductionReportPage() {
-  const [options, setOptions] = useState<{ mesins: string[], potongans: number[], designs: string[] }>({
+  const [options, setOptions] = useState<{ mesins: string[], potongans: number[] }>({
     mesins: [],
-    potongans: [],
-    designs: []
+    potongans: []
   });
 
   const [filters, setFilters] = useState({
     nomor_mc: "",
     potongan_ke: "",
-    design_id: ""
+    tanggal: "",
+    jenis_kain: "all"
   });
+
+  const [selectedPotonganKey, setSelectedPotonganKey] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const checkIsMeter = (pcs: any) => {
+    if (!pcs) return false;
+    const items = pcs.items || [];
+    if (items[0]?.detail?.header?.panel_no === "METERAN") return true;
+    if (pcs.allPcsDetails?.[0]?.production_headers?.panel_no === "METERAN") return true;
+    if (pcs.header?.panel_no === "METERAN") return true;
+    return false;
+  };
+
+  const filteredData = useMemo(() => {
+    return data.filter((pcs) => {
+      if (filters.tanggal) {
+        if (pcs.tanggal_mending !== filters.tanggal) {
+          return false;
+        }
+      }
+      if (filters.jenis_kain && filters.jenis_kain !== "all") {
+        const isMeter = checkIsMeter(pcs);
+        const type = isMeter ? "meteran" : "panel";
+        if (type !== filters.jenis_kain) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [data, filters.tanggal, filters.jenis_kain]);
+
   const displayData = useMemo(() => {
-    return data.map((pcs) => {
+    return filteredData.map((pcs) => {
       const items = pcs.items || [];
-      const isMeter = items[0]?.detail?.header?.panel_no === "METERAN" || pcs.allPcsDetails?.length > 0;
+      const isMeter = checkIsMeter(pcs);
 
       if (isMeter && pcs.allPcsDetails && pcs.allPcsDetails.length > 0) {
         const detailsToDisplay = pcs.allPcsDetails.map((detail: any) => {
@@ -328,33 +359,88 @@ export default function MendingProductionReportPage() {
 
       return { ...pcs, displayItems };
     });
-  }, [data]);
+  }, [filteredData]);
+
+  const groupedPotongans = useMemo(() => {
+    const map = new Map<string, any>();
+    filteredData.forEach((pcs: any) => {
+      const key = `${pcs.nomor_mc}_${pcs.design_id}_${pcs.potongan_ke}`;
+      const isMeter = checkIsMeter(pcs);
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          nomor_mc: pcs.nomor_mc,
+          design_id: pcs.design_id,
+          potongan_ke: pcs.potongan_ke,
+          tanggal_mending: pcs.tanggal_mending,
+          petugas_mending: new Set([pcs.petugas_mending]),
+          pcsList: [pcs],
+          isMeter,
+          totalA: 0,
+          totalB: 0,
+          totalBS: 0
+        });
+      } else {
+        const pot = map.get(key);
+        pot.petugas_mending.add(pcs.petugas_mending);
+        pot.pcsList.push(pcs);
+      }
+      
+      const pot = map.get(key);
+      (pcs.items || []).forEach((item: any) => {
+        if (item.hasil_mending === "A") pot.totalA++;
+        if (item.hasil_mending === "B") pot.totalB++;
+        if (item.hasil_mending === "BS") pot.totalBS++;
+      });
+    });
+
+    return Array.from(map.values()).map(p => ({
+      ...p,
+      petugas_mending: Array.from(p.petugas_mending).filter(Boolean).join(", ")
+    }));
+  }, [filteredData]);
+
+  const selectedPcsData = useMemo(() => {
+    if (!selectedPotonganKey) return [];
+    return displayData.filter((pcs: any) => {
+      const key = `${pcs.nomor_mc}_${pcs.design_id}_${pcs.potongan_ke}`;
+      return key === selectedPotonganKey;
+    });
+  }, [displayData, selectedPotonganKey]);
 
   useEffect(() => {
     getMendingReportOptions().then(res => {
       if (res.success && res.data) {
         setOptions({
           mesins: (res.data.mesins as any[]).sort(),
-          potongans: (res.data.potongans as any[]).sort((a,b) => Number(a) - Number(b)),
-          designs: (res.data.designs as any[]).sort()
+          potongans: (res.data.potongans as any[]).sort((a,b) => Number(a) - Number(b))
         });
       }
     });
   }, []);
 
+  useEffect(() => {
+    handleSearch();
+    setCurrentPage(1);
+  }, [filters.nomor_mc, filters.potongan_ke]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.tanggal, filters.jenis_kain]);
+
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!filters.nomor_mc || !filters.potongan_ke) {
-      setErrorMsg("Mesin dan Potongan Ke harus dipilih!");
-      return;
-    }
     
     setIsLoading(true);
     setErrorMsg(null);
     setHasSearched(true);
+    setSelectedPotonganKey(null);
     
     try {
-      const res = await getMendingReportData(filters.nomor_mc, filters.potongan_ke, filters.design_id);
+      const res = await getMendingReportData(
+        filters.nomor_mc || undefined, 
+        filters.potongan_ke || undefined
+      );
       if (res.success && res.data) {
         const sortedData = [...res.data].sort((a, b) => {
           return Number(a.detail.pcs_index) - Number(b.detail.pcs_index);
@@ -363,9 +449,9 @@ export default function MendingProductionReportPage() {
         const updatedData = await Promise.all(
           sortedData.map(async (pcs: any) => {
             const headerInfo = pcs.header || {};
-            const nomor_mc = filters.nomor_mc;
-            const design_id = headerInfo.design_id || filters.design_id;
-            const potongan_ke = filters.potongan_ke;
+            const nomor_mc = pcs.nomor_mc;
+            const design_id = headerInfo.design_id;
+            const potongan_ke = pcs.potongan_ke;
             const pcs_index = pcs.detail?.pcs_index || pcs.pcs_index;
 
             const detailsRes = await getAllDetailsForPcs(
@@ -396,11 +482,14 @@ export default function MendingProductionReportPage() {
   };
 
   const handleExportExcel = () => {
-    if (data.length === 0) return;
-    const headerRow = data[0]?.header || {};
-    const firstPcs = data[0];
+    const exportSource = selectedPotonganKey ? selectedPcsData : data;
+    const exportDisplaySource = selectedPotonganKey ? selectedPcsData : displayData;
 
-    const isReportMeter = firstPcs?.items?.[0]?.detail?.header?.panel_no === "METERAN";
+    if (exportSource.length === 0) return;
+    const headerRow = exportSource[0]?.header || {};
+    const firstPcs = exportSource[0];
+
+    const isReportMeter = checkIsMeter(firstPcs);
     const reportType = isReportMeter ? "ALL OVER" : "PANEL";
 
     const wb = xlsx.utils.book_new();
@@ -427,7 +516,7 @@ export default function MendingProductionReportPage() {
     const titleRow: any[] = [""];
     const gradeRow: any[] = [""];
     
-    data.forEach((pcs, idx) => {
+    exportSource.forEach((pcs, idx) => {
       const isFirst = idx === 0;
       const spacing = isFirst ? 0 : 3;
       for (let i = 0; i < spacing; i++) {
@@ -448,7 +537,7 @@ export default function MendingProductionReportPage() {
 
     // Find max items across all PCS
     let maxItems = 0;
-    displayData.forEach(pcs => {
+    exportDisplaySource.forEach(pcs => {
       if (pcs.displayItems && pcs.displayItems.length > maxItems) {
         maxItems = pcs.displayItems.length;
       }
@@ -457,7 +546,7 @@ export default function MendingProductionReportPage() {
     // Populate Items Data
     for (let i = 0; i < maxItems; i++) {
       const row: any[] = [""];
-      displayData.forEach((pcs, idx) => {
+      exportDisplaySource.forEach((pcs, idx) => {
         const isFirst = idx === 0;
         const spacing = isFirst ? 0 : 3;
         for (let s = 0; s < spacing; s++) {
@@ -640,7 +729,7 @@ export default function MendingProductionReportPage() {
     const infoRow5: any[] = [""];
     const infoRow6: any[] = [""];
 
-    data.forEach((pcs, idx) => {
+    exportSource.forEach((pcs, idx) => {
       const isFirst = idx === 0;
       const spacing = isFirst ? 0 : 3;
       for (let i = 0; i < spacing; i++) {
@@ -666,7 +755,7 @@ export default function MendingProductionReportPage() {
       const inspectB = items.filter((i:any) => i.hasil_mending === "B").length;
       const inspectBS = items.filter((i:any) => i.hasil_mending === "BS").length;
 
-      const isMeter = items[0]?.detail?.header?.panel_no === "METERAN";
+      const isMeter = checkIsMeter(pcs);
       let totalQty = 0;
       let totalCacat = 0;
       if (isMeter) {
@@ -692,7 +781,7 @@ export default function MendingProductionReportPage() {
       const totalSetelahInspect = sortedItems.length;
       const beratInspect = pcs.qc_batch?.berat_kain || "";
       const tanggalInspect = pcs.qc_batch?.tanggal_inspeksi || "";
-      const petugasInspect = pcs.qc_batch?.petugas_inspeksi || "";
+      const petugasInspect = [pcs.qc_batch?.petugas_inspeksi, pcs.qc_batch?.petugas_inspeksi_2, pcs.qc_batch?.petugas_inspeksi_3].filter(Boolean).join(", ") || "";
       const startInspect = pcs.qc_batch?.start_inspect || "";
       const finishInspect = pcs.qc_batch?.finish_inspect || "";
 
@@ -864,8 +953,8 @@ export default function MendingProductionReportPage() {
 
       {/* Filter Card */}
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4 items-end">
-          <div className="flex flex-col gap-1 w-full sm:w-1/4">
+        <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Pilih Mesin
             </label>
@@ -874,14 +963,14 @@ export default function MendingProductionReportPage() {
               onChange={(e) => setFilters({ ...filters, nomor_mc: e.target.value })}
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full transition-colors"
             >
-              <option value="">-- Pilih Mesin --</option>
+              <option value="">-- Semua Mesin --</option>
               {options.mesins.map((m) => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>Mesin {m}</option>
               ))}
             </select>
           </div>
           
-          <div className="flex flex-col gap-1 w-full sm:w-1/4">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Pilih Potongan Ke
             </label>
@@ -890,37 +979,39 @@ export default function MendingProductionReportPage() {
               onChange={(e) => setFilters({ ...filters, potongan_ke: e.target.value })}
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full transition-colors"
             >
-              <option value="">-- Pilih Potongan --</option>
+              <option value="">-- Semua Potongan --</option>
               {options.potongans.map((p) => (
                 <option key={p} value={String(p)}>Potongan Ke-{p}</option>
               ))}
             </select>
           </div>
 
-          <div className="flex flex-col gap-1 w-full sm:w-1/4">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Desain (Opsional)
+              Pilih Tanggal
             </label>
-            <select
-              value={filters.design_id}
-              onChange={(e) => setFilters({ ...filters, design_id: e.target.value })}
+            <input
+              type="date"
+              value={filters.tanggal}
+              onChange={(e) => setFilters({ ...filters, tanggal: e.target.value })}
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full transition-colors"
-            >
-              <option value="">-- Semua Desain --</option>
-              {options.designs.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
+            />
           </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="h-11 px-8 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
-          >
-            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-4 h-4" />}
-            Tampilkan
-          </button>
+          <div className="flex flex-col gap-1 w-full">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Jenis Kain
+            </label>
+            <select
+              value={filters.jenis_kain}
+              onChange={(e) => setFilters({ ...filters, jenis_kain: e.target.value })}
+              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full transition-colors"
+            >
+              <option value="all">-- Semua Jenis --</option>
+              <option value="panel">Panel</option>
+              <option value="meteran">All Over (Meteran)</option>
+            </select>
+          </div>
         </form>
       </div>
 
@@ -936,461 +1027,718 @@ export default function MendingProductionReportPage() {
         </div>
       )}
 
-      {data.length > 0 && headerInfo && (
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-          {/* Document Header Section */}
-          <div className="p-8 border-b border-slate-200 bg-slate-50/50">
-            <div className="flex flex-col items-center justify-center text-center mb-8 border-b border-slate-200 pb-6">
-              <h2 className="text-xl font-black text-slate-800 tracking-wider">
-                FORM KUALITAS PRODUKSI KAIN {data[0]?.items?.[0]?.detail?.header?.panel_no === "METERAN" ? "ALL OVER" : "PANEL"}
-              </h2>
+      {/* List View: Grouped by Potongan */}
+      {hasSearched && data.length > 0 && selectedPotonganKey === null && (() => {
+        const itemsPerPage = 10;
+        const totalPages = Math.ceil(groupedPotongans.length / itemsPerPage);
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const paginatedPotongans = groupedPotongans.slice(startIndex, endIndex);
+
+        return (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fadeIn">
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                Daftar Potongan Produksi
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Pilih salah satu potongan untuk melihat rincian detail per PCS.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-4 py-3 font-extrabold text-slate-600">Mesin</th>
+                    <th className="px-4 py-3 font-extrabold text-slate-600">Desain</th>
+                    <th className="px-4 py-3 font-extrabold text-slate-600">Potongan</th>
+                    <th className="px-4 py-3 font-extrabold text-slate-600">Jenis</th>
+                    <th className="px-4 py-3 font-extrabold text-slate-600">Petugas Mending</th>
+                    <th className="px-4 py-3 font-extrabold text-slate-600 text-center">Jumlah PCS</th>
+                    <th className="px-4 py-3 font-extrabold text-slate-600 text-center">Hasil Mending</th>
+                    <th className="px-4 py-3 font-extrabold text-slate-600 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  {paginatedPotongans.map((pot) => (
+                    <tr 
+                      key={pot.key} 
+                      onClick={() => setSelectedPotonganKey(pot.key)}
+                      className="hover:bg-sky-50/30 transition-colors cursor-pointer group"
+                    >
+                      <td className="px-4 py-3 font-black text-[#0070bc]">{pot.nomor_mc}</td>
+                      <td className="px-4 py-3 font-bold text-slate-800">{pot.design_id}</td>
+                      <td className="px-4 py-3 text-rose-600 font-bold">Ke-{pot.potongan_ke}</td>
+                      <td className="px-4 py-3">
+                        {pot.isMeter ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 uppercase tracking-wider whitespace-nowrap">
+                            Meteran (All Over)
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 uppercase tracking-wider whitespace-nowrap">
+                            Panel
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">{pot.petugas_mending || "-"}</td>
+                      <td className="px-4 py-3 text-center text-slate-800 font-bold">{pot.pcsList.length} PCS</td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-emerald-600 font-black">A: {pot.totalA}</span>
+                          <span className="text-slate-300">|</span>
+                          <span className="text-amber-500 font-black">B: {pot.totalB}</span>
+                          <span className="text-slate-300">|</span>
+                          <span className="text-rose-600 font-black">BS: {pot.totalBS}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPotonganKey(pot.key);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-[#0070bc] text-[#0070bc] hover:text-white font-extrabold text-[11px] transition-all shadow-sm flex items-center gap-1 mx-auto"
+                        >
+                          <Search className="w-3 h-3" />
+                          Lihat Detail
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-1 max-w-5xl mx-auto text-sm">
-              <div className="space-y-1">
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Design</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.design_id || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Nomor Mc</span>
-                  <span className="font-black text-[#0070bc] col-span-2 flex gap-2"><span>:</span> {headerInfo.nomor_mc || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Tanggal produksi</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.tgl || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Tanggal potong</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.tanggal_potong || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Pick</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.pick || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Course</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.course || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Rpm</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.rpm || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">No. Order Barang</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.no_order_barang || "-"}</span>
-                </div>
-              </div>
-              
-              <div className="space-y-1">
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Potongan ke</span>
-                  <span className="font-black text-rose-600 col-span-2 flex gap-2"><span>:</span> {headerInfo.potongan_ke || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Roll no</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {data[0]?.detail?.roll_no || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Jenis Benang Dsr</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.jenis_benang_dasar || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Liner</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.liner || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Heavy</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.heavy || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Shadow</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.shadow || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">Pinggiran</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.pinggiran || "-"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <span className="font-bold text-slate-500">No. costumer</span>
-                  <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {headerInfo.no_customer || "-"}</span>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between bg-slate-50/50 gap-3">
+                <span className="text-xs font-semibold text-slate-500">
+                  Menampilkan {startIndex + 1} - {Math.min(endIndex, groupedPotongans.length)} dari {groupedPotongans.length} potongan
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 disabled:opacity-50 text-xs font-bold text-slate-600 transition-all flex items-center gap-1 shadow-sm"
+                  >
+                    Sebelumnya
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`w-8 h-8 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                        currentPage === page
+                          ? "bg-[#0070bc] text-white animate-pulse"
+                          : "border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 disabled:opacity-50 text-xs font-bold text-slate-600 transition-all flex items-center gap-1 shadow-sm"
+                  >
+                    Berikutnya
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
+        );
+      })()}
 
-{/* PCS Tables Grid - Side by Side Scrollable */}
-          <div className="w-full overflow-x-auto pb-4 custom-scrollbar bg-slate-50/50 p-6 rounded-b-2xl">
-            <div className="flex w-max min-w-full gap-8">
-              {displayData.map((pcs, index) => {
-                const pcsLabel = `PCS ${pcs.detail.pcs_index}`;
+      {/* Detail View: Show side-by-side tables for the selected Potongan */}
+      {selectedPotonganKey !== null && selectedPcsData.length > 0 && headerInfo && (
+        <div className="flex flex-col gap-4 animate-fadeIn">
+          <div className="flex justify-between items-center">
+            <button
+              type="button"
+              onClick={() => setSelectedPotonganKey(null)}
+              className="h-10 px-5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Kembali ke Daftar Laporan
+            </button>
+          </div>
+          
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+            {/* Document Header Section */}
+            <div className="p-8 border-b border-slate-200 bg-slate-50/50">
+              <div className="flex flex-col items-center justify-center text-center mb-8 border-b border-slate-200 pb-6">
+                <h2 className="text-xl font-black text-slate-800 tracking-wider">
+                  FORM KUALITAS PRODUKSI KAIN {selectedPcsData[0]?.items?.[0]?.detail?.header?.panel_no === "METERAN" ? "ALL OVER" : "PANEL"}
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-1 max-w-5xl mx-auto text-sm">
+                <div className="space-y-1">
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Design</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.design_id || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Nomor Mc</span>
+                    <span className="font-black text-[#0070bc] col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.nomor_mc || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Tanggal produksi</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.tgl || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Tanggal potong</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.tanggal_potong || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Pick</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.pick || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Course</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.course || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Rpm</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.rpm || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">No. Order Barang</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.no_order_barang || "-"}</span>
+                  </div>
+                </div>
                 
-                // For grade calculation, we still use the raw sorted items
-                const sortedItems = pcs.displayItems ? pcs.displayItems.filter((i: any) => !i.isSummaryRow && !i.isTotalRow && !i.isStartRow) : [];
-                const isMeter = pcs.header?.panel_no === "METERAN" || pcs.items?.[0]?.detail?.header?.panel_no === "METERAN";
-                let totalQty = 0;
-                let totalCacat = 0;
-                if (isMeter) {
-                  sortedItems.forEach((i: any) => {
-                    totalQty = Math.max(totalQty, Number(i.detail?.jml_hasil_produksi || 0));
-                    if (i.detail?.kategori_masalah || i.hasil_mending === "B" || i.hasil_mending === "BS") {
-                      totalCacat += 1;
+                <div className="space-y-1">
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Potongan ke</span>
+                    <span className="font-black text-rose-600 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.potongan_ke || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Roll no</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.detail?.roll_no || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Jenis Benang Dsr</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.jenis_benang_dasar || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Liner</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.liner || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Heavy</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.heavy || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Shadow</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.shadow || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">Pinggiran</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.pinggiran || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <span className="font-bold text-slate-500">No. costumer</span>
+                    <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.no_customer || "-"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* PCS Tables Grid - Side by Side Scrollable */}
+            <div className="w-full overflow-x-auto pb-4 custom-scrollbar bg-slate-50/50 p-6 rounded-b-2xl">
+              <div className="flex gap-6 min-w-max">
+                {selectedPcsData.map((pcs: any) => {
+                  const sortedItems = [...(pcs.items || [])].sort((a: any, b: any) => {
+                    const pA = a.detail?.header?.panel_no;
+                    const pB = b.detail?.header?.panel_no;
+                    if (pA === "METERAN" && pB === "METERAN") {
+                      return parseFloat(a.detail?.meter_kain || 0) - parseFloat(b.detail?.meter_kain || 0);
                     }
+                    if (pA === "METERAN") return 1;
+                    if (pB === "METERAN") return -1;
+                    return parseInt(pA || 0) - parseInt(pB || 0);
                   });
-                  if (totalQty === 0) totalQty = 300;
-                } else {
-                  sortedItems.forEach((i: any) => {
-                    totalQty += Number(i.detail?.jml_hasil_produksi || 0);
-                    if (i.detail?.kategori_masalah || i.hasil_mending === "B" || i.hasil_mending === "BS") {
-                      totalCacat += Number(i.detail?.jml_hasil_produksi || 1);
+
+                  const isMeter = checkIsMeter(pcs);
+                  const unit = isMeter ? 'Meter' : 'Panel';
+
+                  let prodA: number | string = 0;
+                  let prodB: number | string = 0;
+                  let prodBS: number | string = 0;
+                  let inspectA: number | string = 0;
+                  let inspectB: number | string = 0;
+                  let inspectBS: number | string = 0;
+
+                  let totalMeterSum = 0;
+
+                  if (isMeter) {
+                    // Sum total meters from all isTotalRow entries in displayItems
+                    pcs.displayItems?.forEach((di: any) => {
+                      if (di.isTotalRow && di.totalMeter) {
+                        const m = parseFloat(di.totalMeter);
+                        if (!isNaN(m)) totalMeterSum += m;
+                      }
+                    });
+
+                    // Produksi: total meter produced, and count of defect titik during production QC
+                    const defectItemsProd = pcs.items?.filter((i: any) => i.detail?.kategori_masalah) || [];
+                    const prodBCount = defectItemsProd.length;
+                    const prodBSCount = pcs.items?.filter((i: any) => i.detail?.kategori_masalah && i.hasil_mending === "BS").length || 0;
+                    prodA = `${totalMeterSum - prodBCount} Meter`; // total meter - titik cacat B
+                    prodB = prodBCount;
+                    prodBS = prodBSCount;
+
+                    // Setelah Inspect: grade A = totalMeter - inspectB, B and BS from mending result
+                    const inspectBCount = pcs.items?.filter((i: any) => i.hasil_mending === "B").length || 0;
+                    const inspectBSCount = pcs.items?.filter((i: any) => i.hasil_mending === "BS").length || 0;
+                    inspectA = `${totalMeterSum - inspectBCount} Meter`; // total meter - titik cacat B hasil mending
+                    inspectB = inspectBCount;
+                    inspectBS = inspectBSCount;
+                  } else {
+                    prodA = pcs.items?.filter((i: any) => !i.detail?.kategori_masalah).length || 0;
+                    prodB = pcs.items?.filter((i: any) => i.detail?.kategori_masalah).length || 0;
+                    prodBS = 0;
+                    inspectA = pcs.items?.filter((i: any) => i.hasil_mending === "A").length || 0;
+                    inspectB = pcs.items?.filter((i: any) => i.hasil_mending === "B").length || 0;
+                    inspectBS = pcs.items?.filter((i: any) => i.hasil_mending === "BS").length || 0;
+                  }
+
+                  let totalQty = 0;
+                  let totalCacat = 0;
+                  if (isMeter) {
+                    pcs.items?.forEach((i: any) => {
+                      totalQty = Math.max(totalQty, Number(i.detail?.jml_hasil_produksi || 0));
+                      if (i.detail?.kategori_masalah || i.hasil_mending === "B" || i.hasil_mending === "BS") {
+                        totalCacat += 1;
+                      }
+                    });
+                    if (totalQty === 0) totalQty = 300;
+                  } else {
+                    pcs.items?.forEach((i: any) => {
+                      totalQty += Number(i.detail?.jml_hasil_produksi || 0);
+                      if (i.detail?.kategori_masalah || i.hasil_mending === "B" || i.hasil_mending === "BS") {
+                        totalCacat += Number(i.detail?.jml_hasil_produksi || 1);
+                      }
+                    });
+                  }
+
+                  const totalSetelahInspect = isMeter ? `${totalMeterSum} Meter` : sortedItems.length;
+                  const beratInspect = pcs.qc_batch?.berat_kain || "-";
+                  const tanggalInspect = pcs.qc_batch?.tanggal_inspeksi || "-";
+                  const petugasInspect = [pcs.qc_batch?.petugas_inspeksi, pcs.qc_batch?.petugas_inspeksi_2, pcs.qc_batch?.petugas_inspeksi_3].filter(Boolean).join(", ") || "-";
+                  const startInspect = pcs.qc_batch?.start_inspect || "-";
+                  const finishInspect = pcs.qc_batch?.finish_inspect || "-";
+
+                  let overallGrade = "-";
+                  let bucket = 0;
+                  if (totalQty > 0) {
+                    if (isMeter) {
+                      bucket = 300;
+                      if (totalQty > 450) bucket = 500;
+                      else if (totalQty > 400) bucket = 450;
+                      else if (totalQty > 350) bucket = 400;
+                      else if (totalQty > 300) bucket = 350;
+                      else bucket = 300;
+
+                      let limitA = 9, limitB = 15, limitC = 21;
+                      if (bucket === 350) { limitA = 11; limitB = 18; limitC = 25; }
+                      if (bucket === 400) { limitA = 12; limitB = 20; limitC = 28; }
+                      if (bucket === 450) { limitA = 14; limitB = 23; limitC = 32; }
+                      if (bucket === 500) { limitA = 15; limitB = 25; limitC = 35; }
+
+                      if (totalCacat <= limitA) overallGrade = "A";
+                      else if (totalCacat <= limitB) overallGrade = "B";
+                      else if (totalCacat <= limitC) overallGrade = "C";
+                      else overallGrade = "D";
+                    } else {
+                      bucket = 50;
+                      if (totalQty > 125) bucket = 150;
+                      else if (totalQty > 120) bucket = 125;
+                      else if (totalQty > 100) bucket = 120;
+                      else if (totalQty > 75) bucket = 100;
+                      else if (totalQty > 65) bucket = 75;
+                      else if (totalQty > 50) bucket = 65;
+                      else bucket = 50;
+
+                      let limitA = 5, limitB = 8, limitC = 9;
+                      if (bucket === 65) { limitA = 7; limitB = 10; limitC = 13; }
+                      if (bucket === 75) { limitA = 8; limitB = 12; limitC = 15; }
+                      if (bucket === 100) { limitA = 10; limitB = 15; limitC = 19; }
+                      if (bucket === 120) { limitA = 12; limitB = 18; limitC = 23; }
+                      if (bucket === 125) { limitA = 13; limitB = 19; limitC = 25; }
+                      if (bucket === 150) { limitA = 15; limitB = 23; limitC = 29; }
+
+                      if (totalCacat <= limitA) overallGrade = "A";
+                      else if (totalCacat <= limitB) overallGrade = "B";
+                      else if (totalCacat <= limitC) overallGrade = "C";
+                      else overallGrade = "D";
                     }
-                  });
-                }
-                const { grade: overallGrade, bucket } = getOverallGradeInfo(totalQty, totalCacat, isMeter);
-                const unit = isMeter ? 'Meter' : 'Panel';
+                  }
 
-                const totalSetelahInspect = sortedItems.length;
-                const beratInspect = pcs.qc_batch?.berat_kain || "";
-                const tanggalInspect = pcs.qc_batch?.tanggal_inspeksi || "";
-                const p1 = pcs.qc_batch?.petugas_inspeksi || "";
-                const p2 = pcs.qc_batch?.petugas_inspeksi_2 || "";
-                const p3 = pcs.qc_batch?.petugas_inspeksi_3 || "";
-                const petugasInspect = [p1, p2, p3].filter(Boolean).join(", ");
-                const startInspect = pcs.qc_batch?.start_inspect || "";
-                const finishInspect = pcs.qc_batch?.finish_inspect || "";
+                  return (
+                    <div 
+                      key={pcs.id} 
+                      className="min-w-[500px] border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden flex flex-col"
+                    >
+                      {/* PCS Title Header */}
+                      <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                        <span className="font-black text-slate-800 text-sm">
+                          PCS {pcs.detail?.pcs_index || pcs.pcs_index}
+                        </span>
+                        <span className="text-[10px] font-bold bg-[#0070bc]/10 text-[#0070bc] px-2.5 py-1 rounded-full uppercase tracking-wider">
+                          {unit}
+                        </span>
+                      </div>
 
-                return (
-                  <div key={pcs.id} className="w-min flex-none bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                    <div className="bg-slate-100/80 px-4 py-3 border-b border-slate-200 text-center">
-                      <span className="font-black text-slate-800 text-sm tracking-wider uppercase">{pcsLabel}</span>
-                    </div>
-                    <table className="text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50">
-                          <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12" rowSpan={2}>
-                            {isMeter ? "METER" : "PNL NO"}
-                          </th>
-                          <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-20 whitespace-nowrap" rowSpan={2}>TGL</th>
-                          <th className="px-1 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-12 text-center" rowSpan={2}>Group</th>
-                          <th className="px-1 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-24" rowSpan={2}>Operator</th>
-                          <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-16 text-center" rowSpan={2}>KET ✓/X</th>
-                          <th className="px-2 py-1.5 border-b border-slate-200 font-extrabold text-slate-600 w-72 whitespace-nowrap" rowSpan={2}>KETERANGAN CACAT</th>
-                          <th className="px-2 py-1 border-b border-slate-200 font-extrabold text-slate-600 text-center" colSpan={3}>INSPECTING</th>
-                        </tr>
-                        <tr className="bg-slate-50">
-                          <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-emerald-600">A</th>
-                          <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-amber-600">B</th>
-                          <th className="px-1 py-1 border-b border-slate-200 text-center font-black text-rose-600">BS</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-xs">
-                        {pcs.displayItems && pcs.displayItems.length > 0 ? (
-                          pcs.displayItems.map((item: any, itemIndex: number) => {
-                            const grade = item.hasil_mending_original || item.hasil_mending;
+                      {/* Items Table */}
+                      <table className="w-full text-left text-[11px] border-collapse flex-1">
+                        <thead>
+                          <tr className="bg-slate-100 border-b border-slate-200">
+                            <th className="px-2 py-2 font-extrabold text-slate-600 w-10 border-r border-slate-200">NO</th>
+                            <th className="px-2 py-2 font-extrabold text-slate-600 w-20 border-r border-slate-200">TGL</th>
+                            <th className="px-1.5 py-2 font-extrabold text-slate-600 text-center w-12 border-r border-slate-200">Group</th>
+                            <th className="px-2 py-2 font-extrabold text-slate-600 w-24 border-r border-slate-200">Operator</th>
+                            <th className="px-2 py-2 font-extrabold text-slate-600 text-center w-16 border-r border-slate-200">✓/X</th>
+                            {isMeter && <th className="px-2 py-2 font-extrabold text-slate-600 w-16 border-r border-slate-200 text-center">Meter</th>}
+                            <th className="px-2 py-2 font-extrabold text-slate-600 border-r border-slate-200">CACAT</th>
+                            <th className="px-1 py-2 font-extrabold text-slate-600 text-center w-8 border-r border-slate-200">A</th>
+                            <th className="px-1 py-2 font-extrabold text-slate-600 text-center w-8 border-r border-slate-200">B</th>
+                            <th className="px-1 py-2 font-extrabold text-slate-600 text-center w-8">BS</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                          {pcs.displayItems && pcs.displayItems.length > 0 ? (
+                            pcs.displayItems.map((item: any, itemIndex: number) => {
+                              if (item.isSummaryRow) {
+                                return (
+                                  <tr key={item.id || itemIndex} className="bg-slate-100/70 border-t border-b border-slate-200 font-bold text-slate-700">
+                                    <td colSpan={4} className="px-3 py-2 text-right border-r border-slate-200">
+                                      Total Produksi {item.operatorName}:
+                                    </td>
+                                    <td className="px-2 py-2 text-center font-black border-r border-slate-200 whitespace-nowrap">
+                                      {item.totalCount} {unit}
+                                    </td>
+                                    <td colSpan={4}></td>
+                                  </tr>
+                                );
+                              }
+                              if (item.isTotalRow) {
+                                return (
+                                  <tr key={item.id || itemIndex} className="bg-slate-100/70 border-t border-b border-slate-200 font-bold text-slate-700">
+                                    <td colSpan={isMeter ? 5 : 4} className="px-3 py-2 text-right border-r border-slate-200">
+                                      {item.totalLabel}
+                                    </td>
+                                    <td className="px-2 py-2 text-center font-black border-r border-slate-200 whitespace-nowrap">
+                                      {item.totalMeter}
+                                    </td>
+                                    <td colSpan={4}></td>
+                                  </tr>
+                                );
+                              }
 
-                            if (item.isTotalRow) {
+                              const isMeterRow = item.isMeter;
+                              const det = item.detail || {};
+                              const rowNo = isMeterRow ? item.displayNo : (det.header?.panel_no === "METERAN" ? det.meter_kain : det.header?.panel_no);
+                              const meterVal = isMeterRow ? item.meterDisplay : null;
+                              const tgl = isMeterRow ? item.tglStr : (item.hideOperatorAndDate ? "" : (det.header?.tgl || ""));
+                              const grpStr = isMeterRow ? item.grpStr : (item.hideOperatorAndDate ? "" : (det.header?.groups?.nama_grup || "-"));
+                              const oprStr = isMeterRow ? item.oprStr : (item.hideOperatorAndDate ? "" : (det.header?.operators?.nama_operator || det.header?.pic || "-"));
+                              const grade = item.hasil_mending_original || item.hasil_mending;
+
+                              let cacatLines: string[] = [];
+
+                              // Shared cacat-building logic for both panel and meter rows
+                              const buildCacatLines = (srcDet: any, stripTitik = false): string[] => {
+                                const lines: string[] = [];
+                                const katsRaw = srcDet?.kategori_masalah;
+                                const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
+                                let rawDetail = srcDet?.detail_masalah || "";
+
+                                // For meter rows: strip ALL (Titik: X) occurrences from detail
+                                let titikSuffix = "";
+                                if (stripTitik) {
+                                  // Remove every (Titik: ...) occurrence using global flag
+                                  rawDetail = rawDetail.replace(/\s*\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").trim();
+                                }
+
+                                const displayDetail = rawDetail;
+
+                                const pushDetailsForCat = (k: string, d: string) => {
+                                  if (!d) { lines.push(k); return; }
+                                  const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
+                                  const matchedDetails: string[] = [];
+                                  let remainingD = d;
+                                  const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
+                                  sortedKnown.forEach(known => {
+                                    if (remainingD.includes(known)) { matchedDetails.push(known); remainingD = remainingD.replace(known, ""); }
+                                  });
+                                  if (matchedDetails.length > 0) {
+                                    const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                    matchedDetails.forEach(match => lines.push(`${k} - ${match}`));
+                                    customParts.forEach(custom => lines.push(`${k} - ${custom}`));
+                                  } else {
+                                    const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                    parts.forEach(p => lines.push(`${k} - ${p}`));
+                                  }
+                                };
+
+                                if (kats.length > 0) {
+                                  if (displayDetail.includes(" | ")) {
+                                    const catDetails = displayDetail.split(" | ");
+                                    for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
+                                      pushDetailsForCat(kats[i] || "Unknown", catDetails[i] || "");
+                                    }
+                                  } else if (displayDetail) {
+                                    if (kats.length === 1) {
+                                      pushDetailsForCat(kats[0], displayDetail);
+                                    } else {
+                                      const dets = displayDetail.split(", ");
+                                      if (kats.length === dets.length) {
+                                        for (let i = 0; i < kats.length; i++) pushDetailsForCat(kats[i], dets[i]);
+                                      } else {
+                                        dets.forEach((d: string) => {
+                                          let foundKat = "Unknown";
+                                          for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+                                            if ((detList as string[]).some((dd: string) => d.toLowerCase().includes(dd.toLowerCase()))) { foundKat = kat; break; }
+                                          }
+                                          lines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${d}`);
+                                        });
+                                      }
+                                    }
+                                  } else {
+                                    lines.push(kats.join(", "));
+                                  }
+                                } else if (displayDetail) {
+                                  lines.push(displayDetail);
+                                }
+
+                                let ketCacat = srcDet?.keterangan_cacat || "";
+                                const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
+                                ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
+                                ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
+                                ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
+
+                                if (ketCacat) {
+                                  if (lines.length > 0) {
+                                    const parts = ketCacat.split(",").map((s: string) => s.trim());
+                                    for (let i = 0; i < lines.length; i++) {
+                                      const lineKat = lines[i].includes(" - ") ? lines[i].split(" - ")[0].trim() : "";
+                                      let partIndex = i;
+                                      if (lineKat && kats.includes(lineKat)) partIndex = kats.indexOf(lineKat);
+                                      if (parts[partIndex] && parts[partIndex] !== "") {
+                                        const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
+                                        lines[i] = `${lines[i]} (Blok ${cleanB})`;
+                                      } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
+                                        const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
+                                        lines[i] = `${lines[i]} (Blok ${cleanB})`;
+                                      }
+                                    }
+                                  } else {
+                                    const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
+                                    lines.push(`(Blok ${cleanB})`);
+                                  }
+                                }
+
+                                if (hasTambahanQC) {
+                                  if (lines.length === 0) lines.push("[TAMBAHAN QC]");
+                                  else for (let i = 0; i < lines.length; i++) lines[i] += " [TAMBAHAN QC]";
+                                }
+
+                                return lines;
+                              };
+
+                              if (isMeterRow) {
+                                if (item.isIstirahat) {
+                                  cacatLines = ["ISTIRAHAT"];
+                                } else if (item.isFinishReport && !item.detail?.kategori_masalah && !item.detail?.detail_masalah) {
+                                  cacatLines = ["FINISH"];
+                                } else if (item.isStartRow) {
+                                  cacatLines = ["START"];
+                                } else {
+                                  cacatLines = buildCacatLines(item.detail, true);
+                                }
+                              } else {
+                                cacatLines = buildCacatLines(det);
+                              }
+
+                              let cacat = cacatLines.join("\n") || "-";
+                              const isGradable = isMeterRow ? item.isGradable : true;
+                              const hasError = isMeterRow ? item.hasErrorDetail : !!det.kategori_masalah;
+                              
                               return (
-                                <tr key={item.id || itemIndex} className="bg-slate-100 font-semibold text-slate-700">
-                                  <td colSpan={9} className="px-3 py-2 text-center text-xs font-bold text-slate-600 border-t border-b border-slate-200">
-                                    {item.totalLabel} <span className="font-extrabold text-slate-800 ml-1">{item.totalMeter}</span>
+                                <tr key={item.id || itemIndex} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-2 py-1 font-bold text-slate-800">{isMeterRow ? (item.displayNo || "-") : (rowNo || "-")}</td>
+                                  <td className="px-2 py-1 text-slate-600 whitespace-nowrap">{tgl}</td>
+                                  <td className="px-1 py-1 font-medium text-slate-700 text-center">{grpStr}</td>
+                                  <td className="px-1 py-1 font-medium text-slate-700 leading-tight">{oprStr}</td>
+                                  
+                                  <td className="px-2 py-1 text-center font-bold text-sm">
+                                    {!isGradable ? "" : (hasError ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
+                                  </td>
+
+                                  {isMeter && (
+                                    <td className="px-2 py-1 font-mono text-slate-700 whitespace-nowrap text-[11px] text-center border-r border-slate-100">
+                                      {isMeterRow ? (item.meterDisplay !== "-" ? item.meterDisplay : "") : ""}
+                                    </td>
+                                  )}
+                                  
+                                  <td className="px-2 py-1 text-[11px] font-medium whitespace-pre-wrap leading-tight min-w-[160px]">
+                                    {isMeterRow ? (
+                                      <span className={
+                                        cacat === "START" || cacat === "FINISH" || cacat === "ISTIRAHAT"
+                                          ? "text-slate-400 font-semibold italic"
+                                          : "text-rose-600"
+                                      }>{cacat || "-"}</span>
+                                    ) : (
+                                      <span className="text-rose-600">{cacat || "-"}</span>
+                                    )}
+                                  </td>
+
+                                  <td className="px-1 py-1 text-center">
+                                    {isGradable && grade === "A" && <div className="mx-auto w-4 h-4 rounded bg-emerald-100 text-emerald-700 font-black flex items-center justify-center text-[10px]">A</div>}
+                                  </td>
+                                  <td className="px-1 py-1 text-center">
+                                    {isGradable && grade === "B" && <div className="mx-auto w-4 h-4 rounded bg-amber-100 text-amber-700 font-black flex items-center justify-center text-[10px]">B</div>}
+                                  </td>
+                                  <td className="px-1 py-1 text-center">
+                                    {isGradable && grade === "BS" && <div className="mx-auto w-4 h-4 rounded bg-rose-100 text-rose-700 font-black flex items-center justify-center text-[10px]">BS</div>}
                                   </td>
                                 </tr>
                               );
-                            }
+                            })
+                          ) : (
+                            <tr>
+                              <td colSpan={9} className="px-3 py-8 text-center text-slate-400 font-medium">Belum ada baris mending</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
 
-                            const det = item.detail || {};
-                            const isMeterRow = item.isMeter;
-                            
-                            const pnlNo = isMeterRow ? item.meterDisplay : (det.header?.panel_no === "METERAN" ? det.meter_kain : det.header?.panel_no);
-                            const tgl = isMeterRow ? (item.showTgl ? item.tglStr : "") : (item.hideOperatorAndDate ? "" : (det.header?.tgl || "-"));
-                            const grpStr = isMeterRow ? (item.showGrp ? item.grpStr : "") : (item.hideOperatorAndDate ? "" : (det.header?.groups?.nama_grup || ""));
-                            let oprStr = isMeterRow ? (item.showOpr ? item.oprStr : "") : (item.hideOperatorAndDate ? "" : (det.header?.operators?.nama_operator || det.header?.pic || ""));
-                            let displayKeterangan = det.keterangan_cacat || "";
-                            if (!isMeterRow && displayKeterangan.includes("ISTIRAHAT")) {
-                              oprStr = "Istirahat";
-                              displayKeterangan = displayKeterangan.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
-                              displayKeterangan = displayKeterangan.replace(/^,\s*|\s*,\s*$/g, "");
-                            }
-                            
-                            let cacatLines: string[] = [];
-                            const katsRaw = det.kategori_masalah;
-                            const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
-                            const displayDetail = det.detail_masalah || "";
-                            
-                            const pushDetailsForCat = (k: string, d: string) => {
-                              if (!d) {
-                                cacatLines.push(k);
-                                return;
-                              }
-                              const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
-                              const matchedDetails: string[] = [];
-                              let remainingD = d;
-                              
-                              const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
-                              sortedKnown.forEach(known => {
-                                if (remainingD.includes(known)) {
-                                  matchedDetails.push(known);
-                                  remainingD = remainingD.replace(known, "");
-                                }
-                              });
-                              
-                              if (matchedDetails.length > 0) {
-                                const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
-                                customParts.forEach(custom => cacatLines.push(`${k} - ${custom}`));
-                              } else {
-                                const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                parts.forEach(p => cacatLines.push(`${k} - ${p}`));
-                              }
-                            };
-                            
-                            if (!isMeterRow) {
-                              if (kats.length > 0) {
-                                if (displayDetail.includes(" | ")) {
-                                  const catDetails = displayDetail.split(" | ");
-                                  for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
-                                    const k = kats[i] || "Unknown";
-                                    const d = catDetails[i] || "";
-                                    pushDetailsForCat(k, d);
-                                  }
-                                } else if (displayDetail) {
-                                  if (kats.length === 1) {
-                                    pushDetailsForCat(kats[0], displayDetail);
-                                  } else {
-                                    const dets = displayDetail.split(", ");
-                                    if (kats.length === dets.length) {
-                                      for (let i = 0; i < kats.length; i++) {
-                                        pushDetailsForCat(kats[i], dets[i]);
-                                      }
-                                    } else {
-                                      dets.forEach((det: string) => {
-                                        let foundKat = "Unknown";
-                                        for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
-                                          if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
-                                            foundKat = kat;
-                                            break;
-                                          }
-                                        }
-                                        cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
-                                      });
-                                    }
-                                  }
-                                } else {
-                                  cacatLines.push(kats.join(", "));
-                                }
-                              } else if (displayDetail) {
-                                cacatLines.push(displayDetail);
-                              }
-                              
-                              let ketCacat = displayKeterangan;
-                              const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
-                              ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
-                              ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
-                              ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
-
-                              if (ketCacat) {
-                                if (cacatLines.length > 0) {
-                                  const parts = ketCacat.split(",").map((s: string) => s.trim());
-                                  
-                                  cacatLines = cacatLines.map((line, i) => {
-                                    const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
-                                    let partIndex = i;
-                                    
-                                    if (lineKat && kats.includes(lineKat)) {
-                                       partIndex = kats.indexOf(lineKat);
-                                    }
-                                    
-                                    if (parts[partIndex] && parts[partIndex] !== "") {
-                                      const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
-                                      return `${line} (Blok ${cleanB})`;
-                                    } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
-                                       const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
-                                       return `${line} (Blok ${cleanB})`;
-                                    }
-                                    return line;
-                                  });
-                                } else {
-                                  const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
-                                  cacatLines.push(`(Blok ${cleanB})`);
-                                }
-                              }
-
-                              if (hasTambahanQC) {
-                                if (cacatLines.length === 0) {
-                                  cacatLines.push("[TAMBAHAN QC]");
-                                } else {
-                                  for (let i = 0; i < cacatLines.length; i++) {
-                                    cacatLines[i] = cacatLines[i] + " [TAMBAHAN QC]";
-                                  }
-                                }
-                              }
-                            }
-
-                            let cacat = isMeterRow ? item.cacatDisplay : (cacatLines.join("\n") || "-");
-                            const isGradable = isMeterRow ? item.isGradable : true;
-                            const hasError = isMeterRow ? item.hasErrorDetail : !!det.kategori_masalah;
-                            
-                            return (
-                              <tr key={item.id || itemIndex} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-2 py-1 font-bold text-slate-800">{pnlNo || "-"}</td>
-                                <td className="px-2 py-1 text-slate-600 whitespace-nowrap">{tgl}</td>
-                                <td className="px-1 py-1 font-medium text-slate-700 text-center">{grpStr}</td>
-                                <td className="px-1 py-1 font-medium text-slate-700 leading-tight">{oprStr}</td>
-                                
-                                <td className="px-2 py-1 text-center font-bold text-sm">
-                                  {!isGradable ? "" : (hasError ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
-                                </td>
-                                
-                                <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight">{cacat || "-"}</td>
-
-                                <td className="px-1 py-1 text-center">
-                                  {isGradable && grade === "A" && <div className="mx-auto w-4 h-4 rounded bg-emerald-100 text-emerald-700 font-black flex items-center justify-center text-[10px]">A</div>}
-                                </td>
-                                <td className="px-1 py-1 text-center">
-                                  {isGradable && grade === "B" && <div className="mx-auto w-4 h-4 rounded bg-amber-100 text-amber-700 font-black flex items-center justify-center text-[10px]">B</div>}
-                                </td>
-                                <td className="px-1 py-1 text-center">
-                                  {isGradable && grade === "BS" && <div className="mx-auto w-4 h-4 rounded bg-rose-100 text-rose-700 font-black flex items-center justify-center text-[10px]">BS</div>}
-                                </td>
-                              </tr>
-                            );
-                          })
-                        ) : (
-                          <tr>
-                            <td colSpan={9} className="px-3 py-8 text-center text-slate-400 font-medium">Belum ada baris mending</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-
-                    {/* Summary Table & Overall Grade */}
-                    <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-col gap-6">
-                      <div className="flex flex-col sm:flex-row gap-4 items-stretch w-full">
-                        <div className="flex-1">
-                          <table className="w-full text-left text-xs border-collapse border border-slate-300 bg-white shadow-sm h-full">
-                            <thead>
-                              <tr className="bg-slate-100">
-                                <th className="px-3 py-2 border border-slate-300 font-extrabold text-slate-700">KET</th>
-                                <th className="px-3 py-2 border border-slate-300 font-extrabold text-slate-700 text-center">Produksi</th>
-                                <th className="px-3 py-2 border border-slate-300 font-extrabold text-slate-700 text-center">Setelah Inspect</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
-                              <tr className="hover:bg-slate-50 transition-colors">
-                                <td className="px-3 py-2 border border-slate-300 font-bold text-slate-800">Total Grade A</td>
-                                <td className="px-3 py-2 border border-slate-300 text-center font-bold text-slate-700">
-                                  {sortedItems.filter((i: any) => !i.detail?.kategori_masalah).length || 0}
-                                </td>
-                                <td className="px-3 py-2 border border-slate-300 text-center font-bold text-emerald-600">
-                                  {sortedItems.filter((i: any) => i.hasil_mending === "A").length || 0}
-                                </td>
-                              </tr>
-                              <tr className="hover:bg-slate-50 transition-colors">
-                                <td className="px-3 py-2 border border-slate-300 font-bold text-slate-800">Total Grade B</td>
-                                <td className="px-3 py-2 border border-slate-300 text-center font-bold text-slate-700">
-                                  {sortedItems.filter((i: any) => i.detail?.kategori_masalah).length || 0}
-                                </td>
-                                <td className="px-3 py-2 border border-slate-300 text-center font-bold text-amber-600">
-                                  {sortedItems.filter((i: any) => i.hasil_mending === "B").length || 0}
-                                </td>
-                              </tr>
-                              <tr className="hover:bg-slate-50 transition-colors">
-                                <td className="px-3 py-2 border border-slate-300 font-bold text-slate-800">BS</td>
-                                <td className="px-3 py-2 border border-slate-300 text-center font-bold text-slate-700">0</td>
-                                <td className="px-3 py-2 border border-slate-300 text-center font-bold text-rose-600">
-                                  {sortedItems.filter((i: any) => i.hasil_mending === "BS").length || 0}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                        
-                        <div className="flex-1 h-full bg-white border border-slate-300 rounded-xl shadow-sm flex flex-col items-center justify-center py-6 px-4">
-                          <span className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-2">Grade Keseluruhan</span>
-                          <span className={`text-6xl font-black ${overallGrade === 'A' ? 'text-emerald-500' : overallGrade === 'B' ? 'text-amber-500' : overallGrade === 'C' ? 'text-orange-500' : 'text-rose-600'}`}>
-                            {overallGrade}
-                          </span>
-                          <span className="text-slate-500 text-xs font-semibold mt-3 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                            Kategori: Max {bucket} {unit}
-                          </span>
-                          <span className="text-slate-400 text-[10px] font-medium mt-1">
-                            Total: {totalQty} {unit} &bull; Cacat: {totalCacat}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Additional Info Forms */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2 w-full">
-                        
-                        {/* Column 1: Info */}
-                        <div className="flex flex-col gap-4">
-                          <table className="w-full text-left text-xs border-collapse border border-black bg-white">
-                            <tbody>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold w-1/2">Total {unit} Setelah di Inspecting</td>
-                                <td className="px-2 py-1.5 border border-black w-1/2">: {totalSetelahInspect}</td>
-                              </tr>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold">Berat Inspecting</td>
-                                <td className="px-2 py-1.5 border border-black">: {beratInspect}</td>
-                              </tr>
-                            </tbody>
-                          </table>
+                      {/* Summary Table & Overall Grade */}
+                      <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-col gap-6">
+                        <div className="flex flex-col sm:flex-row gap-4 items-stretch w-full">
+                          <div className="flex-1">
+                            <table className="w-full text-left text-xs border-collapse border border-slate-300 bg-white shadow-sm h-full">
+                              <thead>
+                                <tr className="bg-slate-100">
+                                  <th className="px-3 py-2 border border-slate-300 font-extrabold text-slate-700">KET</th>
+                                  <th className="px-3 py-2 border border-slate-300 font-extrabold text-slate-700 text-center">Produksi</th>
+                                  <th className="px-3 py-2 border border-slate-300 font-extrabold text-slate-700 text-center">Setelah Inspect</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                <tr className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-3 py-2 border border-slate-300 font-bold text-slate-800">Total Grade A</td>
+                                  <td className="px-3 py-2 border border-slate-300 text-center font-bold text-slate-700">{prodA}</td>
+                                  <td className="px-3 py-2 border border-slate-300 text-center font-bold text-emerald-600">{inspectA}</td>
+                                </tr>
+                                <tr className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-3 py-2 border border-slate-300 font-bold text-slate-800">Total Grade B</td>
+                                  <td className="px-3 py-2 border border-slate-300 text-center font-bold text-slate-700">{prodB}</td>
+                                  <td className="px-3 py-2 border border-slate-300 text-center font-bold text-amber-600">{inspectB}</td>
+                                </tr>
+                                <tr className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-3 py-2 border border-slate-300 font-bold text-slate-800">BS</td>
+                                  <td className="px-3 py-2 border border-slate-300 text-center font-bold text-slate-700">{prodBS}</td>
+                                  <td className="px-3 py-2 border border-slate-300 text-center font-bold text-rose-600">{inspectBS}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          
+                          <div className="flex-1 h-full bg-white border border-slate-300 rounded-xl shadow-sm flex flex-col items-center justify-center py-6 px-4">
+                            <span className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-2">Grade Keseluruhan</span>
+                            <span className={`text-6xl font-black ${overallGrade === 'A' ? 'text-emerald-500' : overallGrade === 'B' ? 'text-amber-500' : overallGrade === 'C' ? 'text-orange-500' : 'text-rose-600'}`}>
+                              {overallGrade}
+                            </span>
+                            <span className="text-slate-500 text-xs font-semibold mt-3 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                              Kategori: Max {bucket} {unit}
+                            </span>
+                            <span className="text-slate-400 text-[10px] font-medium mt-1">
+                              Total: {totalQty} {unit} &bull; Cacat: {totalCacat}
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Column 2: Inspect Info */}
-                        <div className="flex flex-col gap-4">
-                          <table className="w-full text-left text-xs border-collapse border border-black bg-white h-full">
-                            <tbody>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold w-1/2">Tanggal Inspecting</td>
-                                <td className="px-2 py-1.5 border border-black w-1/2">: {tanggalInspect}</td>
-                              </tr>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold w-1/2">Petugas Inspecting</td>
-                                <td className="px-2 py-1.5 border border-black w-1/2">: {petugasInspect}</td>
-                              </tr>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold">Start Inspect</td>
-                                <td className="px-2 py-1.5 border border-black">: {startInspect}</td>
-                              </tr>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold">Finish Inspect</td>
-                                <td className="px-2 py-1.5 border border-black">: {finishInspect}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                        {/* Additional Info Forms */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2 w-full">
+                          
+                          {/* Column 1: Info */}
+                          <div className="flex flex-col gap-4">
+                            <table className="w-full text-left text-xs border-collapse border border-black bg-white">
+                              <tbody>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold w-1/2">Total {unit} Setelah di Inspecting</td>
+                                  <td className="px-2 py-1.5 border border-black w-1/2">: {totalSetelahInspect}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold">Berat Inspecting</td>
+                                  <td className="px-2 py-1.5 border border-black">: {beratInspect}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
 
-                        {/* Column 3: Mending Info */}
-                        <div className="flex flex-col gap-4">
-                          <table className="w-full text-left text-xs border-collapse border border-black bg-white h-full">
-                            <tbody>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold w-1/2">Tanggal Mending</td>
-                                <td className="px-2 py-1.5 border border-black w-1/2">: {pcs.tanggal_mending || ""}</td>
-                              </tr>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold w-1/2">Petugas Mending</td>
-                                <td className="px-2 py-1.5 border border-black w-1/2">: {pcs.petugas_mending || ""}</td>
-                              </tr>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold">Start Mending</td>
-                                <td className="px-2 py-1.5 border border-black">: {pcs.start_mending || ""}</td>
-                              </tr>
-                              <tr>
-                                <td className="px-2 py-1.5 border border-black font-bold">Finish Mending</td>
-                                <td className="px-2 py-1.5 border border-black">: {pcs.finish_mending || ""}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                          {/* Column 2: Inspect Info */}
+                          <div className="flex flex-col gap-4">
+                            <table className="w-full text-left text-xs border-collapse border border-black bg-white h-full">
+                              <tbody>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold w-1/2">Tanggal Inspecting</td>
+                                  <td className="px-2 py-1.5 border border-black w-1/2">: {tanggalInspect}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold w-1/2">Petugas Inspecting</td>
+                                  <td className="px-2 py-1.5 border border-black w-1/2">: {petugasInspect}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold">Start Inspect</td>
+                                  <td className="px-2 py-1.5 border border-black">: {startInspect}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold">Finish Inspect</td>
+                                  <td className="px-2 py-1.5 border border-black">: {finishInspect}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
 
+                          {/* Column 3: Mending Info */}
+                          <div className="flex flex-col gap-4">
+                            <table className="w-full text-left text-xs border-collapse border border-black bg-white h-full">
+                              <tbody>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold w-1/2">Tanggal Mending</td>
+                                  <td className="px-2 py-1.5 border border-black w-1/2">: {pcs.tanggal_mending || ""}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold w-1/2">Petugas Mending</td>
+                                  <td className="px-2 py-1.5 border border-black w-1/2">: {pcs.petugas_mending || ""}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold">Start Mending</td>
+                                  <td className="px-2 py-1.5 border border-black">: {pcs.start_mending || ""}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-2 py-1.5 border border-black font-bold">Finish Mending</td>
+                                  <td className="px-2 py-1.5 border border-black">: {pcs.finish_mending || ""}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

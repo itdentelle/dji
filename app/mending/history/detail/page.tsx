@@ -120,6 +120,10 @@ function MendingDetailContent() {
   });
   const totalGradable = gradeA + gradeB + gradeBS;
 
+  const displayGradeA = isMeteran ? (Number(group.mending_grade_a) || Number(header.meter_akhir) || 0) : gradeA;
+  const displayGradeB = isMeteran ? (Number(group.mending_grade_b) || gradeB) : gradeB;
+  const displayGradeBS = isMeteran ? (Number(group.mending_grade_bs) || gradeBS) : gradeBS;
+
   const detailsToDisplay = React.useMemo(() => {
     if (!mendingData) return [];
 
@@ -207,21 +211,128 @@ function MendingDetailContent() {
     if (!mendingData) return [];
     const isMeteranBatch = isMeteran;
     if (!isMeteranBatch) {
-      return detailsToDisplay.map((item: any) => ({
-        ...item,
-        isMeter: false,
-        isStartRow: false,
-        isIstirahat: false,
-        isFinishReport: false,
-        displayNo: item.production_headers?.panel_no || "-",
-        meterDisplay: "-",
-        cacatDisplay: item.detail_masalah || item.keterangan_cacat || "-",
-        isGradable: true,
-        showTgl: true,
-        showGrp: true,
-        showOpr: true,
-        hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
-      }));
+      const items: any[] = [];
+      let currentOpCount = 0;
+      let currentOpA = 0;
+      let currentOpB = 0;
+      let currentOpBS = 0;
+      let lastTgl = "";
+      let lastGrp = "";
+      let lastOpr = "";
+
+      const processed = detailsToDisplay.map((item: any) => {
+        const h = item.production_headers || {};
+        const opr = h.operators?.nama_operator || h.pic || "";
+        const grp = h.groups?.nama_grup || "";
+        const operatorStr = (grp ? `(${grp}) ` : '') + opr;
+        
+        const isIstirahat = (item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+                             item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
+                            !item.kategori_masalah && !item.detail_masalah;
+        
+        const isStartOrFinish = h.panel_no === "START" || h.panel_no === "FINISH" || item.meter_kain === "START" || item.meter_kain === "FINISH";
+        const isGradable = !isStartOrFinish;
+
+        return {
+          item,
+          isIstirahat,
+          isGradable,
+          opr,
+          grp,
+          tgl: h.tgl || "-",
+          operatorStr,
+          oprStr: isIstirahat ? "Istirahat" : opr
+        };
+      });
+
+      processed.forEach((p: any, idx: number) => {
+        const { item, isIstirahat, isGradable, opr, grp, tgl, operatorStr, oprStr } = p;
+
+        if (isGradable) {
+          currentOpCount += 1;
+          if (item.hasil_mending_original === "A") currentOpA++;
+          if (item.hasil_mending_original === "B") currentOpB++;
+          if (item.hasil_mending_original === "BS") currentOpBS++;
+        }
+
+        let showTgl = true;
+        let showGrp = true;
+        let showOpr = true;
+
+        if (tgl === lastTgl) showTgl = false;
+        if (grp === lastGrp) showGrp = false;
+
+        if (isIstirahat) {
+          showTgl = false;
+          showGrp = false;
+          showOpr = true;
+        } else {
+          let prevActualOprStr = "-";
+          for (let k = items.length - 1; k >= 0; k--) {
+            const pItem = items[k];
+            if (!pItem.isTotalRow && !pItem.isIstirahat) {
+              const ph = pItem.production_headers || {};
+              prevActualOprStr = ph.operators?.nama_operator || ph.pic || "-";
+              break;
+            }
+          }
+          if (prevActualOprStr === opr) {
+            showOpr = false;
+          }
+        }
+
+        lastTgl = tgl;
+        lastGrp = grp;
+        lastOpr = isIstirahat ? "Istirahat" : opr;
+
+        items.push({
+          ...item,
+          isMeter: false,
+          isStartRow: false,
+          isIstirahat,
+          isFinishReport: false,
+          displayNo: item.production_headers?.panel_no || "-",
+          meterDisplay: "-",
+          cacatDisplay: item.detail_masalah || item.keterangan_cacat || "-",
+          isGradable,
+          showTgl,
+          showGrp,
+          showOpr,
+          oprStr,
+          grpStr: grp,
+          tglStr: tgl,
+          hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
+        });
+
+        let nextOprStr = null;
+        if (idx + 1 < processed.length) {
+          nextOprStr = processed[idx + 1].operatorStr;
+        }
+
+        if (nextOprStr === null || nextOprStr !== operatorStr) {
+          if (currentOpCount > 0) {
+            const [prevGrp, prevOpr] = operatorStr.includes(") ") 
+              ? [operatorStr.match(/\(([^)]+)\)/)?.[1] || "", operatorStr.replace(/^\([^)]+\)\s*/, "")]
+              : ["", operatorStr];
+
+            items.push({
+              id: `total-${operatorStr}-${Math.random()}`,
+              isTotalRow: true,
+              totalLabel: `Total Produksi${prevGrp ? ` (${prevGrp})` : ""} ${prevOpr}:`,
+              totalCount: currentOpCount,
+              countA: currentOpA,
+              countB: currentOpB,
+              countBS: currentOpBS,
+            });
+          }
+          currentOpCount = 0;
+          currentOpA = 0;
+          currentOpB = 0;
+          currentOpBS = 0;
+        }
+      });
+
+      return items;
     }
 
     const items: any[] = [];
@@ -601,22 +712,22 @@ function MendingDetailContent() {
               {isMeteran ? "Total Panjang" : "Total Panel"}
             </h4>
             <p className="text-sm font-black text-sky-900">
-              {isMeteran ? `${group.mending_grade_a ?? 0} METER` : `${group.items?.length || 0} Panel`}
+              {isMeteran ? `${displayGradeA} METER` : `${group.items?.length || 0} Panel`}
             </p>
           </div>
           <div>
             <h4 className="text-[10px] font-bold text-sky-600 uppercase tracking-wider mb-1">Rekap Hasil</h4>
             <p className="text-sm font-black flex flex-wrap items-center gap-2">
               <span className="text-emerald-600">
-                {isMeteran ? `${group.mending_grade_a ?? 0} M` : `${gradeA} A`}
+                {isMeteran ? `${displayGradeA} M` : `${gradeA} A`}
               </span>
               <span className="text-slate-300">|</span>
               <span className="text-amber-500">
-                {isMeteran ? `${group.mending_grade_b ?? 0} T` : `${gradeB} B`}
+                {isMeteran ? `${displayGradeB} T` : `${gradeB} B`}
               </span>
               <span className="text-slate-300">|</span>
               <span className="text-rose-600">
-                {isMeteran ? `${group.mending_grade_bs ?? 0} T` : `${gradeBS} BS`}
+                {isMeteran ? `${displayGradeBS} T` : `${gradeBS} BS`}
               </span>
             </p>
           </div>
@@ -769,146 +880,78 @@ function MendingDetailContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
-                    {(() => {
-                      const sortedItems = [...(group.items || [])].sort((a: any, b: any) => {
-                        const aHeader = a.header || header;
-                        const bHeader = b.header || header;
-                        const aPanel = aHeader.panel_no;
-                        const bPanel = bHeader.panel_no;
-                        if (aPanel === "METERAN" && bPanel === "METERAN") {
-                          const aMeter = parseFloat(a.detail?.meter_kain ?? "");
-                          const bMeter = parseFloat(b.detail?.meter_kain ?? "");
-                          return (isNaN(aMeter) ? 0 : aMeter) - (isNaN(bMeter) ? 0 : bMeter);
-                        }
-                        if (aPanel === "METERAN") return 1;
-                        if (bPanel === "METERAN") return -1;
-                        const aNum = parseInt(aPanel, 10);
-                        const bNum = parseInt(bPanel, 10);
-                        if (!isNaN(aNum) && !isNaN(bNum) && aNum !== bNum) return aNum - bNum;
-                        const panelCmp = String(aPanel || "").localeCompare(String(bPanel || ""), undefined, { numeric: true });
-                        if (panelCmp !== 0) return panelCmp;
-                        const aTgl = aHeader.tgl || "";
-                        const bTgl = bHeader.tgl || "";
-                        if (aTgl !== bTgl) return aTgl.localeCompare(bTgl);
-                        const aOp = aHeader.operators?.nama_operator || aHeader.pic || "";
-                        const bOp = bHeader.operators?.nama_operator || bHeader.pic || "";
-                        return aOp.localeCompare(bOp);
-                      });
+                    {displayItems.map((item: any, idx: number) => {
+                      if (item.isTotalRow) {
+                        return (
+                          <tr key={item.id || idx} className="bg-slate-100 border-t border-b border-slate-200 font-semibold text-slate-700">
+                            <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap border-r border-slate-100 border-b border-slate-100">
+                              {item.totalLabel}
+                            </td>
+                            <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap border-r border-slate-100 border-b border-slate-100">
+                              {item.totalCount} Panel
+                            </td>
+                            <td colSpan={1} className="bg-slate-100 border-r border-slate-100 border-b border-slate-100"></td>
+                            <td className="px-1 py-2 text-center text-emerald-600 bg-emerald-50/20 font-black border-r border-slate-100 border-b border-slate-100">
+                              {item.countA}
+                            </td>
+                            <td className="px-1 py-2 text-center text-amber-600 bg-amber-50/20 font-black border-r border-slate-100 border-b border-slate-100">
+                              {item.countB}
+                            </td>
+                            <td className="px-1 py-2 text-center text-rose-600 bg-rose-50/20 font-black border-b border-slate-100">
+                              {item.countBS}
+                            </td>
+                          </tr>
+                        );
+                      }
 
-                      const filteredItems = sortedItems; // Show all panel items, including istirahat
+                      const detail = item;
+                      const itemHeader = item.production_headers || header;
 
-                      const itemsRows = filteredItems.map((item: any, idx: number) => {
-                        const detail = item.detail || {};
-                        const itemHeader = item.header || header;
+                      const isIstirahat = item.isIstirahat;
+                      const isGradable = item.isGradable;
 
-                        const currOp = itemHeader.operators?.nama_operator || itemHeader.pic || "-";
-                        const currTgl = itemHeader.tgl || "-";
-                        const currGrp = itemHeader.groups?.nama_grup || "-";
+                      const displayTgl = item.showTgl ? item.tglStr : "";
+                      const displayGrp = item.showGrp ? item.grpStr : "";
+                      const displayOp = item.showOpr ? item.oprStr : "";
 
-                        const isIstirahat = (detail.kategori_masalah?.includes("ISTIRAHAT") || detail.keterangan_cacat?.includes("ISTIRAHAT")) && !detail.kategori_masalah && !detail.detail_masalah;
-                        
-                        let displayOp = currOp;
-                        let displayTgl = currTgl;
-                        let displayGrp = currGrp;
-                        
-                        if (isIstirahat) {
-                          displayOp = "Istirahat";
-                        }
-                        
-                        if (idx > 0) {
-                          const prevItem = sortedItems[idx - 1];
-                          const prevHeader = prevItem?.header || header;
-                          const prevTgl = prevHeader?.tgl || "-";
-                          const prevGrp = prevHeader?.groups?.nama_grup || "-";
-                          
-                          if (prevTgl === currTgl) displayTgl = "";
-                          if (prevGrp === currGrp) displayGrp = "";
-                          
-                          if (isIstirahat) {
-                            displayOp = "Istirahat";
-                          } else {
-                            let prevActualOprStr = "-";
-                            for (let k = idx - 1; k >= 0; k--) {
-                               const pItem = sortedItems[k];
-                               const isPItemIstirahat = (pItem.detail?.kategori_masalah?.includes("ISTIRAHAT") || pItem.detail?.keterangan_cacat?.includes("ISTIRAHAT")) && !pItem.detail?.kategori_masalah && !pItem.detail?.detail_masalah;
-                               if (!isPItemIstirahat) {
-                                 const pHeader = pItem.header || header;
-                                 prevActualOprStr = pHeader?.operators?.nama_operator || pHeader?.pic || "-";
-                                 break;
-                               }
-                            }
-                            if (prevActualOprStr === currOp) {
-                               displayOp = "";
-                            }
+                      let Icon = null;
+                      let iconColor = "";
+
+                      if (detail.final_inspection_id === 1) {
+                        Icon = CheckCircle2;
+                        iconColor = "text-emerald-500";
+                      } else if (detail.final_inspection_id === 2 || detail.final_inspection_id === 3 || detail.final_inspection_id === 4) {
+                        Icon = XCircle;
+                        iconColor = "text-rose-500";
+                      }
+
+                      let masalahLines: string[] = [];
+                      if (!isIstirahat) {
+                        let dtEvents: any[] = [];
+                        try {
+                          if (itemHeader.downtime_events) {
+                            dtEvents = typeof itemHeader.downtime_events === 'string'
+                              ? JSON.parse(itemHeader.downtime_events)
+                              : itemHeader.downtime_events;
                           }
-                        }
-                        
-                        if (isIstirahat) {
-                           displayTgl = "";
-                           displayGrp = "";
-                        }
+                        } catch (e) { }
 
-                        let itemText = "-";
-                        let Icon = null;
-                        let iconColor = "";
+                        const matchedEvents = dtEvents.filter((e: any) =>
+                          !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe == detail.pcs_index
+                        );
 
-                        if (detail.final_inspection_id === 1) {
-                          itemText = "Bagus";
-                          Icon = CheckCircle2;
-                          iconColor = "text-emerald-500";
-                        } else if (detail.final_inspection_id === 2 || detail.final_inspection_id === 3 || detail.final_inspection_id === 4) {
-                          itemText = "Cacat";
-                          Icon = XCircle;
-                          iconColor = "text-rose-500";
-                        }
-
-                        let masalahLines: string[] = [];
-                        if (!isIstirahat) {
-                          let dtEvents: any[] = [];
-                          try {
-                            if (itemHeader.downtime_events) {
-                              dtEvents = typeof itemHeader.downtime_events === 'string'
-                                ? JSON.parse(itemHeader.downtime_events)
-                                : itemHeader.downtime_events;
-                            }
-                          } catch (e) { }
-
-                          const matchedEvents = dtEvents.filter((e: any) =>
-                            !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe == detail.pcs_index
-                          );
-
-                          if (matchedEvents.length > 0) {
-                            matchedEvents.forEach((e: any) => {
-                              if (e.problems && Array.isArray(e.problems)) {
-                                e.problems.forEach((p: any) => {
-                                  const c = p.kategori || "";
-                                  let rawDetails: string[] = [];
-                                  if (p.details && Array.isArray(p.details)) {
-                                    rawDetails = [...p.details];
-                                  } else if (typeof p.details === "string") {
-                                    rawDetails = [p.details];
-                                  }
-                                  const b = p.blok || "";
-
-                                  rawDetails.forEach((dItem: any) => {
-                                    const d = typeof dItem === 'string' ? dItem.trim() : String(dItem);
-                                    if (!d) return;
-                                    let line = "";
-                                    if (c && d) line = `${c} - ${d}`;
-                                    else if (c) line = c;
-                                    else if (d) line = d;
-
-                                    if (b && b !== "-") {
-                                      if (line) line += ` (Blok ${b})`;
-                                      else line = `(Blok ${b})`;
-                                    }
-                                    if (line) masalahLines.push(line);
-                                  });
-                                });
-                              } else if (e.kategori) {
-                                const c = e.kategori;
-                                const rawDetails = e.detail ? (Array.isArray(e.detail) ? e.detail : [e.detail]) : [];
-                                const b = e.blok || "";
+                        if (matchedEvents.length > 0) {
+                          matchedEvents.forEach((e: any) => {
+                            if (e.problems && Array.isArray(e.problems)) {
+                              e.problems.forEach((p: any) => {
+                                const c = p.kategori || "";
+                                let rawDetails: string[] = [];
+                                if (p.details && Array.isArray(p.details)) {
+                                  rawDetails = [...p.details];
+                                } else if (typeof p.details === "string") {
+                                  rawDetails = [p.details];
+                                }
+                                const b = p.blok || "";
 
                                 rawDetails.forEach((dItem: any) => {
                                   const d = typeof dItem === 'string' ? dItem.trim() : String(dItem);
@@ -924,208 +967,218 @@ function MendingDetailContent() {
                                   }
                                   if (line) masalahLines.push(line);
                                 });
-                              }
-                            });
-                          } else {
-                            let cacatLines: string[] = [];
-                            const katsRaw = detail.kategori_masalah;
-                            const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
-                            const displayDetail = detail.detail_masalah || "";
+                              });
+                            } else if (e.kategori) {
+                              const c = e.kategori;
+                              const rawDetails = e.detail ? (Array.isArray(e.detail) ? e.detail : [e.detail]) : [];
+                              const b = e.blok || "";
+
+                              rawDetails.forEach((dItem: any) => {
+                                const d = typeof dItem === 'string' ? dItem.trim() : String(dItem);
+                                if (!d) return;
+                                let line = "";
+                                if (c && d) line = `${c} - ${d}`;
+                                else if (c) line = c;
+                                else if (d) line = d;
+
+                                if (b && b !== "-") {
+                                  if (line) line += ` (Blok ${b})`;
+                                  else line = `(Blok ${b})`;
+                                }
+                                if (line) masalahLines.push(line);
+                              });
+                            }
+                          });
+                        } else {
+                          let cacatLines: string[] = [];
+                          const katsRaw = detail.kategori_masalah;
+                          const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
+                          const displayDetail = detail.detail_masalah || "";
+                          
+                          const pushDetailsForCat = (k: string, d: string) => {
+                            if (!d) {
+                              cacatLines.push(k);
+                              return;
+                            }
+                            const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
+                            const matchedDetails: string[] = [];
+                            let remainingD = d;
                             
-                            const pushDetailsForCat = (k: string, d: string) => {
-                              if (!d) {
-                                cacatLines.push(k);
-                                return;
-                              }
-                              const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
-                              const matchedDetails: string[] = [];
-                              let remainingD = d;
-                              
-                              const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
-                              sortedKnown.forEach(known => {
-                                if (remainingD.includes(known)) {
+                            const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
+                            sortedKnown.forEach(known => {
+                              if (remainingD.includes(known)) {
                                   matchedDetails.push(known);
                                   remainingD = remainingD.replace(known, "");
-                                }
-                              });
-                              
-                              if (matchedDetails.length > 0) {
-                                const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
-                                customParts.forEach(custom => cacatLines.push(`${k} - ${custom}`));
-                              } else {
-                                const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                parts.forEach(p => cacatLines.push(`${k} - ${p}`));
                               }
-                            };
+                            });
                             
-                            if (kats.length > 0) {
-                              if (displayDetail.includes(" | ")) {
-                                const catDetails = displayDetail.split(" | ");
-                                for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
-                                  const k = kats[i] || "Unknown";
-                                  const d = catDetails[i] || "";
-                                  pushDetailsForCat(k, d);
-                                }
-                              } else if (displayDetail) {
-                                if (kats.length === 1) {
-                                  pushDetailsForCat(kats[0], displayDetail);
-                                } else {
-                                  const dets = displayDetail.split(", ");
-                                  if (kats.length === dets.length) {
-                                    for (let i = 0; i < kats.length; i++) {
-                                      pushDetailsForCat(kats[i], dets[i]);
-                                    }
-                                  } else {
-                                    dets.forEach((det: string) => {
-                                      let foundKat = "Unknown";
-                                      for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
-                                        if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
-                                          foundKat = kat;
-                                          break;
-                                        }
-                                      }
-                                      cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
-                                    });
-                                  }
-                                }
-                              } else {
-                                cacatLines.push(kats.join(", "));
+                            if (matchedDetails.length > 0) {
+                              const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
+                              matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
+                              customParts.forEach(custom => cacatLines.push(`${k} - ${custom}`));
+                            } else {
+                              const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
+                              parts.forEach(p => cacatLines.push(`${k} - ${p}`));
+                            }
+                          };
+                          
+                          if (kats.length > 0) {
+                            if (displayDetail.includes(" | ")) {
+                              const catDetails = displayDetail.split(" | ");
+                              for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
+                                const k = kats[i] || "Unknown";
+                                const d = catDetails[i] || "";
+                                pushDetailsForCat(k, d);
                               }
                             } else if (displayDetail) {
-                              cacatLines.push(displayDetail);
-                            }
-                            
-                            let ketCacat = detail.keterangan_cacat || "";
-                            const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
-                            ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
-                            ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
-                            ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
-
-                            if (ketCacat) {
-                              if (cacatLines.length > 0) {
-                                const parts = ketCacat.split(",").map((s: string) => s.trim());
-                                
-                                cacatLines = cacatLines.map((line, i) => {
-                                  const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
-                                  let partIndex = i;
-                                  
-                                  if (lineKat && kats.includes(lineKat)) {
-                                     partIndex = kats.indexOf(lineKat);
-                                  }
-                                  
-                                  if (parts[partIndex] && parts[partIndex] !== "") {
-                                    const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
-                                    return `${line} (Blok ${cleanB})`;
-                                  } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
-                                     const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
-                                     return `${line} (Blok ${cleanB})`;
-                                  }
-                                  return line;
-                                });
+                              if (kats.length === 1) {
+                                pushDetailsForCat(kats[0], displayDetail);
                               } else {
-                                const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
-                                cacatLines.push(`(Blok ${cleanB})`);
-                              }
-                            }
-
-                            if (hasTambahanQC) {
-                              if (cacatLines.length === 0) {
-                                cacatLines.push("[TAMBAHAN QC]");
-                              } else {
-                                for (let i = 0; i < cacatLines.length; i++) {
-                                  cacatLines[i] = cacatLines[i] + " [TAMBAHAN QC]";
+                                const dets = displayDetail.split(", ");
+                                if (kats.length === dets.length) {
+                                  for (let i = 0; i < kats.length; i++) {
+                                    pushDetailsForCat(kats[i], dets[i]);
+                                  }
+                                } else {
+                                  dets.forEach((det: string) => {
+                                    let foundKat = "Unknown";
+                                    for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+                                      if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
+                                        foundKat = kat;
+                                        break;
+                                      }
+                                    }
+                                    cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
+                                  });
                                 }
                               }
+                            } else {
+                              cacatLines.push(kats.join(", "));
                             }
-                            
-                            masalahLines.push(...cacatLines);
+                          } else if (displayDetail) {
+                            cacatLines.push(displayDetail);
+                          }
+                          
+                          let ketCacat = detail.keterangan_cacat || "";
+                          const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
+                          ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
+                          ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
+                          ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
+
+                          if (ketCacat) {
+                            if (cacatLines.length > 0) {
+                              const parts = ketCacat.split(",").map((s: string) => s.trim());
+                              
+                              cacatLines = cacatLines.map((line, i) => {
+                                const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
+                                let partIndex = i;
+                                
+                                if (lineKat && kats.includes(lineKat)) {
+                                   partIndex = kats.indexOf(lineKat);
+                                }
+                                
+                                if (parts[partIndex] && parts[partIndex] !== "") {
+                                  const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
+                                  return `${line} (Blok ${cleanB})`;
+                                } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
+                                   const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
+                                   return `${line} (Blok ${cleanB})`;
+                                }
+                                return line;
+                              });
+                            } else {
+                              const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
+                              cacatLines.push(`(Blok ${cleanB})`);
+                            }
                           }
 
-                          if (detail.keterangan_qc && detail.keterangan_qc !== "-") {
-                            masalahLines.push(`QC: ${detail.keterangan_qc}`);
+                          if (hasTambahanQC) {
+                            if (cacatLines.length === 0) {
+                              cacatLines.push("[TAMBAHAN QC]");
+                            } else {
+                              for (let i = 0; i < cacatLines.length; i++) {
+                                cacatLines[i] = cacatLines[i] + " [TAMBAHAN QC]";
+                              }
+                            }
                           }
+                          
+                          masalahLines.push(...cacatLines);
                         }
-                        if (masalahLines.length === 0) masalahLines.push("-");
 
-                        const isStartOrFinish = itemHeader.panel_no === "START" || itemHeader.panel_no === "FINISH" || detail.meter_kain === "START" || detail.meter_kain === "FINISH";
-                        const isGradable = !isStartOrFinish;
-
-                        return (
-                          <tr key={item.id || idx} className="hover:bg-sky-50/30 transition-colors group">
-                            <td className="px-2 py-1 font-bold text-slate-800 border-r border-slate-100 border-b border-slate-100">
-                              <span className="text-[11px] font-extrabold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
-                                {itemHeader.panel_no === "METERAN" ? (detail.meter_kain ?? "-") : itemHeader.panel_no}
-                              </span>
-                            </td>
-                            <td className="px-2 py-1 text-slate-600 whitespace-nowrap border-r border-slate-100 border-b border-slate-100">
-                              {displayTgl}
-                            </td>
-                            <td className="px-1.5 py-1 font-medium text-slate-700 text-center border-r border-slate-100 border-b border-slate-100">
-                              {displayGrp}
-                            </td>
-                            <td className="px-2 py-1 font-medium text-slate-700 leading-tight border-r border-slate-100 border-b border-slate-100">
-                              {displayOp}
-                            </td>
-                            <td className="px-2 py-1 text-center font-bold text-sm border-r border-slate-100 border-b border-slate-100">
-                              {Icon ? <Icon className={`w-3.5 h-3.5 mx-auto ${iconColor}`} /> : <span className="text-slate-300">-</span>}
-                            </td>
-                            <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
-                              <div className="flex flex-col gap-0.5">
-                                {masalahLines.map((line: string, i: number) => (
-                                  <span key={i} title={line}>
-                                    {line}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
-                              {isGradable ? (
-                                <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending === "A" ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
-                                  <CheckCircle className="w-3.5 h-3.5" />
-                                </div>
-                              ) : null}
-                            </td>
-                            <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
-                              {isGradable ? (
-                                <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending === "B" ? "border-amber-500 bg-amber-100 text-amber-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
-                                  <span className="text-[10px] font-black">B</span>
-                                </div>
-                              ) : null}
-                            </td>
-                            <td className="px-1 py-1.5 text-center border-b border-slate-100">
-                              {isGradable ? (
-                                <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending === "BS" ? "border-rose-500 bg-rose-100 text-rose-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
-                                  <span className="text-[10px] font-black">BS</span>
-                                </div>
-                              ) : null}
-                            </td>
-                          </tr>
-                        );
-                      });
+                        if (detail.keterangan_qc && detail.keterangan_qc !== "-") {
+                          masalahLines.push(`QC: ${detail.keterangan_qc}`);
+                        }
+                      }
+                      if (masalahLines.length === 0) masalahLines.push("-");
 
                       return (
-                        <>
-                          {itemsRows}
-                          {totalGradable > 0 && (
-                            <tr className="bg-slate-50 font-bold border-t border-slate-200 text-[11px] text-slate-700 uppercase tracking-wider">
-                              <td className="px-2 py-3 text-right font-extrabold border-r border-slate-100 border-b border-slate-100" colSpan={6}>
-                                Total ({totalGradable} Panel):
-                              </td>
-                              <td className="px-1 py-3 text-center text-emerald-600 bg-emerald-50/40 font-black border-r border-slate-100 border-b border-slate-100">
-                                {gradeA}
-                              </td>
-                              <td className="px-1 py-3 text-center text-amber-600 bg-amber-50/40 font-black border-r border-slate-100 border-b border-slate-100">
-                                {gradeB}
-                              </td>
-                              <td className="px-1 py-3 text-center text-rose-600 bg-rose-50/40 font-black border-b border-slate-100">
-                                {gradeBS}
-                              </td>
-                            </tr>
-                          )}
-                        </>
+                        <tr key={item.id || idx} className="hover:bg-sky-50/30 transition-colors group">
+                          <td className="px-2 py-1 font-bold text-slate-800 border-r border-slate-100 border-b border-slate-100">
+                            <span className="text-[11px] font-extrabold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {itemHeader.panel_no === "METERAN" ? (detail.meter_kain ?? "-") : itemHeader.panel_no}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1 text-slate-600 whitespace-nowrap border-r border-slate-100 border-b border-slate-100">
+                            {displayTgl}
+                          </td>
+                          <td className="px-1.5 py-1 font-medium text-slate-700 text-center border-r border-slate-100 border-b border-slate-100">
+                            {displayGrp}
+                          </td>
+                          <td className="px-2 py-1 font-medium text-slate-700 leading-tight border-r border-slate-100 border-b border-slate-100">
+                            {displayOp}
+                          </td>
+                          <td className="px-2 py-1 text-center font-bold text-sm border-r border-slate-100 border-b border-slate-100">
+                            {Icon ? <Icon className={`w-3.5 h-3.5 mx-auto ${iconColor}`} /> : <span className="text-slate-300">-</span>}
+                          </td>
+                          <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
+                            <div className="flex flex-col gap-0.5">
+                              {masalahLines.map((line: string, i: number) => (
+                                <span key={i} title={line}>
+                                  {line}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
+                            {isGradable ? (
+                              <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending_original === "A" ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                <CheckCircle className="w-3.5 h-3.5" />
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
+                            {isGradable ? (
+                              <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending_original === "B" ? "border-amber-500 bg-amber-100 text-amber-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                <span className="text-[10px] font-black">B</span>
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-1 py-1.5 text-center border-b border-slate-100">
+                            {isGradable ? (
+                              <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${item.hasil_mending_original === "BS" ? "border-rose-500 bg-rose-100 text-rose-700 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-300"}`}>
+                                <span className="text-[10px] font-black">BS</span>
+                              </div>
+                            ) : null}
+                          </td>
+                        </tr>
                       );
-                    })()}
+                    })}
+                    {totalGradable > 0 && (
+                      <tr className="bg-slate-50 font-bold border-t border-slate-200 text-[11px] text-slate-700 uppercase tracking-wider">
+                        <td className="px-2 py-3 text-right font-extrabold border-r border-slate-100 border-b border-slate-100" colSpan={6}>
+                          Total ({totalGradable} Panel):
+                        </td>
+                        <td className="px-1 py-3 text-center text-emerald-600 bg-emerald-50/40 font-black border-r border-slate-100 border-b border-slate-100">
+                          {gradeA}
+                        </td>
+                        <td className="px-1 py-3 text-center text-amber-600 bg-amber-50/40 font-black border-r border-slate-100 border-b border-slate-100">
+                          {gradeB}
+                        </td>
+                        <td className="px-1 py-3 text-center text-rose-600 bg-rose-50/40 font-black border-b border-slate-100">
+                          {gradeBS}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               )}

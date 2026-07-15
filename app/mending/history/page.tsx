@@ -452,12 +452,15 @@ export default function MendingHistoryPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                      <th className="px-6 py-4">Tanggal & Waktu</th>
-                      <th className="px-6 py-4">Mesin & Desain</th>
-                      <th className="px-6 py-4">Petugas Mending</th>
-                      <th className="px-6 py-4">Panel / PCS</th>
-                      <th className="px-6 py-4 text-center">Hasil Mending</th>
-                      <th className="px-6 py-4 text-center">Aksi</th>
+                      <th className="px-4 py-4 w-28 whitespace-nowrap">Tanggal</th>
+                      <th className="px-4 py-4 w-28 whitespace-nowrap">Jam</th>
+                      <th className="px-4 py-4">Mesin & Desain</th>
+                      <th className="px-4 py-4 text-center w-24">Potongan</th>
+                      <th className="px-4 py-4 text-center w-20">PCS</th>
+                      <th className="px-4 py-4 text-center w-32">Panel / Meter</th>
+                      <th className="px-4 py-4">Petugas Mending</th>
+                      <th className="px-4 py-4 text-center">Hasil Mending</th>
+                      <th className="px-4 py-4 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -471,8 +474,8 @@ export default function MendingHistoryPage() {
                         if (item.hasil_mending === "BS") gradeBS++;
                       });
 
-                      const isMeteran = d.items?.[0]?.detail?.header?.panel_no === "METERAN";
-                      const gradeAVal = isMeteran ? (d.mending_grade_a ?? 0) : gradeA;
+                      const isMeteran = d.header?.panel_no === "METERAN";
+                      const gradeAVal = isMeteran ? (d.mending_grade_a || Number(d.header?.meter_akhir) || 0) : gradeA;
                       const gradeBVal = isMeteran ? (d.mending_grade_b ?? 0) : gradeB;
                       const gradeBSVal = isMeteran ? (d.mending_grade_bs ?? 0) : gradeBS;
 
@@ -481,40 +484,46 @@ export default function MendingHistoryPage() {
                           key={d.id || idx}
                           className="hover:bg-slate-50/80 transition-colors group/row"
                         >
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="font-bold text-slate-800">
                               {d.tanggal_mending}
                             </div>
-                            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
-                              <Clock className="w-3 h-3" />{" "}
-                              {d.start_mending || "-"} -{" "}
-                              {d.finish_mending || "-"}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />{" "}
+                              {d.start_mending || "-"} - {d.finish_mending || "-"}
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-4">
                             <div className="font-bold text-slate-800">
                               {d.nomor_mc || "-"}
                             </div>
                             <div className="text-xs text-slate-500 font-medium">
-                              {d.design_id || "-"} {d.potongan_ke ? <span className="ml-1 opacity-75">• Potongan Ke-{d.potongan_ke}</span> : ""}
+                              {d.design_id || "-"}
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-4 text-center">
+                            <span className="inline-flex items-center justify-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+                              {d.potongan_ke || "-"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <span className="inline-flex items-center justify-center rounded-lg bg-sky-50 text-sky-700 border border-sky-100 px-2.5 py-1 text-xs font-bold">
+                              {d.pcs_index || d.detail?.pcs_index || "-"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <span className="font-extrabold text-slate-800 text-xs">
+                              {isMeteran ? `${gradeAVal} Meter` : `${d.total_panel || d.items?.length || 0} Panel`}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
                             <div className="font-bold text-slate-800">
                               {d.petugas_mending || "-"}
                             </div>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="font-bold text-slate-800 flex flex-col">
-                              <span>
-                                PCS Ke-{d.pcs_index || d.detail?.pcs_index}
-                              </span>
-                              <span className="text-xs text-slate-500 font-medium mt-0.5">
-                                {isMeteran ? `${d.mending_grade_a ?? 0} Meter` : `${d.total_panel || d.items?.length || 0} Panel`}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-center">
+                          <td className="px-4 py-4 text-center">
                             <div className="text-sm font-bold text-slate-800 flex flex-wrap items-center justify-center gap-3">
                               {gradeAVal > 0 && (
                                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 text-emerald-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
@@ -536,7 +545,7 @@ export default function MendingHistoryPage() {
                                 gradeBSVal === 0 && <span>-</span>}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-center">
+                          <td className="px-4 py-4 text-center">
                             <button
                               onClick={() => handleOpenDetail(d)}
                               className="p-2 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm group mx-auto"

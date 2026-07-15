@@ -249,7 +249,10 @@ export async function submitMending(params: {
         nomor_mc: headerInfo.nomor_mc,
         design_id: headerInfo.design_id,
         potongan_ke: headerInfo.potongan_ke,
-        pcs_index: headerInfo.pcs_index
+        pcs_index: headerInfo.pcs_index,
+        mending_grade_a: params.mending_grade_a,
+        mending_grade_b: params.mending_grade_b,
+        mending_grade_bs: params.mending_grade_bs
       })
       .select("id")
       .single();
@@ -468,6 +471,14 @@ export async function searchMendingHistory(filters: {
       const firstItem = batch.items && batch.items.length > 0 ? batch.items[0] : null;
       const header = firstItem?.detail?.header || {};
       
+      let maxMeterAkhir = 0;
+      (batch.items || []).forEach((item: any) => {
+        const m = Number(item.detail?.header?.meter_akhir) || 0;
+        if (m > maxMeterAkhir) {
+          maxMeterAkhir = m;
+        }
+      });
+      
       const formattedItems = (batch.items || []).map((item: any) => ({
         id: item.id,
         hasil_mending: item.hasil_mending,
@@ -477,7 +488,10 @@ export async function searchMendingHistory(filters: {
 
       return {
         ...batch,
-        header,
+        header: {
+          ...header,
+          meter_akhir: maxMeterAkhir || header.meter_akhir
+        },
         detail: { pcs_index: batch.pcs_index },
         items: formattedItems
       };
@@ -645,7 +659,7 @@ export async function getMendingReportOptions() {
   }
 }
 
-export async function getMendingReportData(nomor_mc: string, potongan_ke: string, design_id?: string) {
+export async function getMendingReportData(nomor_mc?: string, potongan_ke?: string) {
   try {
     const supabase = await createClient();
     let query = supabase
@@ -665,12 +679,13 @@ export async function getMendingReportData(nomor_mc: string, potongan_ke: string
             )
           )
         )
-      `)
-      .eq("nomor_mc", nomor_mc)
-      .eq("potongan_ke", parseInt(potongan_ke));
+      `);
       
-    if (design_id) {
-      query = query.eq("design_id", design_id);
+    if (nomor_mc) {
+      query = query.eq("nomor_mc", nomor_mc);
+    }
+    if (potongan_ke) {
+      query = query.eq("potongan_ke", parseInt(potongan_ke));
     }
     
     const { data, error } = await query;
