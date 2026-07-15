@@ -44,14 +44,16 @@ export default function PanelHistoryTable({
       const tgl = h.tgl || "";
       const operatorStr = (grp ? `(${grp}) ` : '') + opr;
 
-      const isIstirahat = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") && !item.kategori_masalah && !item.detail_masalah;
+      const isIstirahatOnly = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") && !item.kategori_masalah && !item.detail_masalah;
+      const hasIstirahat = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT");
       const isFinish = item.keterangan_cacat === "FINISH" || item.production_headers?.panel_no === "FINISH";
       const isStart = item.keterangan_cacat === "START" || item.production_headers?.panel_no === "START";
-      const isGradable = !isIstirahat && !isFinish && !isStart;
+      const isGradable = !isIstirahatOnly && !isFinish && !isStart;
 
       return {
         item,
-        isIstirahat,
+        isIstirahatOnly,
+        hasIstirahat,
         isGradable,
         opr,
         grp,
@@ -67,7 +69,7 @@ export default function PanelHistoryTable({
     let lastOpr = "";
 
     processed.forEach((p: any, i: number) => {
-      const { item, isIstirahat, isGradable, opr, grp, tgl, operatorStr } = p;
+      const { item, isIstirahatOnly, hasIstirahat, isGradable, opr, grp, tgl, operatorStr } = p;
 
       currentOpCount += 1;
 
@@ -78,7 +80,7 @@ export default function PanelHistoryTable({
       if (tgl === lastTgl) showTgl = false;
       if (grp === lastGrp) showGrp = false;
 
-      if (isIstirahat) {
+      if (hasIstirahat) {
         showTgl = false;
         showGrp = false;
         showOpr = true;
@@ -86,7 +88,7 @@ export default function PanelHistoryTable({
         let prevActualOprStr = "-";
         for (let k = items.length - 1; k >= 0; k--) {
           const pItem = items[k];
-          if (!pItem.isTotalRow && !pItem.isIstirahat) {
+          if (!pItem.isTotalRow && !pItem.hasIstirahat) {
             prevActualOprStr = pItem.production_headers?.operators?.nama_operator || pItem.production_headers?.pic || "-";
             break;
           }
@@ -98,13 +100,14 @@ export default function PanelHistoryTable({
 
       lastTgl = tgl;
       lastGrp = grp;
-      lastOpr = isIstirahat ? "Istirahat" : opr;
+      lastOpr = hasIstirahat ? "Istirahat" : opr;
 
       items.push({
         ...item,
         isMeter: false,
         isStartRow: false,
-        isIstirahat,
+        isIstirahatOnly,
+        hasIstirahat,
         isFinishReport: false,
         displayNo: item.production_headers?.panel_no || "-",
         meterDisplay: "-",
@@ -113,7 +116,7 @@ export default function PanelHistoryTable({
         showTgl,
         showGrp,
         showOpr,
-        oprStr: isIstirahat ? "Istirahat" : opr,
+        oprStr: hasIstirahat ? "Istirahat" : opr,
         grpStr: grp,
         tglStr: tgl,
         hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
@@ -176,13 +179,14 @@ export default function PanelHistoryTable({
           const detail = item;
           const itemHeader = item.production_headers || header;
 
-          const isIstirahat = item.isIstirahat;
+          const isIstirahatOnly = item.isIstirahatOnly;
+          const hasIstirahat = item.hasIstirahat;
           const displayOp = item.showOpr ? (item.oprStr || "-") : "";
           const displayTgl = item.showTgl ? (item.tglStr || "-") : "";
           const displayGrp = item.showGrp ? (item.grpStr || "-") : "";
 
           let masalahLines: string[] = [];
-          if (isIstirahat) {
+          if (isIstirahatOnly) {
             // break rows have no defects, so masalahLines remains empty (rendering as "-")
           } else {
             let dtEvents: any[] = [];
@@ -365,7 +369,7 @@ export default function PanelHistoryTable({
           if (masalahLines.length === 0) masalahLines.push("-");
 
           return (
-            <tr key={item.id || idx} className={`${isIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
+            <tr key={item.id || idx} className={`${isIstirahatOnly ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
               <td className="px-1 py-1 font-bold text-slate-800 text-center">
                 {item.displayNo}
               </td>
@@ -375,11 +379,11 @@ export default function PanelHistoryTable({
               <td className="px-1 py-1 font-medium text-slate-700 text-center">
                 {displayGrp}
               </td>
-              <td className={`px-1 py-1 leading-tight ${isIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
-                {isIstirahat ? "Istirahat" : displayOp}
+              <td className={`px-1 py-1 leading-tight ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
+                {hasIstirahat ? "Istirahat" : displayOp}
               </td>
               <td className="px-1 py-1 text-center">
-                {isIstirahat ? (
+                {isIstirahatOnly ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
                 ) : (
                   detail.kategori_masalah || detail.detail_masalah ? (
@@ -389,13 +393,13 @@ export default function PanelHistoryTable({
                   )
                 )}
               </td>
-              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahat ? 'text-slate-600 font-semibold italic' : (hasDefect ? 'text-rose-600' : 'text-slate-400')}`}>
-                {isIstirahat ? "ISTIRAHAT" : (masalahLines.join("\n") || "-")}
+              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahatOnly ? 'text-slate-600 font-semibold italic' : (hasDefect ? 'text-rose-600' : 'text-slate-400')}`}>
+                {isIstirahatOnly ? "ISTIRAHAT" : (masalahLines.join("\n") || "-")}
               </td>
               <td className="px-1 py-1 text-center border-l border-slate-100">
-                {detail.id && detail.keterangan_cacat !== "FINISH" && (
+                {itemHeader?.id && detail.keterangan_cacat !== "FINISH" && (
                   <Link
-                    href={`/edit/${detail.id}`}
+                    href={`/edit/${itemHeader.id}`}
                     className="inline-flex items-center justify-center p-1.5 rounded hover:bg-sky-100 text-[#0070bc] transition-colors"
                     title="Edit Data"
                   >

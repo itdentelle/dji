@@ -149,7 +149,6 @@ export default function EmployeeHistoryPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [tourRect, setTourRect] = useState<{
@@ -385,25 +384,6 @@ export default function EmployeeHistoryPage() {
     // Not used anymore since we moved to a dedicated detail page
   };
 
-  // Reset filters to defaults
-  const handleResetFilters = () => {
-    const reset = {
-      date: "",
-      nomor_mc: "",
-      group_id: "",
-      operator_ids: [],
-      design_id: "",
-      potongan_ke: "",
-      tanggal_potong: "",
-      no_customer: "",
-    };
-    setFilters(reset);
-    setData([]);
-    setHasSearched(false);
-    sessionStorage.removeItem("dji_history_filters");
-    sessionStorage.removeItem("dji_history_data");
-    sessionStorage.removeItem("dji_history_searched");
-  };
 
   // Use server-side pagination/sorting. `data` holds current page items.
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
@@ -448,7 +428,7 @@ export default function EmployeeHistoryPage() {
             data-tour="history-primary-filters"
             className="flex flex-col sm:flex-row gap-4 items-end"
           >
-            <div className="flex flex-col gap-1 w-full sm:w-1/3">
+            <div className="flex flex-col gap-1 w-full sm:flex-1">
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" />
                 Tanggal Produksi
@@ -463,7 +443,7 @@ export default function EmployeeHistoryPage() {
               />
             </div>
 
-            <div className="flex flex-col gap-1 w-full sm:w-1/3">
+            <div className="flex flex-col gap-1 w-full sm:flex-1">
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                 <Hash className="w-3.5 h-3.5" />
                 Nomor Mesin
@@ -497,6 +477,21 @@ export default function EmployeeHistoryPage() {
               </select>
             </div>
 
+            <div className="flex flex-col gap-1 w-full sm:flex-1">
+              <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                Potongan Ke
+              </label>
+              <input
+                type="number"
+                value={filters.potongan_ke}
+                onChange={(e) =>
+                  setFilters({ ...filters, potongan_ke: e.target.value })
+                }
+                className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none transition-all shadow-sm w-full"
+                placeholder="Cari Potongan..."
+              />
+            </div>
+
             <button
               type="submit"
               disabled={isLoading}
@@ -512,173 +507,7 @@ export default function EmployeeHistoryPage() {
                 </>
               )}
             </button>
-
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="h-11 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
-              title="Reset filter"
-            >
-              <X className="w-4 h-4" /> Reset
-            </button>
-
-            <button
-              data-tour="history-advanced-toggle"
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="h-11 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
-            >
-              <Filter className="w-4 h-4" />
-              {showAdvanced ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </button>
           </div>
-
-          {/* Advanced Filters */}
-          {showAdvanced && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-slate-100 animate-fadeIn">
-              {true && (
-                <div className="flex flex-col md:col-span-2 lg:col-span-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                        Nama Operator{" "}
-                        {filters.group_id
-                          ? `(Shift ${groups.find((g) => g.id.toString() === filters.group_id)?.name})`
-                          : "(Semua Shift)"}
-                      </label>
-                      <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white custom-scrollbar">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 px-1">
-                          {(() => {
-                            const activeShiftName = filters.group_id
-                              ? groups.find(
-                                (g) => g.id.toString() === filters.group_id,
-                              )?.name
-                              : null;
-                            const activeOps = activeShiftName
-                              ? operators.filter(
-                                (op: any) =>
-                                  op.shift === activeShiftName || !op.shift,
-                              )
-                              : operators;
-
-                            if (activeOps.length === 0) {
-                              return (
-                                <div className="col-span-full text-xs text-slate-400 italic py-2 text-center">
-                                  Tidak ada operator di shift ini
-                                </div>
-                              );
-                            }
-
-                            return activeOps.map((op: any) => (
-                              <label
-                                key={op.id}
-                                className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 p-1.5 rounded transition-colors"
-                              >
-                                <input
-                                  type="checkbox"
-                                  value={op.id.toString()}
-                                  checked={(
-                                    filters.operator_ids || []
-                                  ).includes(op.id.toString())}
-                                  onChange={(e) => {
-                                    const id = op.id.toString();
-                                    setFilters((prev) => ({
-                                      ...prev,
-                                      operator_ids: e.target.checked
-                                        ? [...(prev.operator_ids || []), id]
-                                        : (prev.operator_ids || []).filter(
-                                          (x) => x !== id,
-                                        ),
-                                    }));
-                                  }}
-                                  className="w-3.5 h-3.5 text-sky-500 border-slate-300 rounded focus:ring-sky-400"
-                                />
-                                <span className="truncate">
-                                  {op.name || op.nama_operator}
-                                </span>
-                              </label>
-                            ));
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                        Grup Shift
-                      </label>
-                      <select
-                        value={filters.group_id}
-                        onChange={(e) => {
-                          // Jika grup diubah, kosongkan pilihan operator karena beda shift
-                          setFilters({
-                            ...filters,
-                            group_id: e.target.value,
-                            operator_ids: [],
-                          });
-                        }}
-                        className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-sm focus:border-sky-400 outline-none"
-                      >
-                        <option value="">Semua Grup</option>
-                        {groups.map((g) => (
-                          <option key={g.id} value={g.id.toString()}>
-                            Grup {g.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">
-                  Design
-                </label>
-                <input
-                  type="text"
-                  value={filters.design_id}
-                  onChange={(e) =>
-                    setFilters({ ...filters, design_id: e.target.value })
-                  }
-                  className="h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold outline-none focus:border-sky-400 w-full"
-                  placeholder="Cari Design..."
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">
-                  Potongan Ke
-                </label>
-                <input
-                  type="number"
-                  value={filters.potongan_ke}
-                  onChange={(e) =>
-                    setFilters({ ...filters, potongan_ke: e.target.value })
-                  }
-                  className="h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold outline-none focus:border-sky-400 w-full"
-                  placeholder="Cari Potongan..."
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">
-                  No Customer
-                </label>
-                <input
-                  type="text"
-                  value={filters.no_customer}
-                  onChange={(e) =>
-                    setFilters({ ...filters, no_customer: e.target.value })
-                  }
-                  className="h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold outline-none focus:border-sky-400 w-full"
-                  placeholder="Cari No Cust..."
-                />
-              </div>
-            </div>
-          )}
         </form>
       </div>
 
@@ -809,7 +638,7 @@ export default function EmployeeHistoryPage() {
                           </td>
                           <td className="px-4 py-3 text-center whitespace-nowrap">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-700">
-                              {batch.total_panels} {batch.is_meter ? "Baris" : "Panel"}
+                              {batch.is_meter ? `${batch.total_meter || 0} Meter` : `${batch.total_panels} Panel`}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center whitespace-nowrap">

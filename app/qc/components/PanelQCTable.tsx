@@ -28,13 +28,16 @@ export default function PanelQCTable({
       const tgl = h.tgl || "";
       const operatorStr = (grp ? `(${grp}) ` : '') + opr;
 
-      const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+      const isIstirahatOnly = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
                            !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
                           !item.kategori_masalah && !item.detail_masalah;
+      const hasIstirahat = !!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT");
 
       return {
         item,
-        isIstirahat,
+        isIstirahatOnly,
+        hasIstirahat,
         opr,
         grp,
         tgl,
@@ -49,7 +52,7 @@ export default function PanelQCTable({
     let lastOpr = "";
 
     processed.forEach((p, i) => {
-      const { item, isIstirahat, opr, grp, tgl, operatorStr } = p;
+      const { item, isIstirahatOnly, hasIstirahat, opr, grp, tgl, operatorStr } = p;
 
       currentOpCount += 1;
 
@@ -69,7 +72,8 @@ export default function PanelQCTable({
         ...item,
         isMeter: false,
         isStartRow: false,
-        isIstirahat: isIstirahat,
+        isIstirahatOnly: isIstirahatOnly,
+        hasIstirahat: hasIstirahat,
         isFinishReport: false,
         displayNo: item.production_headers?.panel_no || "-",
         meterDisplay: "-",
@@ -149,9 +153,10 @@ export default function PanelQCTable({
             let displayKeterangan = item.keterangan_cacat || "";
             let displayDetail = item.detail_masalah || "";
             
-            let isIstirahat = false;
-            if (displayKeterangan.includes("ISTIRAHAT") && !item.kategori_masalah && !item.detail_masalah) {
-              isIstirahat = true;
+            let isIstirahatOnly = item.isIstirahatOnly;
+            let hasIstirahat = item.hasIstirahat;
+            
+            if (hasIstirahat) {
               displayKeterangan = displayKeterangan.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
               displayKeterangan = displayKeterangan.replace(/^,\s*|\s*,\s*$/g, "");
             }
@@ -270,7 +275,7 @@ export default function PanelQCTable({
             let cacat = cacatLines.join("\n");
 
             return (
-            <tr key={item.id} className={`${isIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
+            <tr key={item.id} className={`${isIstirahatOnly ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
               <td className="px-1 py-1 font-bold text-slate-800 text-center">
                 {item.production_headers?.panel_no || "-"}
               </td>
@@ -280,14 +285,14 @@ export default function PanelQCTable({
               <td className="px-1 py-1 font-medium text-slate-700 text-center">
                 {showGrp ? grpStr : ""}
               </td>
-              <td className={`px-1 py-1 leading-tight ${isIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
-                {isIstirahat ? "Istirahat" : (showOpr ? oprStr : "")}
+              <td className={`px-1 py-1 leading-tight ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
+                {hasIstirahat ? "Istirahat" : (showOpr ? oprStr : "")}
               </td>
               <td className="px-1 py-1 text-center font-bold text-sm">
                 {item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>}
               </td>
               
-              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahat ? 'text-slate-500 italic' : 'text-rose-600'}`}>
+              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${hasIstirahat ? 'text-slate-500 italic' : 'text-rose-600'}`}>
                 {cacat || "-"}
               </td>
               

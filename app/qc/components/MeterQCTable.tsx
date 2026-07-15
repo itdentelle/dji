@@ -64,10 +64,12 @@ export default function MeterQCTable({
         isSameAsPrev = true;
       }
 
-      const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+      const isIstirahatOnly = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
                            !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
                           !item.kategori_masalah && !item.detail_masalah &&
                           h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
+      const hasIstirahat = !!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT");
       const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
 
       let cacatLines: string[] = [];
@@ -191,7 +193,7 @@ export default function MeterQCTable({
       }
       
       if (meterDisplay === "-") {
-        if ((isIstirahat || isFinishReport) && (h.meter_akhir || h.meter_awal)) {
+        if ((isIstirahatOnly || isFinishReport) && (h.meter_akhir || h.meter_awal)) {
           meterDisplay = cleanMeterVal(h.meter_akhir || h.meter_awal);
         }
       }
@@ -236,7 +238,7 @@ export default function MeterQCTable({
       const showOpr = !isSameAsPrev;
 
       // TAMBAHAN QC dengan data cacat tetap gradable meski header sudah finish
-      const isGradable = !isIstirahat && (!isFinishReport || hasErrorDetail);
+      const isGradable = !isIstirahatOnly && (!isFinishReport || hasErrorDetail);
       // Format "Kategori - Detail (Blok n)" per baris, hilangkan (Titik: ...) karena sudah di kolom Meter
       const cacatForMeter = combinedCacat
         .split("\n")
@@ -251,16 +253,17 @@ export default function MeterQCTable({
           return true;
         })
         .join("\n");
-      const cacatText = isIstirahat ? "-" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
+      const cacatText = isIstirahatOnly ? "-" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
 
-      const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !isIstirahat && !isFinishReport;
+      const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !isIstirahatOnly && !isFinishReport;
       if (!isPlaceholder) {
         items.push({
           ...item,
-          isStartRow: false,
           isMeter: true,
-          isIstirahat,
-          isFinishReport,
+          isStartRow: false,
+          isIstirahatOnly: isIstirahatOnly,
+          hasIstirahat: hasIstirahat,
+          isFinishReport: isFinishReport,
           displayNo: (globalRowCount + 1).toString(),
           tglStr: finalTglStr,
           grpStr: finalGrpStr,
@@ -328,18 +331,18 @@ export default function MeterQCTable({
               );
             }
             return (
-              <tr key={item.id} className={`${item.isIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
+              <tr key={item.id} className={`${item.isIstirahatOnly ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
                 <td className="px-1 py-1.5 font-bold text-slate-800 text-center text-xs w-7 border-r border-slate-100">
                   {item.displayNo}
                 </td>
                 <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100">
-                  {item.isIstirahat ? "" : (item.showTgl ? item.tglStr : "")}
+                  {item.hasIstirahat ? "" : (item.showTgl ? item.tglStr : "")}
                 </td>
                 <td className="px-1 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100">
-                  {item.isIstirahat ? "" : (item.showGrp ? item.grpStr : "")}
+                  {item.hasIstirahat ? "" : (item.showGrp ? item.grpStr : "")}
                 </td>
-                <td className={`px-2 py-1.5 leading-tight text-xs w-28 border-r border-slate-100 ${item.isIstirahat ? "text-slate-500 italic font-bold" : "font-medium text-slate-700"}`}>
-                  {item.isIstirahat ? "Istirahat" : (item.showOpr ? item.oprStr : "")}
+                <td className={`px-2 py-1.5 leading-tight text-xs w-28 border-r border-slate-100 ${item.hasIstirahat ? "text-slate-500 italic font-bold" : "font-medium text-slate-700"}`}>
+                  {item.hasIstirahat ? "Istirahat" : (item.showOpr ? item.oprStr : "")}
                 </td>
                 <td className="px-1 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100">
                   {item.meterDisplay}
@@ -347,7 +350,7 @@ export default function MeterQCTable({
                 <td className="px-1 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100">
                   {!item.isGradable ? "" : (item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
                 </td>
-                <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${item.isIstirahat ? 'text-slate-500 italic' : ((!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600')}`}>
+                <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${item.hasIstirahat ? 'text-slate-500 italic' : ((!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600')}`}>
                   {item.cacatDisplay || "-"}
                 </td>
                 <td className="px-1 py-1.5 text-center w-24 border-r border-slate-100">

@@ -745,6 +745,7 @@ export async function searchEmployeeHistory(filters: {
           pinggiran: row.pinggiran,
           // Aggregates
           total_panels: 0,
+          total_meter: 0,
           total_downtime_detik: 0,
           waktu_input_terakhir: row.tanggal_jam,
           operators: new Set(),
@@ -770,7 +771,13 @@ export async function searchEmployeeHistory(filters: {
       }
       batch.total_panels = Math.max(batch.total_panels, currentMaxPanel);
       batch.total_downtime_detik += row.total_downtime_detik || 0;
-      if (row.panel_no === "METERAN") batch.is_meter = true;
+      if (row.panel_no === "METERAN") {
+        batch.is_meter = true;
+        const meterAkhir = parseFloat(row.meter_akhir);
+        if (!isNaN(meterAkhir)) {
+          batch.total_meter = Math.max(batch.total_meter, meterAkhir);
+        }
+      }
       
       const opName = row.created_by_name || row.pic || (row.operators ? row.operators.nama_operator : null);
       if (opName) batch.operators.add(opName);

@@ -160,6 +160,7 @@ const formatLastInputTime = (isoString: string | null) => {
 export default function QCPage() {
   const [searchTanggal, setSearchTanggal] = useState("");
   const [searchMesin, setSearchMesin] = useState("");
+  const [searchPotongan, setSearchPotongan] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -246,6 +247,7 @@ export default function QCPage() {
     allDetails.forEach((d: any) => {
       const h = d.production_headers;
       if (searchMesin && String(h?.nomor_mc) !== String(searchMesin)) return;
+      if (searchPotongan && String(h?.potongan_ke) !== String(searchPotongan)) return;
 
       const key = `${h?.nomor_mc}_${h?.design_id}_${h?.potongan_ke}_${d.pcs_index}`;
       if (!map.has(key)) {
@@ -272,7 +274,7 @@ export default function QCPage() {
       }
     });
     return Array.from(map.values());
-  }, [allDetails, searchMesin]);
+  }, [allDetails, searchMesin, searchPotongan]);
 
   const ITEMS_PER_PAGE = 10;
   const totalPages = Math.ceil(groupedPcsList.length / ITEMS_PER_PAGE);
@@ -282,7 +284,7 @@ export default function QCPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchMesin, searchTanggal]);
+  }, [searchMesin, searchTanggal, searchPotongan]);
 
   const handleStartQC = async (nomor_mc: string, design_id: string, potongan_ke: string, pcs_index: string) => {
     setActiveQcPcs({ nomor_mc: String(nomor_mc), design_id: String(design_id), potongan_ke: String(potongan_ke), pcs_index: String(pcs_index) });
@@ -1145,7 +1147,7 @@ export default function QCPage() {
       {/* Filter Card */}
       <div data-tour="qc-inspection-filter" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
         <div className="flex flex-col sm:flex-row items-end gap-4 w-full">
-          <div className="flex flex-col gap-1 w-full sm:w-[40%]">
+          <div className="flex flex-col gap-1 w-full sm:flex-1">
             <label className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
               <span>Tanggal</span>
               {searchTanggal && (
@@ -1164,7 +1166,7 @@ export default function QCPage() {
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full cursor-pointer"
             />
           </div>
-          <div className="flex flex-col gap-1 w-full sm:w-[40%]">
+          <div className="flex flex-col gap-1 w-full sm:flex-1">
             <label className="text-xs font-bold text-slate-500 uppercase">
               Mesin
             </label>
@@ -1179,10 +1181,22 @@ export default function QCPage() {
               ))}
             </select>
           </div>
+          <div className="flex flex-col gap-1 w-full sm:flex-1">
+            <label className="text-xs font-bold text-slate-500 uppercase">
+              Potongan
+            </label>
+            <input
+              type="number"
+              value={searchPotongan}
+              onChange={(e) => setSearchPotongan(e.target.value)}
+              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full"
+              placeholder="Cari Potongan..."
+            />
+          </div>
           <button
             onClick={() => handleSearch(searchTanggal)}
             disabled={isSearching}
-            className="h-11 px-6 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm shrink-0 sm:w-[20%]"
+            className="h-11 px-6 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm shrink-0 sm:w-auto"
           >
             {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             Cari Data
@@ -1211,7 +1225,8 @@ export default function QCPage() {
                   <th className="px-6 py-4">Nomor Mesin</th>
                   <th className="px-6 py-4">Tanggal Input</th>
                   <th className="px-6 py-4">Jam Input</th>
-                  <th className="px-6 py-4">Desain & Potongan</th>
+                  <th className="px-6 py-4">Desain</th>
+                  <th className="px-6 py-4">Potongan</th>
                   <th className="px-6 py-4 text-center">PCS Ke</th>
                   <th className="px-6 py-4 text-center">Jml Baris</th>
                   <th className="px-6 py-4 text-center">Aksi</th>
@@ -1240,8 +1255,10 @@ export default function QCPage() {
                           <span className="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-700 uppercase tracking-wider">PANEL</span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-1 uppercase tracking-wider">
-                        Potongan Ke-{g.header?.potongan_ke}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-slate-800 font-bold uppercase tracking-wider">
+                        {g.header?.potongan_ke}
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">

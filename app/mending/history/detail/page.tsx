@@ -416,19 +416,23 @@ function MendingDetailContent() {
         }
       };
 
+      const cleanDetail = item.detail_masalah 
+        ? item.detail_masalah.replace(/\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").replace(/\|\s*$/, "").replace(/,\s*$/, "").trim()
+        : "";
+
       if (kats.length > 0) {
-        if (item.detail_masalah?.includes(" | ")) {
-          const catDetails = item.detail_masalah.split(" | ");
+        if (cleanDetail.includes(" | ")) {
+          const catDetails = cleanDetail.split(" | ");
           for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
             const k = kats[i] || "Unknown";
             const d = catDetails[i] || "";
             pushDetailsForCat(k, d);
           }
-        } else if (item.detail_masalah) {
+        } else if (cleanDetail) {
           if (kats.length === 1) {
-            pushDetailsForCat(kats[0], item.detail_masalah);
+            pushDetailsForCat(kats[0], cleanDetail);
           } else {
-            const dets = item.detail_masalah.split(", ");
+            const dets = cleanDetail.split(", ");
             if (kats.length === dets.length) {
               for (let i = 0; i < kats.length; i++) {
                 pushDetailsForCat(kats[i], dets[i]);

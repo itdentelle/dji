@@ -109,7 +109,6 @@ const MENDING_TOUR_STEPS: ProductTourStep[] = [
 export default function MendingPage() {
   const [searchTanggal, setSearchTanggal] = useState("");
   const [searchMesin, setSearchMesin] = useState("");
-  const [searchDesain, setSearchDesain] = useState("");
   const [searchPotongan, setSearchPotongan] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
@@ -140,7 +139,6 @@ export default function MendingPage() {
     setActiveMendingPcs(null);
     setSelections({});
     setSearchMesin("");
-    setSearchDesain("");
     setSearchPotongan("");
     setCurrentPage(1);
 
@@ -160,26 +158,18 @@ export default function MendingPage() {
     return Array.from(new Set(allDetails.map(d => d.production_headers?.nomor_mc).filter(Boolean)));
   }, [allDetails]);
 
-  const uniqueDesains = React.useMemo(() => {
-    return Array.from(new Set(allDetails
-      .filter(d => !searchMesin || d.production_headers?.nomor_mc === searchMesin)
-      .map(d => d.production_headers?.design_id)
-      .filter(Boolean)));
-  }, [allDetails, searchMesin]);
-
   const uniquePotongans = React.useMemo(() => {
     return Array.from(new Set(allDetails
-      .filter(d => (!searchMesin || d.production_headers?.nomor_mc === searchMesin) && (!searchDesain || d.production_headers?.design_id === searchDesain))
+      .filter(d => !searchMesin || d.production_headers?.nomor_mc === searchMesin)
       .map(d => d.production_headers?.potongan_ke)
       .filter(Boolean)));
-  }, [allDetails, searchMesin, searchDesain]);
+  }, [allDetails, searchMesin]);
 
   const groupedPcsList = React.useMemo(() => {
     const map = new Map<string, any>();
     allDetails.forEach((d: any) => {
       const h = d.production_headers;
       if (searchMesin && String(h?.nomor_mc) !== String(searchMesin)) return;
-      if (searchDesain && String(h?.design_id) !== String(searchDesain)) return;
       if (searchPotongan && String(h?.potongan_ke) !== String(searchPotongan)) return;
 
       const key = `${h?.nomor_mc}_${h?.design_id}_${h?.potongan_ke}_${d.pcs_index}`;
@@ -201,7 +191,7 @@ export default function MendingPage() {
       if (d.meter_kain) group.meter_kain = d.meter_kain;
     });
     return Array.from(map.values());
-  }, [allDetails, searchMesin, searchDesain, searchPotongan]);
+  }, [allDetails, searchMesin, searchPotongan]);
 
   const ITEMS_PER_PAGE = 10;
   const totalPages = Math.ceil(groupedPcsList.length / ITEMS_PER_PAGE);
@@ -211,7 +201,7 @@ export default function MendingPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchMesin, searchDesain, searchPotongan, searchTanggal]);
+  }, [searchMesin, searchPotongan, searchTanggal]);
 
   const refreshActiveMendingDetails = async (mc: string, des: string, pot: string, pcs: string, initSelections: boolean = false) => {
     const res = await getMendingDetailsByGroup(mc, des, pot, pcs);
@@ -620,19 +610,23 @@ export default function MendingPage() {
         }
       };
 
+      const cleanDetail = item.detail_masalah 
+        ? item.detail_masalah.replace(/\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").replace(/\|\s*$/, "").replace(/,\s*$/, "").trim()
+        : "";
+
       if (kats.length > 0) {
-        if (item.detail_masalah?.includes(" | ")) {
-          const catDetails = item.detail_masalah.split(" | ");
+        if (cleanDetail.includes(" | ")) {
+          const catDetails = cleanDetail.split(" | ");
           for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
             const k = kats[i] || "Unknown";
             const d = catDetails[i] || "";
             pushDetailsForCat(k, d);
           }
-        } else if (item.detail_masalah) {
+        } else if (cleanDetail) {
           if (kats.length === 1) {
-            pushDetailsForCat(kats[0], item.detail_masalah);
+            pushDetailsForCat(kats[0], cleanDetail);
           } else {
-            const dets = item.detail_masalah.split(", ");
+            const dets = cleanDetail.split(", ");
             if (kats.length === dets.length) {
               for (let i = 0; i < kats.length; i++) {
                 pushDetailsForCat(kats[i], dets[i]);
@@ -1130,22 +1124,7 @@ export default function MendingPage() {
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1 w-full sm:w-[20%]">
-            <label className="text-xs font-bold text-slate-500 uppercase">
-              Desain
-            </label>
-            <select
-              value={searchDesain}
-              onChange={(e) => setSearchDesain(e.target.value)}
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-rose-400 focus:bg-white outline-none w-full"
-            >
-              <option value="">Semua Desain</option>
-              {uniqueDesains.map(d => (
-                <option key={String(d)} value={String(d)}>{String(d)}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1 w-full sm:w-[20%]">
+          <div className="flex flex-col gap-1 w-full sm:w-[25%]">
             <label className="text-xs font-bold text-slate-500 uppercase">
               Potongan
             </label>
@@ -1189,8 +1168,10 @@ export default function MendingPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4">Tanggal & Waktu</th>
                   <th className="px-6 py-4">Nomor Mesin</th>
-                  <th className="px-6 py-4">Desain & Potongan</th>
+                  <th className="px-6 py-4">Desain</th>
+                  <th className="px-6 py-4">Potongan</th>
                   <th className="px-6 py-4 text-center">PCS Ke</th>
                   <th className="px-6 py-4 text-center">Jml Baris</th>
                   <th className="px-6 py-4 text-center">Aksi</th>
@@ -1199,6 +1180,16 @@ export default function MendingPage() {
               <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
                 {currentPcsList.map((g: any) => (
                   <tr key={`${g.nomor_mc}_${g.design_id}_${g.potongan_ke}_${g.pcs_index}`} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-slate-800">
+                        {g.header?.tgl || "-"}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                        {g.header?.tanggal_jam 
+                          ? new Date(g.header.tanggal_jam).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) 
+                          : "-"}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="inline-flex items-center min-w-[3rem] h-8 px-3 rounded-lg bg-[#0070bc]/10 text-[#0070bc] font-bold">
                         {g.header?.nomor_mc}
@@ -1213,8 +1204,10 @@ export default function MendingPage() {
                           <span className="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-700 uppercase tracking-wider">PANEL</span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-1 uppercase tracking-wider">
-                        Potongan Ke-{g.header?.potongan_ke}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                        {g.header?.potongan_ke || "-"}
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">

@@ -215,7 +215,7 @@ export default function MendingHistoryPage() {
       >
         <form onSubmit={handleSearch} className="flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="flex flex-col gap-1 w-full sm:w-1/3">
+            <div className="flex flex-col gap-1 w-full sm:w-1/4">
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" />
                 Tanggal Mending
@@ -230,7 +230,7 @@ export default function MendingHistoryPage() {
               />
             </div>
 
-            <div className="flex flex-col gap-1 w-full sm:w-1/3">
+            <div className="flex flex-col gap-1 w-full sm:w-1/4">
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                 <Hash className="w-3.5 h-3.5" />
                 Nomor Mesin
@@ -262,6 +262,22 @@ export default function MendingHistoryPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="flex flex-col gap-1 w-full sm:w-1/4">
+              <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                <Box className="w-3.5 h-3.5" />
+                Potongan Ke
+              </label>
+              <input
+                type="number"
+                placeholder="Cari Potongan..."
+                value={filters.potongan_ke}
+                onChange={(e) =>
+                  setFilters({ ...filters, potongan_ke: e.target.value })
+                }
+                className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none transition-all shadow-sm w-full"
+              />
             </div>
 
             <button
@@ -396,20 +412,7 @@ export default function MendingHistoryPage() {
                     className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-sm focus:border-sky-400 outline-none w-full"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    Potongan Ke
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="Cari Potongan..."
-                    value={filters.potongan_ke}
-                    onChange={(e) =>
-                      setFilters({ ...filters, potongan_ke: e.target.value })
-                    }
-                    className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-sm focus:border-sky-400 outline-none w-full"
-                  />
-                </div>
+
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">
                     No Customer
@@ -575,9 +578,39 @@ export default function MendingHistoryPage() {
                     >
                       Sebelumnya
                     </button>
-                    <div className="px-3 py-1.5 text-sm font-black text-sky-700 bg-sky-50 border border-sky-100 rounded-lg min-w-[2.5rem] text-center">
-                      {currentPage}
+                    
+                    <div className="flex items-center gap-1 hidden sm:flex">
+                      {Array.from({ length: totalPages }).map((_, i) => {
+                        const pageNum = i + 1;
+                        if (
+                          pageNum === 1 || 
+                          pageNum === totalPages || 
+                          (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                        ) {
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => handleSearch(undefined, pageNum)}
+                              disabled={isLoading}
+                              className={`w-8 h-8 rounded-lg text-sm font-bold transition-colors flex items-center justify-center ${
+                                currentPage === pageNum
+                                  ? "bg-[#0070bc] text-white border border-[#0070bc]"
+                                  : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        } else if (
+                          pageNum === currentPage - 2 || 
+                          pageNum === currentPage + 2
+                        ) {
+                          return <span key={pageNum} className="text-slate-400 text-sm px-1">...</span>;
+                        }
+                        return null;
+                      })}
                     </div>
+
                     <button
                       onClick={() => handleSearch(undefined, currentPage + 1)}
                       disabled={currentPage >= totalPages || isLoading}

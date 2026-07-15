@@ -425,8 +425,10 @@ export default function QCHistoryPage() {
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
                       <th className="px-6 py-4">Tanggal & Waktu</th>
                       <th className="px-6 py-4">Mesin & Desain</th>
+                      <th className="px-6 py-4">Potongan</th>
                       <th className="px-6 py-4">Petugas QC</th>
-                      <th className="px-6 py-4">Panel / PCS</th>
+                      <th className="px-6 py-4 text-center">PCS</th>
+                      <th className="px-6 py-4">Jumlah QTY</th>
                       <th className="px-6 py-4 text-center">Hasil Inspeksi</th>
                       <th className="px-6 py-4 text-center">Aksi</th>
                     </tr>
@@ -455,7 +457,12 @@ export default function QCHistoryPage() {
                               {group.nomor_mc || "-"}
                             </div>
                             <div className="text-xs text-slate-500">
-                              {group.design_id || "-"} / Pot. {group.potongan_ke || "-"}
+                              {group.design_id || "-"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-slate-800 uppercase tracking-wider">
+                              {group.potongan_ke || "-"}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -474,16 +481,15 @@ export default function QCHistoryPage() {
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <div className="font-bold text-slate-800 flex flex-col">
-                              <span>
-                                PCS Ke-
-                                {group.pcs_index || group.detail?.pcs_index}
-                              </span>
-                              <span className="text-xs text-slate-500 font-medium mt-0.5">
-                                {header?.panel_no === "METERAN"
-                                  ? `${group.inspeksi_ceklis || 0} Meter`
-                                  : `${group.items?.length || 0} Panel`}
-                              </span>
+                            <div className="font-bold text-slate-800 text-center">
+                              {group.pcs_index || group.detail?.pcs_index}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-semibold text-slate-600">
+                              {header?.panel_no === "METERAN"
+                                ? `${group.inspeksi_ceklis || 0} Meter`
+                                : `${group.items?.length || 0} Panel`}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">

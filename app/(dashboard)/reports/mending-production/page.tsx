@@ -976,6 +976,18 @@ export default function MendingProductionReportPage() {
         <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
           <div className="flex flex-col gap-1 w-full">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Pilih Tanggal
+            </label>
+            <input
+              type="date"
+              value={filters.tanggal}
+              onChange={(e) => setFilters({ ...filters, tanggal: e.target.value })}
+              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full transition-colors"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1 w-full">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Pilih Mesin
             </label>
             <select
@@ -1004,18 +1016,6 @@ export default function MendingProductionReportPage() {
                 <option key={p} value={String(p)}>Potongan Ke-{p}</option>
               ))}
             </select>
-          </div>
-
-          <div className="flex flex-col gap-1 w-full">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Pilih Tanggal
-            </label>
-            <input
-              type="date"
-              value={filters.tanggal}
-              onChange={(e) => setFilters({ ...filters, tanggal: e.target.value })}
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full transition-colors"
-            />
           </div>
 
           <div className="flex flex-col gap-1 w-full">
