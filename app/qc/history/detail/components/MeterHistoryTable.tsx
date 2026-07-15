@@ -28,6 +28,16 @@ export default function MeterHistoryTable({
 
     detailsToDisplay.forEach((item: any, idx: number) => {
       const h = item.production_headers || {};
+      const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
+                          !item.kategori_masalah && !item.detail_masalah;
+      const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
+      const hasDefect = !!item.kategori_masalah || !!item.detail_masalah || (item.keterangan_cacat && item.keterangan_cacat !== "START" && item.keterangan_cacat !== "FINISH" && !isIstirahat);
+
+      if (!isIstirahat && !isFinishReport && !hasDefect && (item.meter_kain === null || item.meter_kain === undefined || String(item.meter_kain).trim() === "")) {
+        return;
+      }
+
       const opr = h.operators?.nama_operator || h.pic || "";
       const grp = h.groups?.nama_grup || "";
       const operatorStr = (grp ? `(${grp}) ` : '') + opr;
@@ -58,11 +68,6 @@ export default function MeterHistoryTable({
       } else if (items.length > 0) {
         isSameAsPrev = true;
       }
-
-      const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
-                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
-                          !item.kategori_masalah && !item.detail_masalah;
-      const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
 
       let cleanD = item.detail_masalah || "";
       const meterMatchForClean = cleanD.match(/\(Titik:\s*([A-Za-z0-9\s.\-]+)\)/i);
@@ -357,10 +362,12 @@ export default function MeterHistoryTable({
           let Icon = null;
           let iconColor = "";
 
-          if (item.final_inspection_id === 1) {
+          if (item.isIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH") {
+            Icon = null;
+          } else if (item.final_inspection_id === 1) {
             Icon = CheckCircle2;
             iconColor = "text-emerald-500";
-          } else if (item.final_inspection_id === 2 || item.final_inspection_id === 3) {
+          } else if (item.final_inspection_id === 2 || item.final_inspection_id === 3 || item.final_inspection_id === 4) {
             Icon = XCircle;
             iconColor = "text-rose-500";
           }
@@ -383,11 +390,11 @@ export default function MeterHistoryTable({
                 {item.meterDisplay}
               </td>
               <td className="px-1 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100 border-b border-slate-100">
-                {Icon ? <Icon className={`w-4 h-4 mx-auto ${iconColor}`} /> : <span className="text-slate-300">-</span>}
+                {Icon ? <Icon className={`w-4 h-4 mx-auto ${iconColor}`} /> : null}
               </td>
               <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${
                 item.isIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH"
-                  ? "text-slate-500 italic"
+                  ? "text-slate-600 font-semibold italic"
                   : (item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay !== "START" ? "text-rose-600" : "text-slate-400")
               }`}>
                 {item.cacatDisplay}

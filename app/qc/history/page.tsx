@@ -455,7 +455,7 @@ export default function QCHistoryPage() {
                               {group.nomor_mc || "-"}
                             </div>
                             <div className="text-xs text-slate-500">
-                              {group.design_id || "-"}
+                              {group.design_id || "-"} / Pot. {group.potongan_ke || "-"}
                             </div>
                           </td>
                           <td className="px-6 py-4">

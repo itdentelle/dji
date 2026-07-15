@@ -2,278 +2,170 @@
 
 import React from "react";
 import Link from "next/link";
-import { Edit } from "lucide-react";
+import { Edit, CheckCircle2, XCircle } from "lucide-react";
+import { PROBLEM_DETAILS } from "@/app/qc/page";
 
-export default function PanelHistoryTable({ panels, pcsKey }: { panels: any[]; pcsKey: string }) {
-  const displayItems: any[] = [];
-  let currentOpCount = 0;
-  let globalRowCount = 0;
-  let lastOprString = "";
+export default function PanelHistoryTable({
+  panels,
+  pcsKey
+}: {
+  panels: any[];
+  pcsKey: string;
+}) {
+  const header = panels[0] || {};
 
-  panels.forEach((panel, idx) => {
-    const rawDetails = panel.production_details || [];
-    let pDetails: any[] = [];
-    const seenDetails = new Set();
-    rawDetails.forEach((d: any) => {
-      const key = `${d.kategori_masalah || ''}_${d.detail_masalah || ''}_${d.keterangan_cacat || ''}`;
-      if (!seenDetails.has(key)) { seenDetails.add(key); pDetails.push(d); }
-    });
-    const hasErrorDetail = pDetails.some((d: any) => d.kategori_masalah || d.keterangan_cacat);
-    if (hasErrorDetail) { pDetails = pDetails.filter((d: any) => d.kategori_masalah || d.keterangan_cacat); }
-    if (pDetails.length === 0) pDetails = [{ _isEmpty: true }];
-
-    const opr = panel.operators?.nama_operator || panel.pic || panel.created_by_name || "";
-    const grp = panel.groups?.nama_grup || "";
-    const operatorStr = (grp ? `(${grp}) ` : '') + opr;
-
-    if (displayItems.length === 0) {
-      lastOprString = operatorStr;
-    }
-
-    let isSameAsPrev = false;
-
-    if (operatorStr !== lastOprString && displayItems.length > 0) {
-      let displayTotal = currentOpCount;
-
-      displayItems.push({
-        isSummaryRow: true,
-        operatorName: lastOprString,
-        totalCount: displayTotal,
-        id: `summary-${idx}`
-      });
-      currentOpCount = 0;
-      lastOprString = operatorStr;
-      isSameAsPrev = false;
-    } else if (displayItems.length > 0) {
-      isSameAsPrev = true;
-    }
-
-    let cacatLines: string[] = [];
-    let isIstirahat = false;
-
-    let dtEvents: any[] = [];
-    try {
-      if (typeof panel.downtime_events === 'string') {
-        dtEvents = JSON.parse(panel.downtime_events);
-      } else if (Array.isArray(panel.downtime_events)) {
-        dtEvents = panel.downtime_events;
-      }
-    } catch (e) { }
-
-    const matchedEvents = dtEvents.filter(
-      (e: any) =>
-        !e.pcsKe ||
-        e.pcsKe === "Semua" ||
-        e.pcsKe.split(",").map((x: any) => x.trim()).includes(pcsKey)
-    );
-
-    if (matchedEvents.length > 0) {
-      matchedEvents.forEach((e:any) => {
-        if (e.problems && Array.isArray(e.problems)) {
-          e.problems.forEach((p:any) => {
-            if (p.kategori) {
-              if (p.details && Array.isArray(p.details) && p.details.length > 0) {
-                p.details.forEach((det: string) => {
-                  let line = `${p.kategori} - ${det}`;
-                  if (p.blok) {
-                    line += ` (Blok ${p.blok})`;
-                  }
-                  cacatLines.push(line);
-                });
-              } else {
-                let line = p.kategori;
-                if (p.blok) {
-                  line += ` (Blok ${p.blok})`;
-                }
-                cacatLines.push(line);
-              }
-            }
+  const detailsToDisplay = React.useMemo(() => {
+    const list: any[] = [];
+    panels.forEach((p: any) => {
+      const details = p.production_details || [];
+      if (details.length === 0) {
+        list.push({
+          production_headers: p,
+          final_inspection_id: p.final_inspection_id || 1,
+        });
+      } else {
+        details.forEach((d: any) => {
+          list.push({
+            ...d,
+            production_headers: p,
+            final_inspection_id: d.final_inspection_id ?? p.final_inspection_id ?? 1,
           });
-        } else if (e.kategori) {
-          if (e.detail) {
-            const dets = typeof e.detail === 'string' ? e.detail.split(',').map((x: string) => x.trim()) : [e.detail];
-            dets.forEach((d: string) => {
-              let line = `${e.kategori} - ${d}`;
-              if (e.blok) line += ` (Blok ${e.blok})`;
-              cacatLines.push(line);
-            });
-          } else {
-            let line = e.kategori;
-            if (e.blok) line += ` (Blok ${e.blok})`;
-            cacatLines.push(line);
+        });
+      }
+    });
+    return list;
+  }, [panels]);
+
+  const displayItems = React.useMemo(() => {
+    const processed = detailsToDisplay.map((item: any) => {
+      const h = item.production_headers || {};
+      const opr = h.operators?.nama_operator || h.pic || "";
+      const grp = h.groups?.nama_grup || "";
+      const tgl = h.tgl || "";
+      const operatorStr = (grp ? `(${grp}) ` : '') + opr;
+
+      const isIstirahat = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") && !item.kategori_masalah && !item.detail_masalah;
+      const isFinish = item.keterangan_cacat === "FINISH" || item.production_headers?.panel_no === "FINISH";
+      const isStart = item.keterangan_cacat === "START" || item.production_headers?.panel_no === "START";
+      const isGradable = !isIstirahat && !isFinish && !isStart;
+
+      return {
+        item,
+        isIstirahat,
+        isGradable,
+        opr,
+        grp,
+        tgl,
+        operatorStr,
+      };
+    });
+
+    const items: any[] = [];
+    let currentOpCount = 0;
+    let lastTgl = "";
+    let lastGrp = "";
+    let lastOpr = "";
+
+    processed.forEach((p: any, i: number) => {
+      const { item, isIstirahat, isGradable, opr, grp, tgl, operatorStr } = p;
+
+      currentOpCount += 1;
+
+      let showTgl = true;
+      let showGrp = true;
+      let showOpr = true;
+
+      if (tgl === lastTgl) showTgl = false;
+      if (grp === lastGrp) showGrp = false;
+
+      if (isIstirahat) {
+        showTgl = false;
+        showGrp = false;
+        showOpr = true;
+      } else {
+        let prevActualOprStr = "-";
+        for (let k = items.length - 1; k >= 0; k--) {
+          const pItem = items[k];
+          if (!pItem.isTotalRow && !pItem.isIstirahat) {
+            prevActualOprStr = pItem.production_headers?.operators?.nama_operator || pItem.production_headers?.pic || "-";
+            break;
           }
         }
+        if (prevActualOprStr === opr) {
+          showOpr = false;
+        }
+      }
+
+      lastTgl = tgl;
+      lastGrp = grp;
+      lastOpr = isIstirahat ? "Istirahat" : opr;
+
+      items.push({
+        ...item,
+        isMeter: false,
+        isStartRow: false,
+        isIstirahat,
+        isFinishReport: false,
+        displayNo: item.production_headers?.panel_no || "-",
+        meterDisplay: "-",
+        cacatDisplay: item.detail_masalah || item.keterangan_cacat || "-",
+        isGradable,
+        showTgl,
+        showGrp,
+        showOpr,
+        oprStr: isIstirahat ? "Istirahat" : opr,
+        grpStr: grp,
+        tglStr: tgl,
+        hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
       });
 
-      // Add QC tambahaan if exists
-      const qcNotes = pDetails.filter((d:any) => !d._isEmpty && d.keterangan_cacat && d.keterangan_cacat.includes("TAMBAHAN QC"));
-      qcNotes.forEach((qcNote: any) => {
-        const parts = qcNote.keterangan_cacat.split("\n");
-        const qcPart = parts.find((p: string) => p.includes("TAMBAHAN QC"));
-        if (qcPart) cacatLines.push(`(${qcPart.trim()})`);
-        else cacatLines.push(`(${qcNote.keterangan_cacat})`);
-      });
+      let nextOprStr = null;
+      if (i + 1 < processed.length) {
+        nextOprStr = processed[i + 1].operatorStr;
+      }
 
-      // Istirahat check
-      const isIstirahatEvent = pDetails.some((d:any) => !d._isEmpty && d.keterangan_cacat && d.keterangan_cacat.toUpperCase().includes("ISTIRAHAT") && !d.kategori_masalah && !d.detail_masalah);
-      if (isIstirahatEvent) isIstirahat = true;
-    } else {
-      const processFallback = () => {
-        pDetails.forEach((det: any) => {
-          if (!det._isEmpty) {
-            const katsRaw = det.kategori_masalah;
-            const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
-            const displayDetail = det.detail_masalah || "";
-            let currentLines: string[] = [];
+      if (nextOprStr === null || nextOprStr !== operatorStr) {
+        if (currentOpCount > 0) {
+          const [prevGrp, prevOpr] = operatorStr.includes(") ") 
+            ? [operatorStr.match(/\(([^)]+)\)/)?.[1] || "", operatorStr.replace(/^\([^)]+\)\s*/, "")]
+            : ["", operatorStr];
 
-            if (kats.length > 0) {
-              if (displayDetail.includes(" | ")) {
-                const catDetails = displayDetail.split(" | ");
-                for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
-                  const k = kats[i] || "Unknown";
-                  const d = catDetails[i] || "";
-                  if (d) {
-                    currentLines.push(`${k} - ${d}`);
-                  } else {
-                    currentLines.push(k);
-                  }
-                }
-              } else if (displayDetail) {
-                if (kats.length === 1) {
-                  currentLines.push(`${kats[0]} - ${displayDetail}`);
-                } else {
-                  const dets = displayDetail.split(", ");
-                  if (kats.length === dets.length) {
-                    for (let i = 0; i < kats.length; i++) {
-                      currentLines.push(`${kats[i]} - ${dets[i]}`);
-                    }
-                  } else {
-                    currentLines.push(displayDetail);
-                  }
-                }
-              } else {
-                currentLines.push(kats.join(", "));
-              }
-            } else if (displayDetail) {
-              currentLines.push(displayDetail);
-            }
-
-            let ketCacat = det.keterangan_cacat || "";
-            const isIstirahatLine = ketCacat.toUpperCase().includes("ISTIRAHAT") && !det.kategori_masalah && !det.detail_masalah;
-
-            if (isIstirahatLine) {
-              isIstirahat = true;
-            }
-            
-            ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
-            ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
-
-            const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
-            ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
-            ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
-
-            if (ketCacat) {
-              if (currentLines.length > 0) {
-                const parts = ketCacat.split(",").map((s: string) => s.trim());
-                currentLines = currentLines.map((line, i) => {
-                  if (parts[i] && parts[i] !== "") {
-                    const cleanB = parts[i].replace(/blok\s*/gi, "").trim();
-                    return `${line} (Blok ${cleanB})`;
-                  }
-                  return line;
-                });
-
-                if (parts.length > currentLines.length) {
-                  const remaining = parts.slice(currentLines.length).map((s: string) => s.replace(/blok\s*/gi, "").trim()).join(", ");
-                  if (remaining) {
-                    currentLines[currentLines.length - 1] += ` (Blok ${remaining})`;
-                  }
-                }
-              } else {
-                const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
-                currentLines.push(`(Blok ${cleanB})`);
-              }
-            }
-
-            if (hasTambahanQC) {
-              if (currentLines.length === 0) {
-                currentLines.push("[TAMBAHAN QC]");
-              } else {
-                for (let i = 0; i < currentLines.length; i++) {
-                  currentLines[i] = currentLines[i] + " [TAMBAHAN QC]";
-                }
-              }
-            }
-
-            cacatLines.push(...currentLines);
-          }
-        });
-      };
-      processFallback();
-    }
-
-    cacatLines = Array.from(new Set(cacatLines));
-    const combinedCacat = cacatLines.join("\n");
-
-    let finalOprStr = isSameAsPrev ? "" : opr;
-    let finalGrpStr = isSameAsPrev ? "" : grp;
-    let finalTglStr = isSameAsPrev ? "" : (panel.tgl ? new Date(panel.tgl).toLocaleDateString('en-CA') : (panel.tanggal_jam ? new Date(panel.tanggal_jam).toISOString().split('T')[0] : "-"));
-
-    if (isIstirahat) {
-      finalOprStr = "Istirahat";
-      finalGrpStr = "";
-      finalTglStr = "";
-    }
-
-    const displayNo = panel.panel_no;
-    const isPlaceholder = isIstirahat && !combinedCacat;
-
-    displayItems.push({
-      id: `${idx}-${Math.random()}`,
-      panel_no: displayNo,
-      tglStr: finalTglStr,
-      grpStr: finalGrpStr,
-      oprStr: finalOprStr,
-      meter_kain: "-",
-      isError: hasErrorDetail,
-      cacat: hasErrorDetail && combinedCacat ? combinedCacat : "-",
-      isIstirahat,
-      db_id: panel.id
+          items.push({
+            id: `total-${operatorStr}-${Math.random()}`,
+            isTotalRow: true,
+            totalLabel: `Total Produksi${prevGrp ? ` (${prevGrp})` : ""} ${prevOpr}:`,
+            totalCount: currentOpCount,
+          });
+        }
+        currentOpCount = 0;
+      }
     });
 
-    currentOpCount += 1;
-    globalRowCount += 1;
-
-    if (idx === panels.length - 1) {
-      displayItems.push({
-        isSummaryRow: true,
-        operatorName: operatorStr,
-        totalCount: currentOpCount,
-        id: `summary-end`
-      });
-    }
-  });
+    return items;
+  }, [detailsToDisplay, panels]);
 
   return (
-    <table className="text-left text-xs border-collapse w-full">
+    <table className="w-full text-left border-collapse text-xs">
       <thead>
-        <tr className="bg-slate-50">
-          <th className="px-3 py-2 border-b border-r border-slate-200 font-extrabold text-slate-600 w-12 text-center">PNL NO</th>
-          <th className="px-3 py-2 border-b border-r border-slate-200 font-extrabold text-slate-600 w-24">TGL</th>
-          <th className="px-3 py-2 border-b border-r border-slate-200 font-extrabold text-slate-600 w-16 text-center">Group</th>
-          <th className="px-3 py-2 border-b border-r border-slate-200 font-extrabold text-slate-600 w-24">Operator</th>
-          <th className="px-3 py-2 border-b border-r border-slate-200 font-extrabold text-slate-600 w-12 text-center">KET ✓/X</th>
-          <th className="px-3 py-2 border-b border-r border-slate-200 font-extrabold text-slate-600">KETERANGAN CACAT</th>
-          <th className="px-3 py-2 border-b border-slate-200 font-extrabold text-slate-600 w-12 text-center">AKSI</th>
+        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+          <th className="px-1 py-2 w-8 text-center border-r border-slate-100">PNL</th>
+          <th className="px-1 py-2 w-20 border-r border-slate-100">Tgl</th>
+          <th className="px-1 py-2 w-10 text-center border-r border-slate-100">Group</th>
+          <th className="px-1 py-2 w-24 border-r border-slate-100">Operator</th>
+          <th className="px-1 py-2 text-center w-12 border-r border-slate-100">KET ✓/X</th>
+          <th className="px-2 py-2 min-w-[250px] w-full border-r border-slate-100">KETERANGAN CACAT</th>
+          <th className="px-1 py-2 text-center w-12">AKSI</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-slate-100 text-xs">
-        {displayItems.length > 0 ? displayItems.map((item) => {
-          if (item.isSummaryRow) {
+      <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+        {displayItems.map((item: any, idx: number) => {
+          if (item.isTotalRow) {
             return (
-              <tr key={item.id} className="bg-slate-100 font-semibold text-slate-700">
-                <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap">Total Produksi {item.operatorName}:</td>
-                <td className="px-3 py-2 text-center text-slate-800 font-bold whitespace-nowrap">
+              <tr key={item.id || idx} className="bg-slate-100 border-t border-b border-slate-200 font-semibold text-slate-700">
+                <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap">
+                  {item.totalLabel}
+                </td>
+                <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap">
                   {item.totalCount}
                 </td>
                 <td colSpan={2} className="bg-slate-100"></td>
@@ -281,34 +173,239 @@ export default function PanelHistoryTable({ panels, pcsKey }: { panels: any[]; p
             );
           }
 
+          const detail = item;
+          const itemHeader = item.production_headers || header;
+
+          const isIstirahat = item.isIstirahat;
+          const displayOp = item.showOpr ? (item.oprStr || "-") : "";
+          const displayTgl = item.showTgl ? (item.tglStr || "-") : "";
+          const displayGrp = item.showGrp ? (item.grpStr || "-") : "";
+
+          let masalahLines: string[] = [];
+          if (isIstirahat) {
+            // break rows have no defects, so masalahLines remains empty (rendering as "-")
+          } else {
+            let dtEvents: any[] = [];
+            try {
+              if (itemHeader.downtime_events) {
+                dtEvents = typeof itemHeader.downtime_events === 'string'
+                  ? JSON.parse(itemHeader.downtime_events)
+                  : itemHeader.downtime_events;
+              }
+            } catch (e) { }
+
+            const matchedEvents = dtEvents.filter((e: any) =>
+              !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe == detail.pcs_index
+            );
+
+            if (matchedEvents.length > 0) {
+              matchedEvents.forEach((e: any) => {
+                if (e.problems && Array.isArray(e.problems)) {
+                  e.problems.forEach((p: any) => {
+                    const c = p.kategori || "";
+                    let rawDetails: string[] = [];
+                    if (p.details && Array.isArray(p.details)) {
+                      rawDetails = [...p.details];
+                    } else if (typeof p.details === "string") {
+                      rawDetails = [p.details];
+                    }
+                    const b = p.blok || "";
+
+                    rawDetails.forEach((det: string) => {
+                      const d = typeof det === 'string' ? det.trim() : det;
+                      let line = "";
+                      if (c && d) line = `${c} - ${d}`;
+                      else if (c) line = c;
+                      else if (d) line = d;
+
+                      if (b && b !== "-") {
+                        if (line) line += ` (Blok ${b})`;
+                        else line = `(Blok ${b})`;
+                      }
+                      if (line) masalahLines.push(line);
+                    });
+                  });
+                } else if (e.kategori) {
+                  const c = e.kategori;
+                  const rawDetails = e.detail ? (Array.isArray(e.detail) ? e.detail : [e.detail]) : [];
+                  const b = e.blok || "";
+
+                  rawDetails.forEach((det: string) => {
+                    const d = typeof det === 'string' ? det.trim() : det;
+                    let line = "";
+                    if (c && d) line = `${c} - ${d}`;
+                    else if (c) line = c;
+                    else if (d) line = d;
+
+                    if (b && b !== "-") {
+                      if (line) line += ` (Blok ${b})`;
+                      else line = `(Blok ${b})`;
+                    }
+                    if (line) masalahLines.push(line);
+                  });
+                }
+              });
+            } else {
+              let cacatLines: string[] = [];
+              const katsRaw = detail.kategori_masalah;
+              const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
+              const displayDetail = detail.detail_masalah || "";
+
+              const pushDetailsForCat = (k: string, d: string) => {
+                if (!d) {
+                  cacatLines.push(k);
+                  return;
+                }
+                const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
+                const matchedDetails: string[] = [];
+                let remainingD = d;
+
+                const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
+                sortedKnown.forEach(known => {
+                  if (remainingD.includes(known)) {
+                    matchedDetails.push(known);
+                    remainingD = remainingD.replace(known, "");
+                  }
+                });
+
+                if (matchedDetails.length > 0) {
+                  const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
+                  matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
+                  customParts.forEach(custom => cacatLines.push(`${k} - ${custom}`));
+                } else {
+                  const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
+                  parts.forEach(p => cacatLines.push(`${k} - ${p}`));
+                }
+              };
+
+              if (kats.length > 0) {
+                if (displayDetail.includes(" | ")) {
+                  const catDetails = displayDetail.split(" | ");
+                  for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
+                    const k = kats[i] || "Unknown";
+                    const d = catDetails[i] || "";
+                    pushDetailsForCat(k, d);
+                  }
+                } else if (displayDetail) {
+                  if (kats.length === 1) {
+                    pushDetailsForCat(kats[0], displayDetail);
+                  } else {
+                    const dets = displayDetail.split(", ");
+                    if (kats.length === dets.length) {
+                      for (let i = 0; i < kats.length; i++) {
+                        pushDetailsForCat(kats[i], dets[i]);
+                      }
+                    } else {
+                      dets.forEach((det: string) => {
+                        let foundKat = "Unknown";
+                        for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+                          if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
+                            foundKat = kat;
+                            break;
+                          }
+                        }
+                        cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
+                      });
+                    }
+                  }
+                } else {
+                  cacatLines.push(kats.join(", "));
+                }
+              } else if (displayDetail) {
+                cacatLines.push(displayDetail);
+              }
+
+              let ketCacat = detail.keterangan_cacat || "";
+              ketCacat = ketCacat.replace("[TAMBAHAN QC]", "").trim();
+
+              if (ketCacat) {
+                if (cacatLines.length > 0) {
+                  const parts = ketCacat.split(",").map((s: string) => s.trim());
+                  cacatLines = cacatLines.map((line, i) => {
+                    const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
+                    let partIndex = i;
+                    if (lineKat && kats.includes(lineKat)) {
+                       partIndex = kats.indexOf(lineKat);
+                    }
+
+                    if (parts[partIndex] && parts[partIndex] !== "") {
+                      const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
+                      return `${line} (Blok ${cleanB})`;
+                    } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
+                       const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
+                       return `${line} (Blok ${cleanB})`;
+                    }
+                    return line;
+                  });
+                } else {
+                   const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
+                   cacatLines.push(`(Blok ${cleanB})`);
+                }
+              }
+
+              masalahLines.push(...cacatLines);
+
+              if (detail.keterangan_cacat && detail.keterangan_cacat.includes("[TAMBAHAN QC]")) {
+                if (masalahLines.length === 0) {
+                  masalahLines.push("[TAMBAHAN QC]");
+                } else {
+                  for (let i = 0; i < masalahLines.length; i++) {
+                    masalahLines[i] = masalahLines[i] + " [TAMBAHAN QC]";
+                  }
+                }
+              }
+            }
+
+            if (detail.keterangan_qc && detail.keterangan_qc !== "-") {
+              masalahLines.push(`QC: ${detail.keterangan_qc}`);
+            }
+          }
+          
+          const hasDefect = masalahLines.length > 0;
+          if (masalahLines.length === 0) masalahLines.push("-");
+
           return (
-            <tr key={item.id} className={`${item.isIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
-              <td className="px-3 py-2 border-r border-slate-100 font-bold text-slate-800 text-center align-top">
-                 {item.panel_no}
+            <tr key={item.id || idx} className={`${isIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
+              <td className="px-1 py-1 font-bold text-slate-800 text-center">
+                {item.displayNo}
               </td>
-              <td className="px-3 py-2 border-r border-slate-100 text-slate-600 whitespace-nowrap align-top">{item.tglStr}</td>
-              <td className="px-3 py-2 border-r border-slate-100 font-medium text-slate-700 text-center align-top">{item.grpStr}</td>
-              <td className="px-3 py-2 border-r border-slate-100 font-medium text-slate-700 align-top">{item.oprStr}</td>
-              <td className={`px-3 py-2 border-r border-slate-100 text-center font-bold align-top ${(item.cacat !== "-" && item.cacat !== "ISTIRAHAT") ? "text-red-600" : "text-emerald-600"}`}>
-                {(item.cacat !== "-" && item.cacat !== "ISTIRAHAT") ? "X" : "✓"}
+              <td className="px-1 py-1 text-slate-600 whitespace-nowrap">
+                {displayTgl}
               </td>
-              <td className={`px-3 py-2 border-r border-slate-100 whitespace-pre overflow-x-auto max-w-xs align-top ${item.isIstirahat ? "text-slate-500 italic" : (item.isError && item.cacat !== "FINISH" ? 'text-red-600' : 'text-slate-700')}`}>
-                {item.cacat}
+              <td className="px-1 py-1 font-medium text-slate-700 text-center">
+                {displayGrp}
               </td>
-              <td className="px-3 py-2 text-center align-top">
-                {item.db_id && item.cacat !== "FINISH" && (
-                  <Link href={`/edit/${item.db_id}`} className="inline-flex items-center justify-center p-1.5 rounded hover:bg-sky-100 text-[#0070bc] transition-colors" title="Edit Data">
+              <td className={`px-1 py-1 leading-tight ${isIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
+                {isIstirahat ? "Istirahat" : displayOp}
+              </td>
+              <td className="px-1 py-1 text-center">
+                {isIstirahat ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
+                ) : (
+                  detail.kategori_masalah || detail.detail_masalah ? (
+                    <XCircle className="w-4 h-4 text-rose-500 inline-block" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
+                  )
+                )}
+              </td>
+              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahat ? 'text-slate-600 font-semibold italic' : (hasDefect ? 'text-rose-600' : 'text-slate-400')}`}>
+                {isIstirahat ? "ISTIRAHAT" : (masalahLines.join("\n") || "-")}
+              </td>
+              <td className="px-1 py-1 text-center border-l border-slate-100">
+                {detail.id && detail.keterangan_cacat !== "FINISH" && (
+                  <Link
+                    href={`/edit/${detail.id}`}
+                    className="inline-flex items-center justify-center p-1.5 rounded hover:bg-sky-100 text-[#0070bc] transition-colors"
+                    title="Edit Data"
+                  >
                     <Edit className="w-3.5 h-3.5" />
                   </Link>
                 )}
               </td>
             </tr>
           );
-        }) : (
-          <tr>
-            <td colSpan={7} className="px-3 py-4 text-center text-slate-400">Belum ada baris</td>
-          </tr>
-        )}
+        })}
       </tbody>
     </table>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckCircle, X } from "lucide-react";
+import { CheckCircle, X, CheckCircle2, XCircle } from "lucide-react";
 import { PROBLEM_DETAILS } from "../../../page";
 
 export default function PanelHistoryTable({
@@ -188,9 +188,29 @@ export default function PanelHistoryTable({
                       } else if (typeof p.details === "string") {
                         rawDetails = [p.details];
                       }
-                      const d = rawDetails.map((s: string) => typeof s === 'string' ? s.trim() : s).filter(Boolean).join(" | ");
                       const b = p.blok || "";
 
+                      rawDetails.forEach((det: string) => {
+                        const d = typeof det === 'string' ? det.trim() : det;
+                        let line = "";
+                        if (c && d) line = `${c} - ${d}`;
+                        else if (c) line = c;
+                        else if (d) line = d;
+
+                        if (b && b !== "-") {
+                          if (line) line += ` (Blok ${b})`;
+                          else line = `(Blok ${b})`;
+                        }
+                        if (line) masalahLines.push(line);
+                      });
+                    });
+                  } else if (e.kategori) {
+                    const c = e.kategori;
+                    const rawDetails = e.detail ? (Array.isArray(e.detail) ? e.detail : [e.detail]) : [];
+                    const b = e.blok || "";
+
+                    rawDetails.forEach((det: string) => {
+                      const d = typeof det === 'string' ? det.trim() : det;
                       let line = "";
                       if (c && d) line = `${c} - ${d}`;
                       else if (c) line = c;
@@ -202,22 +222,6 @@ export default function PanelHistoryTable({
                       }
                       if (line) masalahLines.push(line);
                     });
-                  } else if (e.kategori) {
-                    const c = e.kategori;
-                    const rawDetails = e.detail ? (Array.isArray(e.detail) ? e.detail : [e.detail]) : [];
-                    const d = rawDetails.map((s: string) => typeof s === 'string' ? s.trim() : s).filter(Boolean).join(" | ");
-                    const b = e.blok || "";
-
-                    let line = "";
-                    if (c && d) line = `${c} - ${d}`;
-                    else if (c) line = c;
-                    else if (d) line = d;
-
-                    if (b && b !== "-") {
-                      if (line) line += ` (Blok ${b})`;
-                      else line = `(Blok ${b})`;
-                    }
-                    if (line) masalahLines.push(line);
                   }
                 });
               } else {
@@ -352,12 +356,20 @@ export default function PanelHistoryTable({
                 <td className={`px-1 py-1 leading-tight ${isIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
                   {isIstirahat ? "Istirahat" : displayOp}
                 </td>
-                <td className="px-1 py-1 text-center font-bold text-sm">
-                  {detail.kategori_masalah || detail.detail_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>}
-                </td>
-                <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahat ? 'text-slate-500 italic' : (hasDefect ? 'text-rose-600' : 'text-slate-400')}`}>
-                  {masalahLines.join("\n") || "-"}
-                </td>
+                 <td className="px-1 py-1 text-center">
+                   {isIstirahat ? (
+                     <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
+                   ) : (
+                     detail.kategori_masalah || detail.detail_masalah ? (
+                       <XCircle className="w-4 h-4 text-rose-500 inline-block" />
+                     ) : (
+                       <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
+                     )
+                   )}
+                 </td>
+                 <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahat ? 'text-slate-600 font-semibold italic' : (hasDefect ? 'text-rose-600' : 'text-slate-400')}`}>
+                   {isIstirahat ? "ISTIRAHAT" : (masalahLines.join("\n") || "-")}
+                 </td>
 
                 <td className="px-1 py-1 text-center">
                   <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${detail.final_inspection_id === 1 ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-white text-slate-300"}`}>
