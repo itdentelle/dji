@@ -51,6 +51,12 @@ Kami telah menyempurnakan halaman mending (`app/mending/page.tsx`), halaman riwa
     * Menambahkan properti `header_id` (diambil dari `h.id`) ke setiap baris meteran.
     * Memperbarui tombol aksi **Edit** agar muncul **hanya** pada baris meter yang memiliki cacat (`hasMeterDefect = true`), dan mengarahkan navigasinya ke URL `/edit/${item.header_id}` agar operator dapat langsung mengedit form input header batch tersebut.
 
+14. **Garis Vertikal pada Halaman Mending**:
+    * Menambahkan garis vertikal pemisah (`border-r border-slate-100` dan `border-b border-slate-100`) pada tabel Meteran dan Panel di halaman Mending agar senada dengan tabel riwayat.
+
+15. **Refaktorisasi Halaman Mending**:
+    * Memecah rendering tabel Meteran dan Panel ke sub-komponen terpisah (`MeterMendingTable.tsx` dan `PanelMendingTable.tsx`) di bawah folder `components/` sehingga kode utama di `page.tsx` menjadi jauh lebih ringkas, terstruktur, dan mudah dipelihara.
+
 ## Status Verifikasi
 
 * **TypeScript Compilation**: Berhasil dikompilasi dengan **0 error** di seluruh workspace (`npx tsc --noEmit`).
