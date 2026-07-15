@@ -363,7 +363,7 @@ export default function MendingProductionReportPage() {
 
   const groupedPotongans = useMemo(() => {
     const map = new Map<string, any>();
-    filteredData.forEach((pcs: any) => {
+    displayData.forEach((pcs: any) => {
       const key = `${pcs.nomor_mc}_${pcs.design_id}_${pcs.potongan_ke}`;
       const isMeter = checkIsMeter(pcs);
       if (!map.has(key)) {
@@ -387,18 +387,38 @@ export default function MendingProductionReportPage() {
       }
       
       const pot = map.get(key);
-      (pcs.items || []).forEach((item: any) => {
-        if (item.hasil_mending === "A") pot.totalA++;
-        if (item.hasil_mending === "B") pot.totalB++;
-        if (item.hasil_mending === "BS") pot.totalBS++;
-      });
+      if (isMeter) {
+        // Meter: totalB = defect titik, totalBS = BS titik, totalA = total meter - totalB
+        let totalMeterSum = 0;
+        pcs.displayItems?.forEach((di: any) => {
+          if (di.isTotalRow && di.totalMeter) {
+            const m = parseFloat(di.totalMeter);
+            if (!isNaN(m)) totalMeterSum += m;
+          }
+        });
+        
+        const defectItemsProd = pcs.items?.filter((i: any) => i.detail?.kategori_masalah) || [];
+        const prodBCount = defectItemsProd.length;
+        const prodBSCount = pcs.items?.filter((i: any) => i.detail?.kategori_masalah && i.hasil_mending === "BS").length || 0;
+        
+        pot.totalB += prodBCount;
+        pot.totalBS += prodBSCount;
+        pot.totalA += totalMeterSum - prodBCount;
+      } else {
+        // Panel: count per hasil_mending grade
+        (pcs.items || []).forEach((item: any) => {
+          if (item.hasil_mending === "A") pot.totalA++;
+          if (item.hasil_mending === "B") pot.totalB++;
+          if (item.hasil_mending === "BS") pot.totalBS++;
+        });
+      }
     });
 
     return Array.from(map.values()).map(p => ({
       ...p,
       petugas_mending: Array.from(p.petugas_mending).filter(Boolean).join(", ")
     }));
-  }, [filteredData]);
+  }, [displayData]);
 
   const selectedPcsData = useMemo(() => {
     if (!selectedPotonganKey) return [];
