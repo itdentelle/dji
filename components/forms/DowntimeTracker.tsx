@@ -183,6 +183,8 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     // Automatically select the default PCS if provided via URL
     if (defaultPcsIndex && pcsKeys.includes(defaultPcsIndex)) {
       setSelectedPcsKeList([defaultPcsIndex]);
+    } else if (pcsKeys.length === 1) {
+      setSelectedPcsKeList([...pcsKeys]);
     } else {
       setSelectedPcsKeList([]);
     }
@@ -226,6 +228,8 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
       setInputMeters({});
       if (defaultPcsIndex && pcsKeys.includes(defaultPcsIndex)) {
         setSelectedPcsKeList([defaultPcsIndex]);
+      } else if (pcsKeys.length === 1) {
+        setSelectedPcsKeList([...pcsKeys]);
       } else {
         setSelectedPcsKeList([]);
       }
@@ -496,7 +500,8 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
             </div>
 
             <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4 sm:space-y-5">
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 shadow-inner">
+              {pcsCount > 1 && (
+                <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-inner mt-4">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1 block">
                     Masalah terjadi pada PCS ke-berapa?
                   </label>
@@ -556,6 +561,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                     </p>
                   )}
                 </div>
+              )}
 
               {showMeterInput && pcsKeys.length === 1 && (
                 <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200/60 shadow-sm animate-fadeIn">
