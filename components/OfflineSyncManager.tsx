@@ -6,8 +6,10 @@ import { createProductionReport } from "@/actions/employee-actions";
 import { submitContinuousReport } from "@/actions/continuous-actions";
 import { submitQCInspection } from "@/actions/qc-actions";
 import { WifiOff, RefreshCw, CheckCircle2 } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 export default function OfflineSyncManager() {
+  const { isLoggedIn } = useAuth();
   const [isOffline, setIsOffline] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -39,7 +41,7 @@ export default function OfflineSyncManager() {
 
     // Set interval to automatically sync failed sheet data
     const sheetSyncInterval = setInterval(() => {
-      if (navigator.onLine) {
+      if (navigator.onLine && isLoggedIn) {
         autoSyncSheets();
       }
     }, 30000); // 30 detik
@@ -50,7 +52,7 @@ export default function OfflineSyncManager() {
       clearInterval(interval);
       clearInterval(sheetSyncInterval);
     };
-  }, [isSyncing]);
+  }, [isSyncing, isLoggedIn]);
 
   const checkPendingQueue = async () => {
     try {
