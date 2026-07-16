@@ -1,0 +1,82 @@
+[
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A",
+    "detail_masalah": "L1,L2,L3 Benang timbul putus (Titik: 12m)",
+    "keterangan_cacat": "Blok 1",
+    "header_id": "2bdd88a1",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A",
+    "detail_masalah": "Benang lolos, L1,L2,L3 Benang timbul putus",
+    "keterangan_cacat": "Blok 2",
+    "header_id": "cc9226b4",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A",
+    "detail_masalah": "L1,L2,L3 Benang timbul putus",
+    "keterangan_cacat": "Blok 40 [LAPORAN ISTIRAHAT]",
+    "header_id": "99c539fb",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A",
+    "detail_masalah": "Bolong corak",
+    "keterangan_cacat": "Blok 1 [LAPORAN ISTIRAHAT]",
+    "header_id": "228f2b4e",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A",
+    "detail_masalah": "L1,L2,L3 Benang timbul putus (Titik: 110m)",
+    "keterangan_cacat": null,
+    "header_id": "fbe9a13d",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A, B",
+    "detail_masalah": "Benang lolos (Titik: 14m), L1,L2,L3 Benang timbul putus (Titik: 14m), Jarum pattern patah/bengkok (Titik: 14m), Ganti Jacquard (Titik: 14m)",
+    "keterangan_cacat": "Blok 3, Blok 4",
+    "header_id": "ac3fba21",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A",
+    "detail_masalah": "Benang lolos (Titik: 13m), L1,L2,L3 Benang timbul putus (Titik: 13m)",
+    "keterangan_cacat": "Blok 2",
+    "header_id": "1a67faf6",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A, B",
+    "detail_masalah": "Benang lolos, L1,L2,L3 Benang timbul putus, Ganti Jacquard, Jarum pattern patah/bengkok",
+    "keterangan_cacat": "Blok 3, Blok 4",
+    "header_id": "605bfbd9",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "C",
+    "detail_masalah": "Error design (Titik: 80m)",
+    "keterangan_cacat": null,
+    "header_id": "646ac880",
+    "meter_kain": null
+  },
+  {
+    "pcs_index": 1,
+    "kategori_masalah": "A",
+    "detail_masalah": "L1,L2,L3 Benang timbul putus",
+    "keterangan_cacat": "Blok 1",
+    "header_id": "db6e3d57",
+    "meter_kain": null
+  }
+]

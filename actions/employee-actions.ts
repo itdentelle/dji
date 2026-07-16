@@ -119,10 +119,37 @@ export async function createProductionReport(
           : null,
     };
 
-    // 2. Siapkan Data Details
+    // 2. Siapkan Data Details & Defects
     const pcsDataToProcess = validated.isPanelGagal
       ? validated.pcsData.filter((pcs) => pcs.isBs)
       : validated.pcsData;
+
+    const downtimeRecordsData: any[] = [];
+    if (validated.downtimeEvents && validated.downtimeEvents.length > 0) {
+      validated.downtimeEvents.forEach((dt: any) => {
+        if (dt.problems && Array.isArray(dt.problems)) {
+          dt.problems.forEach((p: any) => {
+            downtimeRecordsData.push({
+              header_id: headerId,
+              kategori: p.kategori || dt.kategori,
+              detail: p.details ? (Array.isArray(p.details) ? p.details.join(", ") : p.details) : dt.detail,
+              durasi_detik: dt.durasiDetik || 0,
+              blok: p.blok || dt.blok || null
+            });
+          });
+        } else if (dt.kategori) {
+          downtimeRecordsData.push({
+            header_id: headerId,
+            kategori: dt.kategori,
+            detail: dt.detail,
+            durasi_detik: dt.durasiDetik || 0,
+            blok: dt.blok || null
+          });
+        }
+      });
+    }
+
+    const productionDefectsData: any[] = [];
 
     const detailData = pcsDataToProcess.map((pcsItem, idx) => {
       const detailId = generateExcelStyleId() + "-" + idx;
@@ -161,13 +188,38 @@ export async function createProductionReport(
               if (p.kategori) allCats.add(p.kategori);
               if (p.blok) allBloks.add(`Blok ${p.blok}`);
               if (p.details && Array.isArray(p.details)) {
-                p.details.forEach((d: string) => allDetails.add(d));
+                p.details.forEach((d: string) => {
+                  allDetails.add(d);
+                  productionDefectsData.push({
+                    production_detail_id: detailId,
+                    kategori: p.kategori,
+                    detail: d,
+                    meter: null,
+                    blok: p.blok || null
+                  });
+                });
+              } else if (p.kategori) {
+                  productionDefectsData.push({
+                    production_detail_id: detailId,
+                    kategori: p.kategori,
+                    detail: null,
+                    meter: null,
+                    blok: p.blok || null
+                  });
               }
             });
           } else if (e.kategori) {
             allCats.add(e.kategori);
             if (e.detail) allDetails.add(e.detail);
             if (e.blok) allBloks.add(`Blok ${e.blok}`);
+            
+            productionDefectsData.push({
+              production_detail_id: detailId,
+              kategori: e.kategori,
+              detail: e.detail || null,
+              meter: null,
+              blok: e.blok || null
+            });
           }
         });
 
@@ -381,6 +433,26 @@ export async function createProductionReport(
 
         if (detailError)
           throw new Error(`Gagal menyimpan detail PCS: ${detailError.message}`);
+
+        // C. Insert ke Tabel production_defects
+        if (productionDefectsData.length > 0) {
+          const { error: defectError } = await supabase
+            .from("production_defects")
+            .insert(productionDefectsData);
+          if (defectError) {
+            console.error("Gagal menyimpan production_defects:", defectError);
+          }
+        }
+
+        // D. Insert ke Tabel downtime_records
+        if (downtimeRecordsData.length > 0) {
+          const { error: downtimeError } = await supabase
+            .from("downtime_records")
+            .insert(downtimeRecordsData);
+          if (downtimeError) {
+            console.error("Gagal menyimpan downtime_records:", downtimeError);
+          }
+        }
 
         // Update tanggal_potong massal untuk potongan_ke yang sama
         if (validated.tanggalPotong && validated.nomorMc && potonganKeNum) {
@@ -647,7 +719,7 @@ export async function searchEmployeeHistory(filters: {
 
     const supabase = await createClient();
     let selectFields =
-      "id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, no_customer, panel_no, nomor_mc, total_downtime_detik, operators(nama_operator), groups(nama_grup), design_id, production_details(pcs_index, kategori_masalah, detail_masalah, keterangan_cacat, jml_hasil_produksi, meter_kain), created_by_name, tanggal_potong, pick, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir";
+      "id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, no_customer, panel_no, nomor_mc, total_downtime_detik, operators(nama_operator), groups(nama_grup), design_id, production_details(id, pcs_index, kategori_masalah, detail_masalah, keterangan_cacat, jml_hasil_produksi, meter_kain, production_defects(*)), created_by_name, tanggal_potong, pick, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, downtime_records(*)";
 
     // Prepare base query with exact count
     let query = supabase
@@ -863,19 +935,28 @@ export async function getEmployeeHistoryDetail(
 
     if (headerError) return { success: false, error: headerError.message };
 
-    // Fetch Details
+    // Fetch Details with defects
     const { data: details, error: detailsError } = await supabase
       .from("production_details")
-      .select("*")
+      .select("*, production_defects(*)")
       .eq("header_id", headerId)
       .order("pcs_index", { ascending: true });
 
     if (detailsError) return { success: false, error: detailsError.message };
 
+    // Fetch Downtime Records
+    const { data: downtime_records, error: downtimeError } = await supabase
+      .from("downtime_records")
+      .select("*")
+      .eq("header_id", headerId);
+
+    if (downtimeError) return { success: false, error: downtimeError.message };
+
     return {
       success: true,
       data: {
         ...((header || {}) as Record<string, any>),
+        downtime_records: downtime_records || [],
         details: details || [],
       },
     };
@@ -948,9 +1029,8 @@ export async function updateProductionReport(
       .update({
         operator_id:
           data.operatorId &&
-          data.operatorId.length > 0 &&
-          !isNaN(parseInt(data.operatorId[0]))
-            ? parseInt(data.operatorId[0])
+          !isNaN(parseInt(data.operatorId))
+            ? parseInt(data.operatorId)
             : null,
         group_id: data.groupId,
         design_id: data.designId,
@@ -981,7 +1061,13 @@ export async function updateProductionReport(
 
     if (headerError) throw new Error(headerError.message);
 
-    // 2. Delete old details
+    // 2. Fetch old details to preserve downstream data (inspeksi, mending, etc)
+    const { data: oldDetails } = await supabase
+      .from("production_details")
+      .select("*")
+      .eq("header_id", headerId);
+
+    // 3. Delete old details (this will CASCADE delete old production_defects)
     const { error: delError } = await supabase
       .from("production_details")
       .delete()
@@ -989,7 +1075,37 @@ export async function updateProductionReport(
 
     if (delError) throw new Error(delError.message);
 
-    // 3. Insert new details
+    // Delete old downtime records
+    await supabase.from("downtime_records").delete().eq("header_id", headerId);
+
+    const downtimeRecordsData: any[] = [];
+    if (data.downtimeEvents && data.downtimeEvents.length > 0) {
+      data.downtimeEvents.forEach((dt: any) => {
+        if (dt.problems && Array.isArray(dt.problems)) {
+          dt.problems.forEach((p: any) => {
+            downtimeRecordsData.push({
+              header_id: headerId,
+              kategori: p.kategori || dt.kategori,
+              detail: p.details ? (Array.isArray(p.details) ? p.details.join(", ") : p.details) : dt.detail,
+              durasi_detik: dt.durasiDetik || 0,
+              blok: p.blok || dt.blok || null
+            });
+          });
+        } else if (dt.kategori) {
+          downtimeRecordsData.push({
+            header_id: headerId,
+            kategori: dt.kategori,
+            detail: dt.detail,
+            durasi_detik: dt.durasiDetik || 0,
+            blok: dt.blok || null
+          });
+        }
+      });
+    }
+
+    const productionDefectsData: any[] = [];
+
+    // 4. Insert new details
     if (data.pcsData && data.pcsData.length > 0) {
       const detailData = data.pcsData.map((pcsItem: any, idx: number) => {
         const detailId = generateExcelStyleId() + "-" + idx;
@@ -999,6 +1115,8 @@ export async function updateProductionReport(
         const pcsIndexNum = pcsItem.pcsIndex
           ? parseInt(pcsItem.pcsIndex)
           : null;
+
+        const oldDetail = oldDetails?.find((d: any) => d.pcs_index === pcsIndexNum) || {};
 
         // Filter event khusus untuk PCS ini atau "Semua"
         const matchedEvents = data.downtimeEvents
@@ -1015,42 +1133,120 @@ export async function updateProductionReport(
 
         let kategoriStr = null;
         let detailStr = null;
+        let blokStr = null;
         let indikatorStop = false;
 
         if (matchedEvents.length > 0) {
           const allCats = new Set<string>();
           const allDetails = new Set<string>();
+          const allBloks = new Set<string>();
 
           matchedEvents.forEach((e: any) => {
             if (e.problems && Array.isArray(e.problems)) {
               e.problems.forEach((p: any) => {
                 if (p.kategori) allCats.add(p.kategori);
+                if (p.blok) allBloks.add(`Blok ${p.blok}`);
+                let meterForThisPcs = "";
+                if (p.meter) {
+                  if (data.pcsData.length === 1) {
+                    meterForThisPcs = p.meter;
+                  } else {
+                    const match = p.meter.match(new RegExp(`PCS ${idx + 1}:\\s*([^,]+)`));
+                    if (match) meterForThisPcs = match[1].trim();
+                  }
+                }
+
                 if (p.details && Array.isArray(p.details)) {
-                  p.details.forEach((d: string) => allDetails.add(d));
+                  p.details.forEach((d: string) => {
+                    let detailText = d;
+                    if (meterForThisPcs) {
+                      detailText += ` (Titik: ${meterForThisPcs}m)`;
+                    }
+                    allDetails.add(detailText);
+                    
+                    productionDefectsData.push({
+                      production_detail_id: oldDetail.id || detailId,
+                      kategori: p.kategori,
+                      detail: d,
+                      meter: meterForThisPcs || null,
+                      blok: p.blok || null
+                    });
+                  });
+                } else if (p.kategori) {
+                    productionDefectsData.push({
+                      production_detail_id: oldDetail.id || detailId,
+                      kategori: p.kategori,
+                      detail: null,
+                      meter: meterForThisPcs || null,
+                      blok: p.blok || null
+                    });
                 }
               });
             } else if (e.kategori) {
               allCats.add(e.kategori);
               if (e.detail) allDetails.add(e.detail);
+              if (e.blok) allBloks.add(`Blok ${e.blok}`);
+              
+              productionDefectsData.push({
+                production_detail_id: oldDetail.id || detailId,
+                kategori: e.kategori,
+                detail: e.detail || null,
+                meter: e.meter || null,
+                blok: e.blok || null
+              });
             }
           });
 
           kategoriStr = Array.from(allCats).join(", ");
           detailStr = Array.from(allDetails).join(", ");
+          blokStr = Array.from(allBloks).join(", ");
           indikatorStop = true;
         }
 
+        let keteranganStr: string | null = null;
+        if (blokStr) {
+          keteranganStr = blokStr;
+        }
+
+        let fallbackKeterangan = oldDetail.keterangan_cacat !== undefined ? oldDetail.keterangan_cacat : null;
+
+        if (data.jenisLaporan !== undefined) {
+          if (fallbackKeterangan) {
+            fallbackKeterangan = fallbackKeterangan.replace(/\[?(LAPORAN|SEBELUM)?\s*ISTIRAHAT\]?/gi, "").trim();
+            if (fallbackKeterangan === "") fallbackKeterangan = null;
+          }
+          if (data.jenisLaporan === "Mulai Istirahat") {
+            keteranganStr = keteranganStr ? keteranganStr + " [SEBELUM ISTIRAHAT]" : "[SEBELUM ISTIRAHAT]";
+          } else if (data.jenisLaporan === "Selesai Istirahat" || data.jenisLaporan === "Istirahat") {
+            keteranganStr = keteranganStr ? keteranganStr + " [LAPORAN ISTIRAHAT]" : "[LAPORAN ISTIRAHAT]";
+          }
+          
+          if (keteranganStr === null && fallbackKeterangan === null) {
+              keteranganStr = ""; // Force clear if there's no defect and no fallback (like START/FINISH)
+          }
+        } else {
+          // Pertahankan [LAPORAN ISTIRAHAT] atau [SEBELUM ISTIRAHAT] jika sebelumnya ada
+          if (fallbackKeterangan) {
+            if (fallbackKeterangan.includes("[LAPORAN ISTIRAHAT]")) {
+              keteranganStr = keteranganStr ? keteranganStr + " [LAPORAN ISTIRAHAT]" : "[LAPORAN ISTIRAHAT]";
+            } else if (fallbackKeterangan.includes("[SEBELUM ISTIRAHAT]")) {
+              keteranganStr = keteranganStr ? keteranganStr + " [SEBELUM ISTIRAHAT]" : "[SEBELUM ISTIRAHAT]";
+            }
+          }
+        }
+
         return {
-          id: detailId,
+          ...oldDetail,
+          id: oldDetail.id || detailId,
           header_id: headerId,
           pcs_index: pcsIndexNum,
           jml_hasil_produksi: jmlHasilNum,
           indikator_stop: indikatorStop,
           kategori_masalah: kategoriStr,
           detail_masalah: detailStr,
-          keterangan_cacat: null,
-          meter_kain: pcsItem.meterKain || null,
-          roll_no: pcsItem.rollNo || null,
+          keterangan_cacat: keteranganStr !== null ? keteranganStr : (oldDetail.keterangan_cacat !== undefined ? oldDetail.keterangan_cacat : null),
+          meter_kain: pcsItem.meterKain || oldDetail.meter_kain || null,
+          roll_no: pcsItem.rollNo || oldDetail.roll_no || null,
         };
       });
 
@@ -1059,6 +1255,26 @@ export async function updateProductionReport(
         .insert(detailData);
 
       if (insertError) throw new Error(insertError.message);
+
+      // C. Insert ke Tabel production_defects
+      if (productionDefectsData.length > 0) {
+        const { error: defectError } = await supabase
+          .from("production_defects")
+          .insert(productionDefectsData);
+        if (defectError) {
+          console.error("Gagal menyimpan production_defects:", defectError);
+        }
+      }
+
+      // D. Insert ke Tabel downtime_records
+      if (downtimeRecordsData.length > 0) {
+        const { error: downtimeError } = await supabase
+          .from("downtime_records")
+          .insert(downtimeRecordsData);
+        if (downtimeError) {
+          console.error("Gagal menyimpan downtime_records:", downtimeError);
+        }
+      }
 
       // Update tanggal_potong massal untuk potongan_ke yang sama
       if (data.tanggalPotong && data.nomorMc && potonganKeNum) {

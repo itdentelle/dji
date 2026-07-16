@@ -130,7 +130,7 @@ export async function getPendingMendingDetailsByBatch(mesin: string, designId: s
     // Get inspected & unmended items, but only from fully-inspected PCS indexes
     const { data: details, error: detailsError } = await supabase
       .from("production_details")
-      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id, qc_inspection_items(qc_inspection_batches(berat_kain))")
+      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id, qc_inspection_items(qc_inspection_batches(berat_kain)), production_defects(*)")
       .in("header_id", headerIds)
       .not("final_inspection_id", "is", null)
       .is("status_mending", null);

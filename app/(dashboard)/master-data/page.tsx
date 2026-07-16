@@ -19,6 +19,10 @@ export default function MasterDataPage() {
   const [endDate, setEndDate] = useState(() => {
     return new Date().toISOString().split("T")[0];
   });
+  
+  const [filterMesin, setFilterMesin] = useState("");
+  const [filterPotongan, setFilterPotongan] = useState("");
+  const [filterOperator, setFilterOperator] = useState("");
 
   const fetchData = async () => {
     setLoading(true);
@@ -47,8 +51,8 @@ export default function MasterDataPage() {
       return;
     }
 
-    // 1. Buat Worksheet dari Data JSON
-    const ws = XLSX.utils.json_to_sheet(data);
+    // 1. Buat Worksheet dari Data JSON (Gunakan data yang difilter)
+    const ws = XLSX.utils.json_to_sheet(filteredData);
 
     // 2. Buat Workbook dan tambahkan Worksheet
     const wb = XLSX.utils.book_new();
@@ -58,12 +62,26 @@ export default function MasterDataPage() {
     XLSX.writeFile(wb, `Master_Data_${startDate}_sd_${endDate}.xlsx`);
   };
 
+  const filteredData = data.filter(row => {
+    let match = true;
+    if (filterMesin && row.mesin) {
+      if (!String(row.mesin).toLowerCase().includes(filterMesin.toLowerCase())) match = false;
+    }
+    if (filterPotongan && row.potongan_ke) {
+      if (!String(row.potongan_ke).toLowerCase().includes(filterPotongan.toLowerCase())) match = false;
+    }
+    if (filterOperator && row.operator) {
+      if (!String(row.operator).toLowerCase().includes(filterOperator.toLowerCase())) match = false;
+    }
+    return match;
+  });
+
   const headers = data.length > 0 ? Object.keys(data[0]) : [];
 
   return (
-    <div className="p-4 sm:p-8 space-y-6 max-w-full overflow-hidden flex flex-col h-[calc(100vh-2rem)]">
+    <div className="p-4 sm:p-8 space-y-6 max-w-full overflow-hidden flex flex-col h-[calc(100vh-2rem)] min-w-0">
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 shrink-0 lg:flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-200">
             <FileSpreadsheet className="w-6 h-6 text-white" />
@@ -74,44 +92,81 @@ export default function MasterDataPage() {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 px-2">
-            <span className="text-xs font-bold text-slate-600">Mulai:</span>
-            <input 
-              type="date" 
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="text-sm border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500"
-            />
+        <div className="flex flex-col gap-2 w-full lg:w-auto">
+          {/* Baris 1: Filter Tanggal & Tombol */}
+          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-slate-200 lg:justify-end">
+            <div className="flex items-center gap-2 px-2">
+              <span className="text-xs font-bold text-slate-600">Mulai:</span>
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="text-sm border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div className="flex items-center gap-2 px-2">
+              <span className="text-xs font-bold text-slate-600">Sampai:</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="text-sm border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500"
+              />
+            </div>
+            <button 
+              onClick={fetchData}
+              disabled={loading}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg transition-colors flex items-center justify-center gap-1 font-bold text-sm w-full sm:w-auto"
+            >
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              Refresh Data
+            </button>
           </div>
-          <div className="flex items-center gap-2 px-2">
-            <span className="text-xs font-bold text-slate-600">Sampai:</span>
-            <input 
-              type="date" 
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="text-sm border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500"
-            />
+
+          {/* Baris 2: Filter Pencarian */}
+          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-slate-200 lg:justify-end">
+            <div className="flex items-center gap-2 px-2">
+              <span className="text-xs font-bold text-slate-600">Mesin:</span>
+              <input 
+                type="text" 
+                value={filterMesin}
+                onChange={(e) => setFilterMesin(e.target.value)}
+                placeholder="R1..."
+                className="text-sm border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500 w-16 sm:w-20"
+              />
+            </div>
+            <div className="flex items-center gap-2 px-2 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 sm:pl-3 w-full sm:w-auto">
+              <span className="text-xs font-bold text-slate-600">Potongan:</span>
+              <input 
+                type="text" 
+                value={filterPotongan}
+                onChange={(e) => setFilterPotongan(e.target.value)}
+                placeholder="550..."
+                className="text-sm border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500 w-full sm:w-24"
+              />
+            </div>
+            <div className="flex items-center gap-2 px-2 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 sm:pl-3 w-full sm:w-auto">
+              <span className="text-xs font-bold text-slate-600">Operator:</span>
+              <input 
+                type="text" 
+                value={filterOperator}
+                onChange={(e) => setFilterOperator(e.target.value)}
+                placeholder="Nama..."
+                className="text-sm border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500 w-full sm:w-32"
+              />
+            </div>
           </div>
-          <button 
-            onClick={fetchData}
-            disabled={loading}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg transition-colors flex items-center gap-1 font-bold text-sm"
-          >
-            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            Filter
-          </button>
         </div>
       </div>
 
       {/* TOOLBAR */}
       <div className="flex items-center justify-between shrink-0">
         <p className="text-sm font-bold text-slate-600">
-          Menampilkan <span className="text-emerald-600">{data.length}</span> baris data
+          Menampilkan <span className="text-emerald-600">{filteredData.length}</span> baris data
         </p>
         <button 
           onClick={handleExportExcel}
-          disabled={data.length === 0}
+          disabled={filteredData.length === 0}
           className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 flex items-center gap-2"
         >
           <Download className="w-4 h-4" />
@@ -126,9 +181,9 @@ export default function MasterDataPage() {
             <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin mb-4" />
             <p className="font-bold text-slate-600 animate-pulse">Memuat jutaan data secara realtime...</p>
           </div>
-        ) : data.length === 0 ? (
+        ) : filteredData.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            <p className="font-bold text-slate-400">Tidak ada data di rentang tanggal ini.</p>
+            <p className="font-bold text-slate-400">Tidak ada data untuk filter tersebut.</p>
           </div>
         ) : null}
 
@@ -146,7 +201,7 @@ export default function MasterDataPage() {
             </tr>
           </thead>
           <tbody>
-            {data.map((row, i) => (
+            {filteredData.map((row, i) => (
               <tr key={i} className="hover:bg-emerald-50/50 transition-colors group">
                 <td className="p-3 border-b border-r border-slate-100 font-bold text-slate-500 sticky left-0 bg-white group-hover:bg-emerald-50/50 z-10 shadow-[1px_0_0_0_#f1f5f9]">
                   {i + 1}

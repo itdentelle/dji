@@ -288,11 +288,39 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       ? validated.pcsData.filter(pcs => pcs.isBs) 
       : validated.pcsData;
 
+    const downtimeRecordsData: any[] = [];
+    if (validated.downtimeEvents && validated.downtimeEvents.length > 0) {
+      validated.downtimeEvents.forEach((dt: any) => {
+        if (dt.problems && Array.isArray(dt.problems)) {
+          dt.problems.forEach((p: any) => {
+            downtimeRecordsData.push({
+              header_id: headerId,
+              kategori: p.kategori || dt.kategori,
+              detail: p.details ? (Array.isArray(p.details) ? p.details.join(", ") : p.details) : dt.detail,
+              durasi_detik: dt.durasiDetik || 0,
+              blok: p.blok || dt.blok || null
+            });
+          });
+        } else if (dt.kategori) {
+          downtimeRecordsData.push({
+            header_id: headerId,
+            kategori: dt.kategori,
+            detail: dt.detail,
+            durasi_detik: dt.durasiDetik || 0,
+            blok: dt.blok || null
+          });
+        }
+      });
+    }
+
+    const productionDefectsData: any[] = [];
+
     // Cari index PCS yang akan menampung jml_hasil_produksi (jika ada masalah, pilih PCS tersebut, jika tidak pilih PCS pertama)
     let targetYieldIdx = 0;
-    const idxWithProblem = pcsDataToProcess.findIndex((_, idx) => {
+    const idxWithProblem = pcsDataToProcess.findIndex((pcsItem, idx) => {
+      const pcsKey = pcsItem.pcsIndex ? pcsItem.pcsIndex.toString() : (idx + 1).toString();
       const matchedEvents = validated.downtimeEvents 
-        ? validated.downtimeEvents.filter(e => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes((idx + 1).toString()))
+        ? validated.downtimeEvents.filter(e => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes(pcsKey))
         : [];
       return matchedEvents.length > 0 || pcsDataToProcess[idx].isBs;
     });
@@ -302,9 +330,12 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
     }
 
     const detailData = pcsDataToProcess.map((pcsItem, idx) => {
-      // Filter event khusus untuk PCS ini atau "Semua"
+      const detailId = generateExcelStyleId() + "-" + idx;
+      
+      // Filter event khusus untuk PCS ini berdasarkan pcsIndex aktual (bukan posisi array)
+      const actualPcsKey = pcsItem.pcsIndex ? pcsItem.pcsIndex.toString() : (idx + 1).toString();
       const matchedEvents = validated.downtimeEvents 
-        ? validated.downtimeEvents.filter(e => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes((idx + 1).toString()))
+        ? validated.downtimeEvents.filter(e => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes(actualPcsKey))
         : [];
 
       let kategoriStr = null;
@@ -328,7 +359,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
                 if (pcsDataToProcess.length === 1) {
                   meterForThisPcs = p.meter;
                 } else {
-                  const match = p.meter.match(new RegExp(`PCS ${idx + 1}:\\s*([^,]+)`));
+                  const match = p.meter.match(new RegExp(`PCS ${actualPcsKey}:\\s*([^,]+)`));
                   if (match) meterForThisPcs = match[1].trim();
                 }
               }
@@ -340,6 +371,22 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
                     detailText += ` (Titik: ${meterForThisPcs}m)`;
                   }
                   allDetails.add(detailText);
+                  
+                  productionDefectsData.push({
+                    production_detail_id: detailId,
+                    kategori: p.kategori,
+                    detail: d,
+                    meter: meterForThisPcs || null,
+                    blok: p.blok || null
+                  });
+                });
+              } else if (p.kategori) {
+                productionDefectsData.push({
+                  production_detail_id: detailId,
+                  kategori: p.kategori,
+                  detail: null,
+                  meter: meterForThisPcs || null,
+                  blok: p.blok || null
                 });
               }
             });
@@ -347,6 +394,14 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
             allCats.add(e.kategori);
             if (e.detail) allDetails.add(e.detail);
             if (e.blok) allBloks.add(`Blok ${e.blok}`);
+            
+            productionDefectsData.push({
+              production_detail_id: detailId,
+              kategori: e.kategori,
+              detail: e.detail || null,
+              meter: null,
+              blok: e.blok || null
+            });
           }
         });
         
@@ -372,7 +427,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       }
 
       return {
-        id: generateExcelStyleId(),
+        id: detailId,
         header_id: headerId,
         pcs_index: parseInt(pcsItem.pcsIndex),
         jml_hasil_produksi: (idx === targetYieldIdx) ? 1 : 0,
@@ -456,6 +511,28 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
           throw new Error(`Gagal menyimpan detail: ${detailError.message}`);
       }
 
+      // Filter defects that belong to finalDetailData only (in case empty details were stripped)
+      const validDetailIds = new Set(finalDetailData.map(d => d.id));
+      const filteredDefects = productionDefectsData.filter(d => validDetailIds.has(d.production_detail_id));
+
+      if (filteredDefects.length > 0) {
+        const { error: defectError } = await supabase
+          .from("production_defects")
+          .insert(filteredDefects);
+        if (defectError) {
+          console.error("Gagal menyimpan continuous production_defects:", defectError);
+        }
+      }
+
+      if (downtimeRecordsData.length > 0) {
+        const { error: downtimeError } = await supabase
+          .from("downtime_records")
+          .insert(downtimeRecordsData);
+        if (downtimeError) {
+          console.error("Gagal menyimpan continuous downtime_records:", downtimeError);
+        }
+      }
+
       // Update tanggal potong massal untuk semua laporan potongan yang sama
       if (validated.tanggalPotong && validated.nomorMc && potonganKeNum) {
         const cutResult = await applyT2ACutDateUpdate(supabase, {
@@ -489,7 +566,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
         Pick: validated.pick || "",
         Course: validated.course || "",
         RPM: validated.rpm ?? "",
-        Operator: validated.pic || validated.operatorId?.[0] || "",
+        Operator: validated.pic || validated.operatorId || "",
         Grup: validated.grupName || validated.groupId || "",
         Design: validated.designName || validated.designId || "",
         Panel: "METERAN",
@@ -550,8 +627,8 @@ export async function updateContinuousReport(
       .from("production_headers")
       .update({
         operator_id:
-          data.operatorId && data.operatorId.length > 0 && !isNaN(parseInt(data.operatorId[0]))
-            ? parseInt(data.operatorId[0])
+          data.operatorId && !isNaN(parseInt(data.operatorId))
+            ? parseInt(data.operatorId)
             : null,
         group_id: data.groupId,
         design_id: data.designId,
@@ -592,6 +669,36 @@ export async function updateContinuousReport(
 
     if (delError) throw new Error(delError.message);
 
+    // Delete old downtime records
+    await supabase.from("downtime_records").delete().eq("header_id", headerId);
+
+    const downtimeRecordsData: any[] = [];
+    if (data.downtimeEvents && data.downtimeEvents.length > 0) {
+      data.downtimeEvents.forEach((dt: any) => {
+        if (dt.problems && Array.isArray(dt.problems)) {
+          dt.problems.forEach((p: any) => {
+            downtimeRecordsData.push({
+              header_id: headerId,
+              kategori: p.kategori || dt.kategori,
+              detail: p.details ? (Array.isArray(p.details) ? p.details.join(", ") : p.details) : dt.detail,
+              durasi_detik: dt.durasiDetik || 0,
+              blok: p.blok || dt.blok || null
+            });
+          });
+        } else if (dt.kategori) {
+          downtimeRecordsData.push({
+            header_id: headerId,
+            kategori: dt.kategori,
+            detail: dt.detail,
+            durasi_detik: dt.durasiDetik || 0,
+            blok: dt.blok || null
+          });
+        }
+      });
+    }
+
+    const productionDefectsData: any[] = [];
+    
     // 3. Insert new details
     if (data.pcsData && data.pcsData.length > 0) {
       const detailData = data.pcsData.map((pcsItem: any, idx: number) => {
@@ -603,36 +710,98 @@ export async function updateContinuousReport(
           ? parseInt(pcsItem.pcsIndex)
           : null;
 
-        // Filter event khusus untuk PCS ini atau "Semua"
+        // Filter event khusus untuk PCS ini berdasarkan pcsIndex aktual (bukan posisi array)
+        const actualPcsKey = pcsItem.pcsIndex ? pcsItem.pcsIndex.toString() : (idx + 1).toString();
         const matchedEvents = data.downtimeEvents 
-          ? data.downtimeEvents.filter((e: any) => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map((x: string) => x.trim()).includes((idx + 1).toString()))
+          ? data.downtimeEvents.filter((e: any) => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map((x: string) => x.trim()).includes(actualPcsKey))
           : [];
 
         let kategoriStr = null;
         let detailStr = null;
+        let blokStr = null;
         let indikatorStop = false;
 
         if (matchedEvents.length > 0) {
           const allCats = new Set<string>();
           const allDetails = new Set<string>();
+          const allBloks = new Set<string>();
           
           matchedEvents.forEach((e: any) => {
             if (e.problems && Array.isArray(e.problems)) {
               e.problems.forEach((p: any) => {
                 if (p.kategori) allCats.add(p.kategori);
+                if (p.blok) allBloks.add(`Blok ${p.blok}`);
+                
+                let meterForThisPcs = "";
+                if (p.meter) {
+                  if (data.pcsData.length === 1) {
+                    meterForThisPcs = p.meter;
+                  } else {
+                    const match = p.meter.match(new RegExp(`PCS ${actualPcsKey}:\\s*([^,]+)`));
+                    if (match) meterForThisPcs = match[1].trim();
+                  }
+                }
+
                 if (p.details && Array.isArray(p.details)) {
-                  p.details.forEach((d: string) => allDetails.add(d));
+                  p.details.forEach((d: string) => {
+                    let detailText = d;
+                    if (meterForThisPcs) {
+                      detailText += ` (Titik: ${meterForThisPcs}m)`;
+                    }
+                    allDetails.add(detailText);
+                    
+                    productionDefectsData.push({
+                      production_detail_id: detailId,
+                      kategori: p.kategori,
+                      detail: d,
+                      meter: meterForThisPcs || null,
+                      blok: p.blok || null
+                    });
+                  });
+                } else if (p.kategori) {
+                  productionDefectsData.push({
+                    production_detail_id: detailId,
+                    kategori: p.kategori,
+                    detail: null,
+                    meter: meterForThisPcs || null,
+                    blok: p.blok || null
+                  });
                 }
               });
             } else if (e.kategori) {
               allCats.add(e.kategori);
               if (e.detail) allDetails.add(e.detail);
+              if (e.blok) allBloks.add(`Blok ${e.blok}`);
+              
+              productionDefectsData.push({
+                production_detail_id: detailId,
+                kategori: e.kategori,
+                detail: e.detail || null,
+                meter: e.meter || null,
+                blok: e.blok || null
+              });
             }
           });
           
           kategoriStr = Array.from(allCats).join(", ");
           detailStr = Array.from(allDetails).join(", ");
+          blokStr = Array.from(allBloks).join(", ");
           indikatorStop = true;
+        }
+
+        if (pcsItem.isBs) {
+          kategoriStr = "X";
+        }
+
+        let keteranganStr: string | null = null;
+        if (blokStr) {
+          keteranganStr = blokStr;
+        }
+        if (data.jenisLaporan === "Mulai Istirahat") {
+          keteranganStr = keteranganStr ? keteranganStr + " [SEBELUM ISTIRAHAT]" : "[SEBELUM ISTIRAHAT]";
+        }
+        if (data.jenisLaporan === "Selesai Istirahat") {
+          keteranganStr = keteranganStr ? keteranganStr + " [LAPORAN ISTIRAHAT]" : "[LAPORAN ISTIRAHAT]";
         }
 
         return {
@@ -643,7 +812,7 @@ export async function updateContinuousReport(
           indikator_stop: indikatorStop,
           kategori_masalah: kategoriStr,
           detail_masalah: detailStr,
-          keterangan_cacat: null,
+          keterangan_cacat: keteranganStr,
           meter_kain: pcsItem.meterKain || null,
           roll_no: pcsItem.rollNo || null,
         };
@@ -654,6 +823,25 @@ export async function updateContinuousReport(
         .insert(detailData);
 
       if (insertError) throw new Error(insertError.message);
+
+      if (productionDefectsData.length > 0) {
+        const { error: defectError } = await supabase
+          .from("production_defects")
+          .insert(productionDefectsData);
+        
+        if (defectError) {
+          console.error("Gagal menyimpan production_defects pada update:", defectError);
+        }
+      }
+
+      if (downtimeRecordsData.length > 0) {
+        const { error: downtimeError } = await supabase
+          .from("downtime_records")
+          .insert(downtimeRecordsData);
+        if (downtimeError) {
+          console.error("Gagal menyimpan downtime_records pada update:", downtimeError);
+        }
+      }
 
       const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
       if (sheetUrl) {
@@ -690,7 +878,7 @@ export async function updateContinuousReport(
           Pick: data.pick || "",
           Course: data.course || "",
           RPM: data.rpm ?? "",
-          Operator: data.pic || data.operatorId?.[0] || "",
+          Operator: data.pic || data.operatorId || "",
           Grup: data.groupId || "",
           Design: data.designId || "",
           "Status Matching": data.statusMatching || "",

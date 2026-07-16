@@ -37,6 +37,7 @@ import {
   ArrowRight,
   Send,
   Scissors,
+  AlertTriangle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
@@ -305,8 +306,10 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 type ContinuousFormProps = {
-  initialData?: any;
   isEdit?: boolean;
+  initialData?: any;
+  defaultMeter?: string;
+  defaultPcsIndex?: string;
 };
 
 function parseFormMeterValue(value: string | null | undefined): number | null {
@@ -329,6 +332,8 @@ function getJakartaDateString() {
 export default function ContinuousForm({
   initialData,
   isEdit,
+  defaultMeter,
+  defaultPcsIndex,
 }: ContinuousFormProps = {}) {
   const { user } = useAuth();
   const idempotencyKeyRef = useRef<string>(
@@ -596,6 +601,84 @@ export default function ContinuousForm({
 
   useEffect(() => {
     if (initialData && isEdit) {
+      let isLaporanIstirahat = false;
+      let isSebelumIstirahat = false;
+      
+      if (initialData.details && initialData.details.length > 0) {
+        isLaporanIstirahat = initialData.details.some((d: any) => 
+          (d.keterangan_cacat || "").toUpperCase().includes("[LAPORAN ISTIRAHAT]")
+        );
+        isSebelumIstirahat = initialData.details.some((d: any) => 
+          (d.keterangan_cacat || "").toUpperCase().includes("[SEBELUM ISTIRAHAT]")
+        );
+      }
+
+      let jenisLaporanVal = "";
+      if (isLaporanIstirahat) jenisLaporanVal = "Selesai Istirahat";
+      else if (isSebelumIstirahat) jenisLaporanVal = "Mulai Istirahat";
+      
+      let parsedDowntimeEvents: any[] = [];
+      try {
+        if (initialData.downtime_events) {
+          parsedDowntimeEvents = typeof initialData.downtime_events === 'string'
+            ? JSON.parse(initialData.downtime_events)
+            : initialData.downtime_events;
+        } else if (initialData.details && initialData.details.some((d: any) => d.kategori_masalah && d.kategori_masalah !== "X")) {
+          // Reconstruct downtimeEvents from legacy details to prevent data loss
+          const legacyEvents: any[] = [];
+          initialData.details.forEach((d: any) => {
+            if (d.kategori_masalah && d.kategori_masalah !== "X") {
+              const kats = d.kategori_masalah.split(",").map((s: string) => s.trim());
+              const dets = d.detail_masalah ? d.detail_masalah.split(",").map((s: string) => s.trim()) : [];
+              const bloks = d.keterangan_cacat ? d.keterangan_cacat.replace(/\[SEBELUM ISTIRAHAT\]|\[LAPORAN ISTIRAHAT\]/g, "").split(",").map((s: string) => s.trim()) : [];
+              
+              const problems = kats.map((k: string, i: number) => {
+                let det = dets[i] || "";
+                let blok = bloks[i] || "";
+                blok = blok.replace(/Blok\s*/i, "").trim();
+                let meter = "";
+                // Extract meter from detail if present
+                const meterMatch = det.match(/\(Titik:\s*([^)]+)m\)/);
+                if (meterMatch) {
+                  meter = meterMatch[1];
+                  det = det.replace(/\(Titik:\s*[^)]+m\)/, "").trim();
+                }
+                
+                // Coba cocokan dengan pattern defect jika mungkin, karena det bisa saja bukan exact match dengan detailMasalahSelection
+                const allPossibleDetails = NEW_PROBLEMS[k] || [];
+                const matchedDetails: string[] = [];
+                allPossibleDetails.forEach((possible: string) => {
+                   if (det.includes(possible)) {
+                     matchedDetails.push(possible);
+                     det = det.replace(possible, "").replace(/^[\s,-]+|[\s,-]+$/g, "");
+                   }
+                });
+                
+                // Combine matched details and any leftover string as specific issue
+                const finalDetails = matchedDetails.length > 0 ? matchedDetails : (det ? [det] : []);
+
+                return {
+                  kategori: k,
+                  details: finalDetails,
+                  blok: blok || undefined,
+                  meter: meter || undefined,
+                };
+              });
+
+              legacyEvents.push({
+                id: Math.random().toString(36).substring(2, 9),
+                durasiDetik: legacyEvents.length === 0 && initialData.total_downtime_detik ? parseInt(initialData.total_downtime_detik) : 0,
+                pcsKe: d.pcs_index ? d.pcs_index.toString() : "1",
+                problems
+              });
+            }
+          });
+          parsedDowntimeEvents = legacyEvents;
+        }
+      } catch (e) {
+        console.error("Error parsing downtime_events", e);
+      }
+
       reset({
         operatorId: String(initialData.operator_id || ""),
         groupId: String(initialData.group_id || ""),
@@ -623,22 +706,46 @@ export default function ContinuousForm({
         targetMeter: initialData.target_meter
           ? String(initialData.target_meter)
           : "",
-        pcsData:
-          initialData.details && initialData.details.length > 0
-            ? initialData.details.map((d: any) => ({
-              pcsIndex: String(d.pcs_index || "1"),
+        jenisLaporan: jenisLaporanVal,
+        downtimeEvents: parsedDowntimeEvents,
+        pcsData: (() => {
+          if (!initialData.details || initialData.details.length === 0) {
+            const count = initialData.pcs ? parseInt(initialData.pcs) : 1;
+            return Array.from({ length: count }, (_, i) => ({
+              pcsIndex: String(i + 1),
               jmlHasilProduksi: "0",
-              meterKain: d.meter_kain || "",
-              rollNo: d.roll_no || "",
-            }))
-            : [
-              {
-                pcsIndex: "1",
+              meterKain: "",
+              rollNo: "",
+            }));
+          }
+          const headerPcs = initialData.pcs ? parseInt(initialData.pcs) : 1;
+          const detailMaxPcs = Math.max(...initialData.details.map((d: any) => d.pcs_index ? parseInt(d.pcs_index) : 1));
+          const totalPcs = Math.max(headerPcs, detailMaxPcs);
+          
+          const list = [];
+          for (let i = 1; i <= totalPcs; i++) {
+            const key = i.toString();
+            const d = initialData.details.find((x: any) => String(x.pcs_index || "1") === key);
+            if (d) {
+              list.push({
+                pcsIndex: key,
+                jmlHasilProduksi: "0",
+                meterKain: d.meter_kain || "",
+                rollNo: d.roll_no || "",
+                isBs: d.kategori_masalah === "X" || Boolean(d.kategori_masalah && d.kategori_masalah.includes("BS"))
+              });
+            } else {
+              list.push({
+                pcsIndex: key,
                 jmlHasilProduksi: "0",
                 meterKain: "",
                 rollNo: "",
-              },
-            ],
+                isBs: false
+              });
+            }
+          }
+          return list;
+        })()
       });
     }
   }, [initialData, isEdit, reset]);
@@ -855,6 +962,18 @@ export default function ContinuousForm({
               ];
               setValue("pcsData", currentPcs);
             }
+          } else if (key === "pcsCount") {
+            // Restore the number of PCS rows (with empty meter values)
+            const count = parseInt(parsed[key], 10);
+            if (!isNaN(count) && count > 1) {
+              const restoredPcs = Array.from({ length: count }, (_, i) => ({
+                pcsIndex: (i + 1).toString(),
+                jmlHasilProduksi: "0",
+                meterKain: "",
+                rollNo: "",
+              }));
+              setValue("pcsData", restoredPcs);
+            }
           } else if (key === "tanggalPotong") {
             // Hindari tanggal potong lama terbawa ke submit berikutnya.
             setValue("tanggalPotong", "");
@@ -982,6 +1101,7 @@ export default function ContinuousForm({
       groupId: data.groupId,
       designId: data.designId,
       nomorMc: data.nomorMc,
+      statusMatching: data.statusMatching || "",
       tanggalProduksi: data.tanggalProduksi,
       tanggalPotong: effectiveTanggalPotong,
       pick: data.pick,
@@ -998,6 +1118,7 @@ export default function ContinuousForm({
       pic: data.pic,
       potonganKe: data.potonganKe,
       isPanelGagal: data.isPanelGagal || false,
+      pcsCount: data.pcsData ? data.pcsData.length : 1,
       meterAwal:
         data.meterAkhir && !effectiveIsLastRoll
           ? data.meterAkhir
@@ -1010,19 +1131,21 @@ export default function ContinuousForm({
       mesinMasihStop: data.mesinMasihStop || false,
     };
 
-    if (data.mesinMasihStop) {
-      if (data.downtimeEvents && data.downtimeEvents.length > 0) {
-        const lastEvent = data.downtimeEvents[data.downtimeEvents.length - 1];
-        localStorage.setItem("dji_unresolved_downtime", JSON.stringify({
-          ...lastEvent,
-          durasiDetik: 0
-        }));
+    if (!isEdit) {
+      if (data.mesinMasihStop) {
+        if (data.downtimeEvents && data.downtimeEvents.length > 0) {
+          const lastEvent = data.downtimeEvents[data.downtimeEvents.length - 1];
+          localStorage.setItem("dji_unresolved_downtime", JSON.stringify({
+            ...lastEvent,
+            durasiDetik: 0
+          }));
+        }
+      } else {
+        localStorage.removeItem("dji_unresolved_downtime");
       }
-    } else {
-      localStorage.removeItem("dji_unresolved_downtime");
-    }
 
-    localStorage.setItem("dji_form_header", JSON.stringify(headerDataToSave));
+      localStorage.setItem("dji_form_header", JSON.stringify(headerDataToSave));
+    }
 
     try {
       if (!navigator.onLine) {
@@ -1046,7 +1169,9 @@ export default function ContinuousForm({
       }
 
       if (result.success) {
-        localStorage.removeItem("dji_form_draft_continuous");
+        if (!isEdit) {
+          localStorage.removeItem("dji_form_draft_continuous");
+        }
         setSuccessData({
           ...data,
           id: isEdit ? initialData.id : (result as any).productionId,
@@ -1064,7 +1189,9 @@ export default function ContinuousForm({
       ) {
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("continuous", data);
-        localStorage.removeItem("dji_form_draft_continuous");
+        if (!isEdit) {
+          localStorage.removeItem("dji_form_draft_continuous");
+        }
         setSuccessData({
           ...data,
           isOfflineSaved: true,
@@ -1118,7 +1245,15 @@ export default function ContinuousForm({
     if (isEdit) {
       sessionStorage.removeItem("dji_history_data");
       sessionStorage.removeItem("dji_history_searched");
-      router.push("/history");
+      if (successData) {
+        const mc = successData.nomorMc || "";
+        const design = successData.designId || "";
+        const potongan = successData.potonganKe || "";
+        const tgl = successData.tanggalProduksi || "";
+        router.push(`/history/detail?mc=${mc}&design=${design}&potongan=${potongan}&tgl=${tgl}`);
+      } else {
+        router.back();
+      }
       return;
     }
     const wasLastRoll = isLastRoll;
@@ -1349,6 +1484,17 @@ export default function ContinuousForm({
           </div>
         )}
 
+        {isEdit && (
+          <div className="mb-6 p-4 bg-yellow-50/50 border border-yellow-200 text-yellow-800 rounded-xl flex items-start gap-3 text-sm animate-fadeIn shadow-sm">
+            <AlertTriangle className="w-5 h-5 shrink-0 text-yellow-500" strokeWidth={2} />
+            <div>
+              <strong className="block font-bold mb-1">Perhatian Saat Mengedit Data</strong>
+              Form ini mengedit <b>seluruh laporan (termasuk PCS/potongan lain)</b>. Jangan menekan tombol "Hapus" pada potongan lain kecuali Anda benar-benar ingin menghapusnya secara permanen dari laporan. Tambahkan/edit masalah langsung melalui tombol <b>Tambah Masalah</b>.
+            </div>
+          </div>
+        )}
+
+
         <form
           onSubmit={handleSubmit(onSubmit, onInvalid)}
           className="space-y-4"
@@ -1429,14 +1575,15 @@ export default function ContinuousForm({
               </div>
             </div>
 
-            {/* ARRAY OF PCS (HIDDEN) */}
+            {/* ARRAY OF PCS (HIDDEN) - use actual pcsIndex from field data, not sequential position */}
+            {/* NOTE: Do NOT use value={index+1} here — that overwrites pcsIndex and breaks PCS 2, 3, etc. on edit */}
             <div className="hidden">
-              {fields.map((field, index) => (
+              {fields.map((field: any, index) => (
                 <input
                   key={field.id}
                   type="hidden"
                   {...register(`pcsData.${index}.pcsIndex` as const)}
-                  value={index + 1}
+                  defaultValue={field.pcsIndex || (index + 1)}
                 />
               ))}
             </div>
@@ -1450,6 +1597,8 @@ export default function ContinuousForm({
                 watch={watch}
                 showBlockInput={true}
                 showMeterInput={true}
+                defaultMeter={defaultMeter}
+                defaultPcsIndex={defaultPcsIndex}
               />
             </div>
           </div>

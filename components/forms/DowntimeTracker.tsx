@@ -88,9 +88,11 @@ interface DowntimeTrackerProps {
   setValue?: any;
   showBlockInput?: boolean;
   showMeterInput?: boolean;
+  defaultMeter?: string;
+  defaultPcsIndex?: string;
 }
 
-export default function DowntimeTracker({ control, watch, setValue, showBlockInput, showMeterInput }: DowntimeTrackerProps) {
+export default function DowntimeTracker({ control, watch, setValue, showBlockInput, showMeterInput, defaultMeter, defaultPcsIndex }: DowntimeTrackerProps) {
   const { fields, append, remove } = useFieldArray({
     control,
     name: "downtimeEvents",
@@ -125,7 +127,12 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
   }, [currentDowntimeEvents?.length]);
 
   const pcsData = watch("pcsData") || [];
-  const pcsCount = pcsData.length || 1;
+  // Derive the actual PCS keys from pcsData.pcsIndex (not sequential index)
+  // e.g. if editing PCS 2, pcsData = [{pcsIndex:"2"}] → pcsKeys = ["2"]
+  const pcsKeys: string[] = pcsData.length > 0
+    ? pcsData.map((p: any) => p.pcsIndex ? p.pcsIndex.toString() : "1")
+    : ["1"];
+  const pcsCount = pcsKeys.length;
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -144,12 +151,51 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     setTimerStartRef(Date.now());
   };
 
+  // Pre-fill meter input when the modal opens and defaultMeter is provided
+  useEffect(() => {
+    if (showModal && defaultMeter) {
+      const preFilledMeters: Record<string, string> = {};
+      if (pcsKeys.length === 1) {
+        preFilledMeters[pcsKeys[0]] = defaultMeter;
+      } else {
+        // Fill all PCS slots with the default meter as a suggestion
+        pcsKeys.forEach(k => {
+          preFilledMeters[k] = defaultMeter;
+        });
+      }
+      setInputMeters(prev => {
+        // Only pre-fill slots that are currently empty
+        const merged: Record<string, string> = { ...preFilledMeters };
+        Object.entries(prev).forEach(([k, v]) => {
+          if (v && v.trim()) merged[k] = v;
+        });
+        return merged;
+      });
+    }
+  }, [showModal, defaultMeter, pcsKeys.join(",")]);
+  const handleOpenModal = () => {
+    setTempDuration(0);
+    setSelectedCategories([]);
+    setSelectedDetails({});
+    setInputBloks({});
+    setInputMeters({});
+    
+    // Automatically select the default PCS if provided via URL
+    if (defaultPcsIndex && pcsKeys.includes(defaultPcsIndex)) {
+      setSelectedPcsKeList([defaultPcsIndex]);
+    } else {
+      setSelectedPcsKeList([]);
+    }
+    
+    setShowModal(true);
+  };
+
+
   const handleStopTimer = () => {
     if (!timerStartRef) return;
     const duration = Math.floor((Date.now() - timerStartRef) / 1000);
     setIsTimerRunning(false);
     setTimerStartRef(null);
-    setTempDuration(duration);
 
     // Pre-fill if resuming from previous shift
     if (unresolvedDowntime) {
@@ -166,27 +212,37 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
       setInputBloks(bloks);
 
       if (unresolvedDowntime.pcsKe === "Semua") {
-        setSelectedPcsKeList(Array.from({ length: pcsCount }).map((_, i) => (i + 1).toString()));
+        setSelectedPcsKeList([...pcsKeys]);
       } else if (unresolvedDowntime.pcsKe) {
         setSelectedPcsKeList(unresolvedDowntime.pcsKe.split(", ").map((s: string) => s.trim()));
       } else {
         setSelectedPcsKeList([]);
       }
     } else {
+      // Reset modal state WITHOUT resetting tempDuration (duration was just captured above)
       setSelectedCategories([]);
       setSelectedDetails({});
       setInputBloks({});
-      setSelectedPcsKeList([]);
+      setInputMeters({});
+      if (defaultPcsIndex && pcsKeys.includes(defaultPcsIndex)) {
+        setSelectedPcsKeList([defaultPcsIndex]);
+      } else {
+        setSelectedPcsKeList([]);
+      }
     }
 
+    // Set duration AFTER all state resets so it doesn't get wiped
+    setTempDuration(duration);
     setShowModal(true);
   };
 
+
   const handleSaveEvent = () => {
     if (selectedCategories.length === 0) return;
+    if (selectedPcsKeList.length === 0) return; // wajib pilih minimal 1 PCS
 
-    const meterStr = pcsCount === 1
-      ? inputMeters["1"]?.trim()
+    const meterStr = pcsKeys.length === 1
+      ? inputMeters[pcsKeys[0]]?.trim()
       : Object.entries(inputMeters)
         .filter(([k, v]) => selectedPcsKeList.includes(k) && v.trim() !== "")
         .map(([pcs, val]) => `PCS ${pcs}: ${val.trim()}`)
@@ -199,7 +255,8 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
       meter: meterStr || undefined,
     }));
 
-    const pcsKeStr = selectedPcsKeList.length === pcsCount
+    // If all PCS keys are selected, use "Semua"; otherwise list selected pcsIndex values
+    const pcsKeStr = selectedPcsKeList.length === pcsKeys.length && pcsKeys.every(k => selectedPcsKeList.includes(k))
       ? "Semua"
       : selectedPcsKeList.map(x => parseInt(x)).sort((a, b) => a - b).join(", ");
 
@@ -404,7 +461,33 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                 </div>
                 <div>
                   <h3 className="font-black text-slate-800 text-sm sm:text-base">Simpan Downtime</h3>
-                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Waktu terhenti: <span className="font-bold text-orange-600">{formatTimer(tempDuration)}</span></p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Waktu terhenti:</p>
+                    <div className="flex items-center bg-white border border-slate-200 rounded px-1.5 py-0.5 shadow-sm focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400 transition-all">
+                      <input
+                        type="number"
+                        min="0"
+                        className="w-8 text-[10px] sm:text-xs font-bold text-orange-600 text-right bg-transparent outline-none focus:outline-none appearance-none p-0 border-none m-0 focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        value={Math.floor(tempDuration / 60)}
+                        onChange={(e) => {
+                          const val = e.target.value === "" ? 0 : parseInt(e.target.value);
+                          setTempDuration((isNaN(val) ? 0 : val) * 60 + (tempDuration % 60));
+                        }}
+                      />
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-400 mx-0.5">:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        className="w-7 text-[10px] sm:text-xs font-bold text-orange-600 text-left bg-transparent outline-none focus:outline-none appearance-none p-0 border-none m-0 focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        value={tempDuration % 60 < 10 && tempDuration % 60 !== 0 ? `0${tempDuration % 60}` : tempDuration % 60}
+                        onChange={(e) => {
+                          const val = e.target.value === "" ? 0 : parseInt(e.target.value);
+                          setTempDuration(Math.floor(tempDuration / 60) * 60 + (isNaN(val) ? 0 : Math.min(59, val)));
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
               <button onClick={() => setShowModal(false)} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-xl transition-colors">
@@ -413,7 +496,6 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
             </div>
 
             <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4 sm:space-y-5">
-              {pcsCount > 1 && (
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 shadow-inner">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1 block">
                     Masalah terjadi pada PCS ke-berapa?
@@ -427,25 +509,24 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                         pcsCount === 5 ? "grid-cols-5" :
                           "grid-cols-3 sm:grid-cols-6"
                     }`}>
-                    {Array.from({ length: pcsCount }).map((_, idx) => {
-                      const val = (idx + 1).toString();
-                      const isSelected = selectedPcsKeList.includes(val);
+                    {pcsKeys.map((pcsKey) => {
+                      const isSelected = selectedPcsKeList.includes(pcsKey);
                       return (
-                        <div key={idx} className="flex flex-col gap-1.5 w-full">
+                        <div key={pcsKey} className="flex flex-col gap-1.5 w-full">
                           <button
                             type="button"
                             onClick={() => {
                               setSelectedPcsKeList((prev) => {
-                                if (prev.includes(val)) {
+                                if (prev.includes(pcsKey)) {
                                   // Hapus meter input juga jika unselect
                                   setInputMeters((m) => {
                                     const next = { ...m };
-                                    delete next[val];
+                                    delete next[pcsKey];
                                     return next;
                                   });
-                                  return prev.filter((x) => x !== val);
+                                  return prev.filter((x) => x !== pcsKey);
                                 } else {
-                                  return [...prev, val];
+                                  return [...prev, pcsKey];
                                 }
                               });
                             }}
@@ -454,13 +535,13 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                               : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50"
                               }`}
                           >
-                            {idx + 1}
+                            {pcsKey}
                           </button>
                           {showMeterInput && isSelected && (
                             <input
                               type="text"
-                              value={inputMeters[val] || ""}
-                              onChange={(e) => setInputMeters(prev => ({ ...prev, [val]: e.target.value }))}
+                              value={inputMeters[pcsKey] || ""}
+                              onChange={(e) => setInputMeters(prev => ({ ...prev, [pcsKey]: e.target.value }))}
                               placeholder="Meter..."
                               className="w-full h-8 px-2 text-center rounded-lg border border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-[10px] font-bold text-slate-700 bg-emerald-50 animate-fadeIn"
                             />
@@ -469,15 +550,14 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                       );
                     })}
                   </div>
-                  {pcsCount > 1 && selectedPcsKeList.length === 0 && (
+                  {selectedPcsKeList.length === 0 && (
                     <p className="text-[10px] text-red-500 font-bold mt-2 animate-pulse">
                       * Wajib memilih minimal 1 PCS yang bermasalah!
                     </p>
                   )}
                 </div>
-              )}
 
-              {showMeterInput && pcsCount === 1 && (
+              {showMeterInput && pcsKeys.length === 1 && (
                 <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200/60 shadow-sm animate-fadeIn">
                   <label className="text-[10px] font-black text-emerald-800 uppercase tracking-wider mb-2 block flex items-center gap-1.5">
                     <Box className="w-4 h-4" />
@@ -488,8 +568,8 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                   </p>
                   <input
                     type="text"
-                    value={inputMeters["1"] || ""}
-                    onChange={(e) => setInputMeters(prev => ({ ...prev, "1": e.target.value }))}
+                    value={inputMeters[pcsKeys[0]] || ""}
+                    onChange={(e) => setInputMeters(prev => ({ ...prev, [pcsKeys[0]]: e.target.value }))}
                     placeholder="Contoh: 15.5"
                     className="w-full h-11 px-4 rounded-xl border border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-bold text-slate-700 placeholder:font-medium placeholder:text-slate-400 bg-white shadow-inner transition-all"
                   />
@@ -603,10 +683,10 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                 disabled={
                   selectedCategories.length === 0 ||
                   selectedCategories.some(cat => !selectedDetails[cat] || selectedDetails[cat].length === 0) ||
-                  (pcsCount > 1 && selectedPcsKeList.length === 0) ||
+                  (pcsKeys.length > 1 && selectedPcsKeList.length === 0) ||
                   (showMeterInput === true && (
-                    pcsCount === 1
-                      ? (!inputMeters["1"] || inputMeters["1"].trim() === "")
+                    pcsKeys.length === 1
+                      ? (!inputMeters[pcsKeys[0]] || inputMeters[pcsKeys[0]].trim() === "")
                       : selectedPcsKeList.some(pcs => !inputMeters[pcs] || inputMeters[pcs].trim() === "")
                   ))
                 }

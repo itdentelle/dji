@@ -126,19 +126,19 @@ export default function PanelHistoryTable({
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-            <th className="px-1 py-2 w-8 text-center">PNL</th>
-            <th className="px-1 py-2 w-20">Tgl</th>
-            <th className="px-1 py-2 w-10 text-center">Group</th>
-            <th className="px-1 py-2 w-24">Operator</th>
-            <th className="px-1 py-2 text-center w-12">KET ✓/X</th>
-            <th className="px-2 py-2 min-w-[250px] w-full">KETERANGAN CACAT</th>
-            <th className="px-0.5 py-2 text-center text-emerald-600 font-black w-6">✓</th>
-            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-6">X</th>
-            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-6">BS</th>
+          <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
+            <th className="px-0.5 py-2 w-6 text-center">PNL</th>
+            <th className="px-1 py-2 w-14">Tgl</th>
+            <th className="px-0.5 py-2 w-8 text-center">Group</th>
+            <th className="px-1 py-2 w-16">Operator</th>
+            <th className="px-0.5 py-2 text-center w-8">KET</th>
+            <th className="px-1 py-2 min-w-[150px] w-full">KETERANGAN CACAT</th>
+            <th className="px-0.5 py-2 text-center text-emerald-600 font-black w-5">✓</th>
+            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">X</th>
+            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">BS</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+        <tbody className="divide-y divide-slate-100 text-[10px] text-slate-700">
           {displayItems.map((item: any, idx: number) => {
             if (item.isTotalRow) {
               return (

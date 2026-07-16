@@ -397,8 +397,8 @@ export default function MendingPage() {
             cacatLines = cacatLines.map((line, i) => {
               const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
               let partIndex = i;
-              if (lineKat && kats.includes(lineKat)) {
-                 partIndex = kats.indexOf(lineKat);
+              const katsRaw2 = item.kategori_masalah; const kats2 = katsRaw2 ? (Array.isArray(katsRaw2) ? katsRaw2 : katsRaw2.split(",").map((s: any) => s.trim())) : []; if (lineKat && kats2.includes(lineKat)) {
+                 partIndex = kats2.indexOf(lineKat);
               }
               if (parts[partIndex] && parts[partIndex] !== "") {
                 const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
@@ -663,8 +663,8 @@ export default function MendingPage() {
           cacatLines = cacatLines.map((line, i) => {
             const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
             let partIndex = i;
-            if (lineKat && kats.includes(lineKat)) {
-              partIndex = kats.indexOf(lineKat);
+            const katsRaw2 = item.kategori_masalah; const kats2 = katsRaw2 ? (Array.isArray(katsRaw2) ? katsRaw2 : katsRaw2.split(",").map((s: any) => s.trim())) : []; if (lineKat && kats2.includes(lineKat)) {
+              partIndex = kats2.indexOf(lineKat);
             }
             if (parts[partIndex] && parts[partIndex] !== "") {
               const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
@@ -1097,8 +1097,8 @@ export default function MendingPage() {
       )}
 
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
-        <div className="flex flex-col sm:flex-row items-end gap-4 w-full">
-          <div className="flex flex-col gap-1 w-full sm:w-[25%]">
+        <div className="grid grid-cols-2 lg:grid-cols-4 items-end gap-4 w-full">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
               <span>Tanggal</span>
             </label>
@@ -1109,7 +1109,7 @@ export default function MendingPage() {
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-rose-400 focus:bg-white outline-none w-full"
             />
           </div>
-          <div className="flex flex-col gap-1 w-full sm:w-[20%]">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-bold text-slate-500 uppercase">
               Mesin
             </label>
@@ -1124,7 +1124,7 @@ export default function MendingPage() {
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1 w-full sm:w-[25%]">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-bold text-slate-500 uppercase">
               Potongan
             </label>
@@ -1142,7 +1142,7 @@ export default function MendingPage() {
           <button
             onClick={() => handleSearch(searchTanggal)}
             disabled={isSearching}
-            className="h-11 px-6 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm shrink-0 sm:w-[20%]"
+            className="h-11 px-6 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm shrink-0 w-full"
           >
             {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             Cari Data
@@ -1167,20 +1167,20 @@ export default function MendingPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                  <th className="px-6 py-4">Tanggal & Waktu</th>
-                  <th className="px-6 py-4">Nomor Mesin</th>
-                  <th className="px-6 py-4">Desain</th>
-                  <th className="px-6 py-4">Potongan</th>
-                  <th className="px-6 py-4 text-center">PCS Ke</th>
-                  <th className="px-6 py-4 text-center">Jml Baris</th>
-                  <th className="px-6 py-4 text-center">Aksi</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] sm:text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <th className="px-3 py-3 lg:px-6 lg:py-4">Tanggal & Waktu</th>
+                  <th className="px-3 py-3 lg:px-6 lg:py-4">Nomor Mesin</th>
+                  <th className="px-3 py-3 lg:px-6 lg:py-4">Desain</th>
+                  <th className="px-3 py-3 lg:px-6 lg:py-4">Potongan</th>
+                  <th className="px-3 py-3 lg:px-6 lg:py-4 text-center">PCS Ke</th>
+                  <th className="px-3 py-3 lg:px-6 lg:py-4 text-center">Jml Baris</th>
+                  <th className="px-3 py-3 lg:px-6 lg:py-4 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
                 {currentPcsList.map((g: any) => (
                   <tr key={`${g.nomor_mc}_${g.design_id}_${g.potongan_ke}_${g.pcs_index}`} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3 lg:px-6 lg:py-4">
                       <div className="font-bold text-slate-800">
                         {g.header?.tgl || "-"}
                       </div>
@@ -1190,12 +1190,12 @@ export default function MendingPage() {
                           : "-"}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3 lg:px-6 lg:py-4">
                       <div className="inline-flex items-center min-w-[3rem] h-8 px-3 rounded-lg bg-[#0070bc]/10 text-[#0070bc] font-bold">
                         {g.header?.nomor_mc}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3 lg:px-6 lg:py-4">
                       <div className="text-slate-800 font-bold flex items-center gap-2">
                         {g.header?.design_id}
                         {g.header?.panel_no === "METERAN" ? (
@@ -1205,12 +1205,12 @@ export default function MendingPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3 lg:px-6 lg:py-4">
                       <div className="text-sm font-bold text-slate-800 uppercase tracking-wider">
                         {g.header?.potongan_ke || "-"}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-3 lg:px-6 lg:py-4 text-center">
                       <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 font-bold text-slate-600">
                         {g.pcs_index}
                       </div>
@@ -1220,10 +1220,10 @@ export default function MendingPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-3 lg:px-6 lg:py-4 text-center">
                       <span className="text-slate-500">{g.detailsCount} baris</span>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-3 lg:px-6 lg:py-4 text-center">
                       <button
                         onClick={() => handleStartMending(g.nomor_mc, g.design_id, g.potongan_ke, g.pcs_index)}
                         className="px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs rounded-lg transition-all"

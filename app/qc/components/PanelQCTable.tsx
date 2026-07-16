@@ -114,20 +114,20 @@ export default function PanelQCTable({
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-            <th className="px-1 py-2 w-8 text-center">PNL</th>
-            <th className="px-1 py-2 w-20">Tgl</th>
-            <th className="px-1 py-2 w-10 text-center">Group</th>
-            <th className="px-1 py-2 w-24">Operator</th>
-            <th className="px-1 py-2 text-center w-12">KET ✓/X</th>
-            <th className="px-2 py-2 min-w-[250px] w-full">KETERANGAN CACAT</th>
-            <th className="px-1 py-2 text-center w-16">AKSI</th>
-            <th className="px-0.5 py-2 text-center text-emerald-600 font-black w-6">✓</th>
-            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-6">X</th>
-            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-6">BS</th>
+          <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
+            <th className="px-0.5 py-2 w-6 text-center">PNL</th>
+            <th className="px-1 py-2 w-14">Tgl</th>
+            <th className="px-0.5 py-2 w-8 text-center">Group</th>
+            <th className="px-1 py-2 w-16">Operator</th>
+            <th className="px-0.5 py-2 text-center w-8">KET</th>
+            <th className="px-1 py-2 min-w-[150px] w-full">KETERANGAN CACAT</th>
+            <th className="px-1 py-2 text-center w-14">AKSI</th>
+            <th className="px-0.5 py-2 text-center text-emerald-600 font-black w-5">✓</th>
+            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">X</th>
+            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">BS</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+        <tbody className="divide-y divide-slate-100 text-[10px] text-slate-700">
           {displayItems.map((item, index) => {
             if (item.isTotalRow) {
               return (
@@ -138,7 +138,7 @@ export default function PanelQCTable({
                   <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap animate-fadeIn">
                     {item.totalCount}
                   </td>
-                  <td colSpan={5} className="bg-slate-100"></td>
+                  <td colSpan={6} className="bg-slate-100"></td>
                 </tr>
               );
             }
@@ -162,71 +162,87 @@ export default function PanelQCTable({
             }
 
             let cacatLines: string[] = [];
-            const katsRaw = item.kategori_masalah;
-            const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
             
-            const pushDetailsForCat = (k: string, d: string) => {
-              if (!d) {
-                cacatLines.push(k);
-                return;
-              }
-              const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
-              const matchedDetails: string[] = [];
-              let remainingD = d;
-              
-              const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
-              sortedKnown.forEach(known => {
-                if (remainingD.includes(known)) {
-                  matchedDetails.push(known);
-                  remainingD = remainingD.replace(known, "");
+            if (item.production_defects && Array.isArray(item.production_defects) && item.production_defects.length > 0) {
+              item.production_defects.forEach((defect: any) => {
+                const k = defect.kategori;
+                const d = defect.detail;
+                if (k && d) {
+                  cacatLines.push(`${k} - ${d}`);
+                } else if (k) {
+                  cacatLines.push(k);
+                } else if (d) {
+                  cacatLines.push(d);
                 }
               });
+            } else {
+              // Fallback to legacy string parsing
+              const katsRaw = item.kategori_masalah;
+              const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
               
-              if (matchedDetails.length > 0) {
-                const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
-                matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
-                customParts.forEach(custom => cacatLines.push(`${k} - ${custom}`));
-              } else {
-                const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
-                parts.forEach(p => cacatLines.push(`${k} - ${p}`));
-              }
-            };
-            
-            if (kats.length > 0) {
-              if (displayDetail.includes(" | ")) {
-                const catDetails = displayDetail.split(" | ");
-                for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
-                  const k = kats[i] || "Unknown";
-                  const d = catDetails[i] || "";
-                  pushDetailsForCat(k, d);
+              const pushDetailsForCat = (k: string, d: string) => {
+                if (!d) {
+                  cacatLines.push(k);
+                  return;
+                }
+                const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
+                const matchedDetails: string[] = [];
+                let remainingD = d;
+                
+                const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
+                sortedKnown.forEach(known => {
+                  if (remainingD.includes(known)) {
+                    matchedDetails.push(known);
+                    remainingD = remainingD.replace(known, "");
+                  }
+                });
+                
+                if (matchedDetails.length > 0) {
+                  const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
+                  matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
+                  customParts.forEach(custom => cacatLines.push(`${k} - ${custom}`));
+                } else {
+                  const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
+                  parts.forEach(p => cacatLines.push(`${k} - ${p}`));
+                }
+              };
+              
+              if (kats.length > 0) {
+                if (displayDetail.includes(" | ")) {
+                  const catDetails = displayDetail.split(" | ");
+                  for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
+                    const k = kats[i] || "Unknown";
+                    const d = catDetails[i] || "";
+                    pushDetailsForCat(k, d);
+                  }
+                } else if (displayDetail) {
+                  if (kats.length === 1) {
+                    pushDetailsForCat(kats[0], displayDetail);
+                  } else {
+                    const dets = displayDetail.split(", ");
+                    if (kats.length === dets.length) {
+                      for (let i = 0; i < kats.length; i++) {
+                        pushDetailsForCat(kats[i], dets[i]);
+                      }
+                    } else {
+                      dets.forEach((det: string) => {
+                        let foundKat = "Unknown";
+                        for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+                          if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
+                            foundKat = kat;
+                            break;
+                          }
+                        }
+                        cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
+                      });
+                    }
+                  }
+                } else {
+                  cacatLines.push(kats.join(", "));
                 }
               } else if (displayDetail) {
-                if (kats.length === 1) {
-                  pushDetailsForCat(kats[0], displayDetail);
-                } else {
-                  const dets = displayDetail.split(", ");
-                  if (kats.length === dets.length) {
-                    for (let i = 0; i < kats.length; i++) {
-                      pushDetailsForCat(kats[i], dets[i]);
-                    }
-                  } else {
-                    dets.forEach((det: string) => {
-                      let foundKat = "Unknown";
-                      for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
-                        if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
-                          foundKat = kat;
-                          break;
-                        }
-                      }
-                      cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
-                    });
-                  }
-                }
-              } else {
-                cacatLines.push(kats.join(", "));
+                cacatLines.push(displayDetail);
               }
-            } else if (displayDetail) {
-              cacatLines.push(displayDetail);
             }
             
             let ketCacat = displayKeterangan;
@@ -243,8 +259,8 @@ export default function PanelQCTable({
                   const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
                   let partIndex = i;
                   
-                  if (lineKat && kats.includes(lineKat)) {
-                     partIndex = kats.indexOf(lineKat);
+                  const katsRaw2 = item.kategori_masalah; const kats2 = katsRaw2 ? (Array.isArray(katsRaw2) ? katsRaw2 : katsRaw2.split(",").map((s: any) => s.trim())) : []; if (lineKat && kats2.includes(lineKat)) {
+                     partIndex = kats2.indexOf(lineKat);
                   }
                   
                   if (parts[partIndex] && parts[partIndex] !== "") {
@@ -271,7 +287,6 @@ export default function PanelQCTable({
                 }
               }
             }
-            
             let cacat = cacatLines.join("\n");
 
             return (
@@ -298,13 +313,7 @@ export default function PanelQCTable({
               
               <td className="px-1 py-1">
                 <div className="flex items-center justify-center gap-1">
-                  <button
-                    onClick={() => handleOpenDetail(item.header_id)}
-                    className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm group"
-                    title="Lihat Detail Produksi"
-                  >
-                    <Eye className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  </button>
+
                   <button
                     onClick={() => setDetailToDelete({ id: item.id, name: `${item.kategori_masalah || 'Masalah'} - ${item.detail_masalah || 'Tidak ada detail'}` })}
                     className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 transition-all shadow-sm"

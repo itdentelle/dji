@@ -1146,8 +1146,8 @@ export default function QCPage() {
 
       {/* Filter Card */}
       <div data-tour="qc-inspection-filter" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
-        <div className="flex flex-col sm:flex-row items-end gap-4 w-full">
-          <div className="flex flex-col gap-1 w-full sm:flex-1">
+        <div className="grid grid-cols-2 lg:grid-cols-4 items-end gap-4 w-full">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
               <span>Tanggal</span>
               {searchTanggal && (
@@ -1166,7 +1166,7 @@ export default function QCPage() {
               className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:border-sky-400 focus:bg-white outline-none w-full cursor-pointer"
             />
           </div>
-          <div className="flex flex-col gap-1 w-full sm:flex-1">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-bold text-slate-500 uppercase">
               Mesin
             </label>
@@ -1181,7 +1181,7 @@ export default function QCPage() {
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1 w-full sm:flex-1">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-bold text-slate-500 uppercase">
               Potongan
             </label>
@@ -1196,7 +1196,7 @@ export default function QCPage() {
           <button
             onClick={() => handleSearch(searchTanggal)}
             disabled={isSearching}
-            className="h-11 px-6 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm shrink-0 sm:w-auto"
+            className="h-11 px-6 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm w-full"
           >
             {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             Cari Data
@@ -1221,47 +1221,47 @@ export default function QCPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                  <th className="px-6 py-4">Nomor Mesin</th>
-                  <th className="px-6 py-4">Tanggal Input</th>
-                  <th className="px-6 py-4">Jam Input</th>
-                  <th className="px-6 py-4">Desain</th>
-                  <th className="px-6 py-4">Potongan</th>
-                  <th className="px-6 py-4 text-center">PCS Ke</th>
-                  <th className="px-6 py-4 text-center">Jml Baris</th>
-                  <th className="px-6 py-4 text-center">Aksi</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <th className="px-2 py-2">Mesin</th>
+                  <th className="px-2 py-2">Tanggal</th>
+                  <th className="px-2 py-2">Jam</th>
+                  <th className="px-2 py-2">Desain</th>
+                  <th className="px-2 py-2">Potongan</th>
+                  <th className="px-2 py-2 text-center">PCS</th>
+                  <th className="px-2 py-2 text-center">Baris</th>
+                  <th className="px-2 py-2 text-center">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
+              <tbody className="divide-y divide-slate-100 text-[11px] font-medium text-slate-700">
                 {currentPcsList.map((g: any) => (
                   <tr key={`${g.nomor_mc}_${g.design_id}_${g.potongan_ke}_${g.pcs_index}`} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-2 py-2">
                       <div className="inline-flex items-center min-w-[3rem] h-8 px-3 rounded-lg bg-[#0070bc]/10 text-[#0070bc] font-bold">
                         {g.header?.nomor_mc}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-xs text-slate-500 font-semibold">{formatLastInputDate(g.lastInputTime)}</span>
+                    <td className="px-2 py-2">
+                      <span className="text-[10px] text-slate-500 font-semibold">{formatLastInputDate(g.lastInputTime)}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-xs text-slate-500 font-semibold">{formatLastInputTime(g.lastInputTime)}</span>
+                    <td className="px-2 py-2">
+                      <span className="text-[10px] text-slate-500 font-semibold">{formatLastInputTime(g.lastInputTime)}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-slate-800 font-bold flex items-center gap-2">
+                    <td className="px-2 py-2">
+                      <div className="text-slate-800 font-bold flex items-center gap-1">
                         {g.header?.design_id}
                         {g.header?.panel_no === "METERAN" ? (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700 uppercase tracking-wider">METERAN</span>
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-100 text-purple-700 uppercase tracking-wider">METERAN</span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-700 uppercase tracking-wider">PANEL</span>
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-blue-100 text-blue-700 uppercase tracking-wider">PANEL</span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-slate-800 font-bold uppercase tracking-wider">
+                    <td className="px-2 py-2">
+                      <div className="text-[11px] text-slate-800 font-bold uppercase tracking-wider">
                         {g.header?.potongan_ke}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-2 py-2 text-center">
                       <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 font-bold text-slate-600">
                         {g.pcs_index}
                       </div>
@@ -1271,13 +1271,13 @@ export default function QCPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-2 py-2 text-center">
                       <span className="text-slate-500">{g.detailsCount} baris</span>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-2 py-2 text-center">
                       <button
                         onClick={() => handleStartQC(g.nomor_mc, g.design_id, g.potongan_ke, g.pcs_index)}
-                        className="px-4 py-2 bg-sky-50 text-[#0070bc] hover:bg-sky-100 font-bold text-xs rounded-lg transition-all"
+                        className="px-2 py-1.5 bg-sky-50 text-[#0070bc] hover:bg-sky-100 font-bold text-[10px] rounded-lg transition-all"
                       >
                         Mulai Inspeksi
                       </button>

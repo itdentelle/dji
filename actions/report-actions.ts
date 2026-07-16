@@ -19,6 +19,16 @@ export interface TeamData {
   kode_tindakan: Record<string, number>; // e.g. { "A": 2, "B": 0 }
 }
 
+const PROBLEM_DETAILS: Record<string, string[]> = {
+  A: ["L1,L2,L3 Benang timbul putus", "Benang lolos", "Bolong corak", "Benang narik/Kendor", "Benang Nyilang", "Perbaikan/Beset benang Dasar", "Benang Kejepit/Jebol/Kusut", "Jalur benang"],
+  B: ["Jarum pattern patah/bengkok", "Ganti Jacquard", "Ganti jarum Compoun Nedle, pattern", "Ngampul", "Ganti dari scaloop ke non scaloop atau sebaliknya", "Ngegaris/Stopline", "Keluar Jarum", "Ganti String bar", "Ganti PBO", "Pressan As beam kendor", "Tensi tensioner"],
+  C: ["Loading design/Ganti Design", "Perbaikan corak/revisi", "Salah ganti design", "Error design", "Proofing/PCB", "Ganti Pattern Disk", "Ganti pick"],
+  D: ["Ganti benang dasar L1/L2", "Salah ganti benang dasar", "Ganti benang Pattern Linner", "Ganti benang Pattern Heavy", "Ganti benang Pattern Shadow", "Ganti benang pattern keseluruhan (L,H,S)", "salah ganti benang pattern", "Ngelancarin", "Over Cone/Rewind", "Tunggu benang dasar dari warping", "Tunggu benang (benang belum datang)"],
+  E: ["Error Servo Drive", "Ganti motor servo", "Sensor Benang/Laser Stop", "Perbaikan Eletrik lainnya", "Konsleting", "Perbaikan listrik"],
+  F: ["Perbaikan cilynder Angin", "Ganti Bellow", "Perbaikan gear/Take Up Roll", "Ganti rantai/pertensi", "Ganti Black grip roll", "Ganti Oli", "Pelumasan/greace pada mesin", "Ganti Vanbelt", "Perawatan Panel Listrik", "Servis Overhaul"],
+  G: ["Hari Libur", "Tidak ada order", "Tunggu info", "Demo", "Bencana/gempa/banjir", "Istirahat selama buka puasa", "Tunggu Sparepart", "Mati Listrik"],
+};
+
 export async function getMonthlyMachineReport(
   month: number,
   year: number,
@@ -39,12 +49,14 @@ export async function getMonthlyMachineReport(
         jml_hasil_produksi,
         kategori_masalah,
         indikator_stop,
+        production_defects(kategori),
         production_headers!inner (
           id,
           nomor_mc,
           tgl,
           panel_no,
           total_produksi_meter,
+          pcs,
           design_id,
           course,
           rpm,
@@ -85,6 +97,8 @@ export async function getMonthlyMachineReport(
 
     // To prevent double counting downtime per header, keep track of processed headers per team
     const processedHeaders = new Set<string>();
+    // To track unique panels and whether they have failed/stopped
+    const processedPanels = new Map<string, { countedForTeam: string | null, isFailed: boolean }>();
 
     data?.forEach((row: any) => {
       const header = row.production_headers;
@@ -125,41 +139,143 @@ export async function getMonthlyMachineReport(
       // Aggregate defects (moved outside so we can still count defects from details)
 
       // Aggregate defects
-      if (row.indikator_stop || row.kategori_masalah) {
-        // Count as defect if it's a stop indicator or has a category
+      let hasDefects = false;
+      let defectCountForRow = 0;
+
+      const addDefect = (k: string) => {
+         const code = k.replace("KODE ", "");
+         if (!team.kode_tindakan[code]) team.kode_tindakan[code] = 0;
+         team.kode_tindakan[code] += 1;
+         defectCountForRow += 1;
+      };
+
+      if (row.production_defects && Array.isArray(row.production_defects) && row.production_defects.length > 0) {
+        row.production_defects.forEach((d: any) => {
+          if (d.kategori) addDefect(d.kategori);
+        });
+        hasDefects = true;
+      } else if (row.indikator_stop || row.kategori_masalah) {
         if (row.kategori_masalah && row.kategori_masalah !== "X") {
-          team.jumlah_cacat += 1;
+          let cleanD = row.detail_masalah 
+            ? String(row.detail_masalah).replace(/\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").replace(/\|\s*$/, "").replace(/,\s*$/, "").trim()
+            : "";
+            
+          const katsRaw = row.kategori_masalah;
+          const kats = katsRaw.split(",").map((s: string) => s.trim().toUpperCase()).filter(Boolean);
           
-          // Count categories (A, B, C, D, etc)
-          const cats = row.kategori_masalah.split(",").map((c: string) => c.trim().toUpperCase());
-          cats.forEach((cat: string) => {
-            if (cat.length > 0) {
-              const code = cat.replace("KODE ", ""); // Remove "KODE " if exists
-              if (!team.kode_tindakan[code]) {
-                team.kode_tindakan[code] = 0;
+          const processDefect = (k: string, d: string) => {
+             if (!d) {
+               addDefect(k);
+               return;
+             }
+             const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
+             const matchedDetails: string[] = [];
+             let remainingD = d;
+             const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
+             sortedKnown.forEach(known => {
+               if (remainingD.toLowerCase().includes(known.toLowerCase())) {
+                 matchedDetails.push(known);
+                 remainingD = remainingD.replace(new RegExp(known, "gi"), "");
+               }
+             });
+             
+             if (matchedDetails.length > 0) {
+               matchedDetails.forEach(() => addDefect(k));
+               const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
+               customParts.forEach(custom => {
+                 const cleanCustom = custom.replace(/^,\s*|\s*,\s*$/g, "").trim();
+                 if (cleanCustom) addDefect(k);
+               });
+             } else {
+               const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
+               if (parts.length === 0) addDefect(k);
+               parts.forEach(() => addDefect(k));
+             }
+          };
+
+          if (kats.length > 0) {
+            if (cleanD.includes(" | ")) {
+              const catDetails = cleanD.split(" | ");
+              for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
+                const k = kats[i] || "Unknown";
+                const d = catDetails[i] || "";
+                if (k !== "Unknown") processDefect(k, d);
               }
-              team.kode_tindakan[code] += 1;
+            } else if (cleanD) {
+              if (kats.length === 1) {
+                processDefect(kats[0], cleanD);
+              } else {
+                const dets = cleanD.split(", ");
+                if (kats.length === dets.length) {
+                  for (let i = 0; i < kats.length; i++) {
+                    processDefect(kats[i], dets[i]);
+                  }
+                } else {
+                  dets.forEach((det: string) => {
+                    let foundKat = "Unknown";
+                    for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+                      if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
+                        foundKat = kat;
+                        break;
+                      }
+                    }
+                    if (foundKat !== "Unknown") {
+                      addDefect(foundKat);
+                    } else if (kats.length > 0) {
+                       addDefect(kats[0]);
+                    }
+                  });
+                }
+              }
+            } else {
+              kats.forEach((k: string) => { if (k) addDefect(k); });
             }
-          });
+          }
+          
+          if (defectCountForRow === 0) {
+             defectCountForRow = 1;
+             if (kats.length > 0) addDefect(kats[0]);
+          }
+          hasDefects = true;
         } else if (row.kategori_masalah === "X") {
-           // BS defect
            team.jumlah_cacat += 1;
+           hasDefects = true;
         }
       }
 
-      // Add downtime and count panels ONLY ONCE per header
+      if (hasDefects && defectCountForRow > 0) {
+        team.jumlah_cacat += defectCountForRow;
+      }
+
+      // Add downtime ONLY ONCE per header
       if (!processedHeaders.has(header.id)) {
         processedHeaders.add(header.id);
         team.downtime_detik += (header.total_downtime_detik || 0);
         
         if (header.panel_no === "METERAN") {
-          // For meter machines, count as 1 production only if total_produksi_meter exists and > 0
+          // For meter machines, add total_produksi_meter ONCE per header
           if (header.total_produksi_meter && header.total_produksi_meter > 0) {
+            team.hasil_produksi += header.total_produksi_meter;
+          }
+        }
+      }
+
+      // For normal machines (panel), count unique panels and exclude if failed/stopped
+      // For normal machines (panel), count unique panel_no strings per team, ignoring GAGAL and BERHENTI strings
+      if (header.panel_no && header.panel_no !== "METERAN") {
+        const panelNoStr = String(header.panel_no).toUpperCase();
+        
+        const isBerhenti = panelNoStr === "BERHENTI";
+        const isGagal = panelNoStr.includes("(GAGAL)");
+        
+        if (!isBerhenti && !isGagal) {
+          // Excel logic uses UNIQUE() per group. We simulate this using a Set key.
+          const panelKey = `${groupName}-${panelNoStr}`;
+          
+          if (!processedPanels.has(panelKey)) {
+            processedPanels.set(panelKey, { countedForTeam: groupName, isFailed: false });
             team.hasil_produksi += 1;
           }
-        } else if (header.panel_no) {
-          // For normal machines, if panel_no exists, count as 1
-          team.hasil_produksi += 1;
         }
       }
     });

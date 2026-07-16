@@ -69,11 +69,9 @@ export default function MeterHistoryTable({
         isSameAsPrev = true;
       }
 
-      let cleanD = item.detail_masalah || "";
-      const meterMatchForClean = cleanD.match(/\(Titik:\s*([A-Za-z0-9\s.\-]+)\)/i);
-      if (meterMatchForClean && meterMatchForClean[0]) {
-        cleanD = cleanD.replace(meterMatchForClean[0], "").trim();
-      }
+      let cleanD = item.detail_masalah 
+        ? item.detail_masalah.replace(/\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").replace(/\|\s*$/, "").replace(/,\s*$/, "").trim()
+        : "";
 
       let cacatLines: string[] = [];
       const katsRaw = item.kategori_masalah;
@@ -305,18 +303,18 @@ export default function MeterHistoryTable({
   return (
     <table className="w-full text-left border-collapse">
       <thead>
-        <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-          <th className="px-1 py-2 w-8 text-center border-r border-slate-100">NO</th>
-          <th className="px-1 py-2 w-20 border-r border-slate-100">TGL</th>
-          <th className="px-1 py-2 w-10 text-center border-r border-slate-100">Group</th>
-          <th className="px-1 py-2 w-24 border-r border-slate-100">Operator</th>
+        <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
+          <th className="px-0.5 py-2 w-6 text-center border-r border-slate-100">NO</th>
+          <th className="px-1 py-2 w-14 border-r border-slate-100">TGL</th>
+          <th className="px-0.5 py-2 w-8 text-center border-r border-slate-100">Group</th>
+          <th className="px-1 py-2 w-16 border-r border-slate-100">Operator</th>
           <th className="px-1 py-2 text-center w-12 border-r border-slate-100">METER</th>
-          <th className="px-1 py-2 text-center w-12 border-r border-slate-100">KET ✓/X</th>
-          <th className="px-2 py-2 min-w-[250px] w-full border-r border-slate-100">KETERANGAN CACAT</th>
-          <th className="px-1 py-2 text-center w-16 border-r border-slate-100">INSPEKSI</th>
+          <th className="px-0.5 py-2 text-center w-8 border-r border-slate-100">KET</th>
+          <th className="px-1 py-2 min-w-[150px] w-full border-r border-slate-100">KETERANGAN CACAT</th>
+          <th className="px-1 py-2 text-center w-14 border-r border-slate-100">INSPEKSI</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+      <tbody className="divide-y divide-slate-100 text-[10px] text-slate-700">
         {displayItems.map((item: any, index: number) => {
           if (item.isTotalRow) {
             return (

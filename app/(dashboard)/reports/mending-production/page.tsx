@@ -943,7 +943,7 @@ export default function MendingProductionReportPage() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-20 animate-fadeIn">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-row items-center justify-between gap-3">
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
             <FileSpreadsheet className="w-6 h-6 text-emerald-600" />
@@ -972,8 +972,9 @@ export default function MendingProductionReportPage() {
       )}
 
       {/* Filter Card */}
-      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
-        <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+      <div className="w-full overflow-x-auto pb-2">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6 max-w-5xl min-w-[800px]">
+          <form onSubmit={handleSearch} className="grid grid-cols-4 gap-4 items-end">
           <div className="flex flex-col gap-1 w-full">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Pilih Tanggal
@@ -1033,6 +1034,7 @@ export default function MendingProductionReportPage() {
             </select>
           </div>
         </form>
+      </div>
       </div>
 
       {hasSearched && data.length === 0 && !isLoading && (
@@ -1197,73 +1199,73 @@ export default function MendingProductionReportPage() {
                 </h2>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-1 max-w-5xl mx-auto text-sm">
+              <div className="grid grid-cols-2 gap-x-2 lg:gap-x-12 gap-y-1 max-w-5xl mx-auto text-[10px] sm:text-xs lg:text-sm">
                 <div className="space-y-1">
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Design</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Design</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.design_id || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Nomor Mc</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Nomor Mc</span>
                     <span className="font-black text-[#0070bc] col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.nomor_mc || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Tanggal produksi</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Tanggal produksi</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.tgl || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Tanggal potong</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Tanggal potong</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.tanggal_potong || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Pick</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Pick</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.pick || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Course</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Course</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.course || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Rpm</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Rpm</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.rpm || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">No. Order Barang</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">No. Order Barang</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.no_order_barang || "-"}</span>
                   </div>
                 </div>
                 
                 <div className="space-y-1">
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Potongan ke</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Potongan ke</span>
                     <span className="font-black text-rose-600 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.potongan_ke || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Roll no</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Roll no</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.detail?.roll_no || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Jenis Benang Dsr</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Jenis Benang Dsr</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.jenis_benang_dasar || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Liner</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Liner</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.liner || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Heavy</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Heavy</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.heavy || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Shadow</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Shadow</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.shadow || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">Pinggiran</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">Pinggiran</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.pinggiran || "-"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <span className="font-bold text-slate-500">No. costumer</span>
+                  <div className="grid grid-cols-[100px_1fr] sm:grid-cols-3 gap-1 sm:gap-4">
+                    <span className="font-bold text-slate-500 whitespace-nowrap">No. costumer</span>
                     <span className="font-black text-slate-800 col-span-2 flex gap-2"><span>:</span> {selectedPcsData[0]?.header?.no_customer || "-"}</span>
                   </div>
                 </div>

@@ -1,16 +1,20 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useEffect, useState, Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getEmployeeHistoryDetail } from "@/actions/employee-actions";
 import { Loader2, ArrowLeft } from "lucide-react";
 import EmployeeForm from "@/components/forms/EmployeeForm";
 import ContinuousForm from "@/components/forms/ContinuousForm";
 
-export default function EditProductionPage() {
+function EditProductionContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const headerId = params.id as string;
+  const defaultMeter = searchParams.get("meter") || undefined;
+  const rawPcs = searchParams.get("pcs");
+  const defaultPcsIndex = (rawPcs && rawPcs !== "undefined" && rawPcs !== "null") ? rawPcs : undefined;
 
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<any>(null);
@@ -81,10 +85,28 @@ export default function EditProductionPage() {
       </div>
       
       {isMeteran ? (
-        <ContinuousForm initialData={data} isEdit={true} />
+        <ContinuousForm 
+          initialData={data} 
+          isEdit={true} 
+          defaultMeter={defaultMeter} 
+          defaultPcsIndex={defaultPcsIndex}
+        />
       ) : (
         <EmployeeForm initialData={data} isEdit={true} />
       )}
     </div>
+  );
+}
+
+export default function EditProductionPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex-1 flex flex-col items-center justify-center p-10 w-full animate-fadeIn">
+        <Loader2 className="w-10 h-10 animate-spin text-[#0070bc] mb-4" />
+        <span className="text-slate-500 font-medium">Memuat Data Laporan...</span>
+      </div>
+    }>
+      <EditProductionContent />
+    </Suspense>
   );
 }

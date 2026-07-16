@@ -14,12 +14,15 @@ const cleanMeterVal = (val: any) => {
 
 export default function MeterHistoryTable({
   panels,
-  pcsKey
+  pcsKey,
+  downtimeRecords
 }: {
   panels: any[];
   pcsKey: string;
+  downtimeRecords?: any[];
 }) {
   const header = panels[0] || {};
+  const actualDowntimeRecords = downtimeRecords || panels.flatMap(p => p.downtime_records || []);
 
   const detailsToDisplay = React.useMemo(() => {
     const list: any[] = [];
@@ -46,7 +49,20 @@ export default function MeterHistoryTable({
   const displayItems = React.useMemo(() => {
     const filtered = detailsToDisplay.filter((item: any) => {
       const h = item.production_headers || {};
-      const isIstirahat = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") && !item.kategori_masalah && !item.detail_masalah;
+      const hasIstirahatDetail = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT");
+      
+      let hasIstirahatBatch = false;
+      const hDetails = h.production_details || [];
+      if (hDetails.some((d: any) => (d.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (d.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT"))) {
+        hasIstirahatBatch = true;
+      }
+      const dRecs = h.downtime_records || [];
+      if (dRecs.some((r: any) => (r.kategori || "").toUpperCase().includes("ISTIRAHAT"))) {
+        hasIstirahatBatch = true;
+      }
+
+      const hasIstirahat = hasIstirahatDetail || hasIstirahatBatch;
+      const isIstirahat = hasIstirahat && !item.kategori_masalah && !item.detail_masalah;
       const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
       const hasDefect = !!item.kategori_masalah || !!item.detail_masalah || (item.keterangan_cacat && item.keterangan_cacat !== "START" && item.keterangan_cacat !== "FINISH" && !isIstirahat);
 
@@ -68,7 +84,20 @@ export default function MeterHistoryTable({
       const tgl = h.tgl || "";
       const operatorStr = (grp ? `(${grp}) ` : '') + opr;
 
-      const isIstirahat = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") && !item.kategori_masalah && !item.detail_masalah;
+      const hasIstirahatDetail = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT");
+      let hasIstirahatBatch = false;
+      const hDetails = h.production_details || [];
+      if (hDetails.some((d: any) => (d.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (d.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT"))) {
+        hasIstirahatBatch = true;
+      }
+      const dRecs = h.downtime_records || [];
+      if (dRecs.some((r: any) => (r.kategori || "").toUpperCase().includes("ISTIRAHAT"))) {
+        hasIstirahatBatch = true;
+      }
+
+      const hasIstirahat = hasIstirahatDetail || hasIstirahatBatch;
+      const isIstirahat = hasIstirahat && !item.kategori_masalah && !item.detail_masalah;
+      
       const isFinish = item.keterangan_cacat === "FINISH" || item.production_headers?.panel_no === "FINISH" || item.production_headers?.meter_akhir;
       const isStart = item.keterangan_cacat === "START" || item.production_headers?.panel_no === "START";
       const isGradable = !isIstirahat && !isFinish && !isStart;
@@ -96,116 +125,142 @@ export default function MeterHistoryTable({
       const { item, isIstirahat, isGradable, opr, grp, tgl, operatorStr } = p;
       const h = item.production_headers || {};
 
-      let cleanD = item.detail_masalah || "";
-      const meterMatchForClean = cleanD.match(/\(Titik:\s*([A-Za-z0-9\s.\-]+)\)/i);
-      if (meterMatchForClean && meterMatchForClean[0]) {
-        cleanD = cleanD.replace(meterMatchForClean[0], "").trim();
-      }
-
       let cacatLines: string[] = [];
+      let defectMeterStr = "";
+      
       const katsRaw = item.kategori_masalah;
       const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
       
-      const pushDetailsForCat = (k: string, d: string) => {
-        if (!d) {
-          cacatLines.push(k);
-          return;
-        }
-        const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
-        const matchedDetails: string[] = [];
-        let remainingD = d;
-        const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
-        sortedKnown.forEach(known => {
-          if (remainingD.includes(known)) {
-            matchedDetails.push(known);
-            remainingD = remainingD.replace(known, "");
-          }
+      if (item.production_defects && Array.isArray(item.production_defects) && item.production_defects.length > 0) {
+        item.production_defects.forEach((defect: any) => {
+          const k = defect.kategori;
+          const d = defect.detail;
+          const b = defect.blok;
+          
+          let lineStr = "";
+          if (k && d) lineStr = `${k} - ${d}`;
+          else if (k) lineStr = k;
+          else if (d) lineStr = d;
+          
+          if (b) lineStr += ` (Blok ${b})`;
+          
+          if (lineStr) cacatLines.push(lineStr);
+          if (defect.meter) defectMeterStr = defect.meter;
         });
-        if (matchedDetails.length > 0) {
-          const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
-          matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
-          customParts.forEach(custom => {
-            const cleanCustom = custom.replace(/^,\s*|\s*,\s*$/g, "").trim();
-            if (cleanCustom) cacatLines.push(`${k} - ${cleanCustom}`);
-          });
-        } else {
-          const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
-          parts.forEach(p => cacatLines.push(`${k} - ${p}`));
+        
+        let ketCacat = item.keterangan_cacat || "";
+        const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
+        if (hasTambahanQC) {
+          if (cacatLines.length === 0) cacatLines.push("[TAMBAHAN QC]");
+          else cacatLines = cacatLines.map(line => line + " [TAMBAHAN QC]");
         }
-      };
+      } else {
+        // Fallback to legacy string parsing
+        let cleanD = item.detail_masalah 
+          ? item.detail_masalah.replace(/\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").replace(/\|\s*$/, "").replace(/,\s*$/, "").trim()
+          : "";
+        
+        const pushDetailsForCat = (k: string, d: string) => {
+          if (!d) {
+            cacatLines.push(k);
+            return;
+          }
+          const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
+          const matchedDetails: string[] = [];
+          let remainingD = d;
+          const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
+          sortedKnown.forEach(known => {
+            if (remainingD.includes(known)) {
+              matchedDetails.push(known);
+              remainingD = remainingD.replace(known, "");
+            }
+          });
+          if (matchedDetails.length > 0) {
+            const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
+            matchedDetails.forEach(match => cacatLines.push(`${k} - ${match}`));
+            customParts.forEach(custom => {
+              const cleanCustom = custom.replace(/^,\s*|\s*,\s*$/g, "").trim();
+              if (cleanCustom) cacatLines.push(`${k} - ${cleanCustom}`);
+            });
+          } else {
+            const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
+            parts.forEach(p => cacatLines.push(`${k} - ${p}`));
+          }
+        };
 
-      if (kats.length > 0) {
-        if (cleanD?.includes(" | ")) {
-          const catDetails = cleanD.split(" | ");
-          for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
-            const k = kats[i] || "Unknown";
-            const d = catDetails[i] || "";
-            pushDetailsForCat(k, d);
+        if (kats.length > 0) {
+          if (cleanD?.includes(" | ")) {
+            const catDetails = cleanD.split(" | ");
+            for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
+              const k = kats[i] || "Unknown";
+              const d = catDetails[i] || "";
+              pushDetailsForCat(k, d);
+            }
+          } else if (cleanD) {
+            if (kats.length === 1) {
+              pushDetailsForCat(kats[0], cleanD);
+            } else {
+              const dets = cleanD.split(", ");
+              if (kats.length === dets.length) {
+                for (let i = 0; i < kats.length; i++) {
+                  pushDetailsForCat(kats[i], dets[i]);
+                }
+              } else {
+                dets.forEach((det: string) => {
+                  let foundKat = "Unknown";
+                  for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+                    if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
+                      foundKat = kat;
+                      break;
+                    }
+                  }
+                  cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
+                });
+              }
+            }
+          } else {
+            cacatLines.push(kats.join(", "));
           }
         } else if (cleanD) {
-          if (kats.length === 1) {
-            pushDetailsForCat(kats[0], cleanD);
-          } else {
-            const dets = cleanD.split(", ");
-            if (kats.length === dets.length) {
-              for (let i = 0; i < kats.length; i++) {
-                pushDetailsForCat(kats[i], dets[i]);
+          cacatLines.push(cleanD);
+        }
+
+        let ketCacat = item.keterangan_cacat || "";
+        const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
+        ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
+        ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
+        ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
+
+        if (ketCacat) {
+          if (cacatLines.length > 0) {
+            const parts = ketCacat.split(",").map((s: string) => s.trim());
+            cacatLines = cacatLines.map((line, i) => {
+              const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
+              let partIndex = i;
+              if (lineKat && kats.includes(lineKat)) {
+                partIndex = kats.indexOf(lineKat);
               }
-            } else {
-              dets.forEach((det: string) => {
-                let foundKat = "Unknown";
-                for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
-                  if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
-                    foundKat = kat;
-                    break;
-                  }
-                }
-                cacatLines.push(`${foundKat !== "Unknown" ? foundKat + " - " : ""}${det}`);
-              });
-            }
+              if (parts[partIndex] && parts[partIndex] !== "") {
+                const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
+                return `${line} (Blok ${cleanB})`;
+              } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
+                const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
+                return `${line} (Blok ${cleanB})`;
+              }
+              return line;
+            });
+          } else {
+            const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
+            cacatLines.push(`(Blok ${cleanB})`);
           }
-        } else {
-          cacatLines.push(kats.join(", "));
         }
-      } else if (cleanD) {
-        cacatLines.push(cleanD);
-      }
 
-      let ketCacat = item.keterangan_cacat || "";
-      const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
-      ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
-      ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
-      ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
-
-      if (ketCacat) {
-        if (cacatLines.length > 0) {
-          const parts = ketCacat.split(",").map((s: string) => s.trim());
-          cacatLines = cacatLines.map((line, i) => {
-            const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
-            let partIndex = i;
-            if (lineKat && kats.includes(lineKat)) {
-              partIndex = kats.indexOf(lineKat);
-            }
-            if (parts[partIndex] && parts[partIndex] !== "") {
-              const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
-              return `${line} (Blok ${cleanB})`;
-            } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
-              const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
-              return `${line} (Blok ${cleanB})`;
-            }
-            return line;
-          });
-        } else {
-          const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
-          cacatLines.push(`(Blok ${cleanB})`);
-        }
-      }
-
-      if (hasTambahanQC) {
-        if (cacatLines.length === 0) {
-          cacatLines.push("[TAMBAHAN QC]");
-        } else {
-          cacatLines = cacatLines.map(line => line + " [TAMBAHAN QC]");
+        if (hasTambahanQC) {
+          if (cacatLines.length === 0) {
+            cacatLines.push("[TAMBAHAN QC]");
+          } else {
+            cacatLines = cacatLines.map(line => line + " [TAMBAHAN QC]");
+          }
         }
       }
 
@@ -215,6 +270,8 @@ export default function MeterHistoryTable({
       let meterDisplay = "-";
       if (item.meter_kain !== null && item.meter_kain !== undefined && String(item.meter_kain).trim() !== "") {
         meterDisplay = cleanMeterVal(item.meter_kain);
+      } else if (defectMeterStr) {
+        meterDisplay = cleanMeterVal(defectMeterStr);
       } else if (item.detail_masalah) {
         const meterMatch = item.detail_masalah.match(/\(Titik:\s*([A-Za-z0-9\s.\-]+)\)/i);
         if (meterMatch && meterMatch[1]) {
@@ -311,23 +368,93 @@ export default function MeterHistoryTable({
         }
       }
 
-      if (tgl === prevTgl) showTgl = false;
-      if (grp === prevGrp) showGrp = false;
       if (opr === prevOpr) showOpr = false;
+      if (tgl === prevTgl) showTgl = false;
+      if (grp === prevGrp && !showOpr) showGrp = false;
 
       const cleanedCacatLines = cacatLines
         .map((line: string) => line.replace(/\s*\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").trim())
         .filter(Boolean);
 
-      let cacatText = isStartRow ? "START" : (isFinishReport ? "FINISH" : (isIstirahat ? "ISTIRAHAT" : (cleanedCacatLines.join("\n") || "-")));
+      let cacatText = isStartRow ? "START" : (isFinishReport ? "FINISH" : (cleanedCacatLines.join("\n") || "-"));
       if (isIstirahat) {
         showTgl = false;
         showGrp = false;
         showOpr = true;
-        cacatText = "ISTIRAHAT";
+        if (cleanedCacatLines.length === 0) {
+          cacatText = "-";
+        }
       }
 
       const hasErrorDetail = !!item.kategori_masalah || !!item.detail_masalah;
+
+      let downtimeDisplay = "-";
+      if (!isStartRow && !isIstirahat) {
+        // Always use downtime_events JSON for per-row meter matching.
+        // downtime_records has no meter column, so it cannot be used for per-row matching.
+        let dtEvents: any[] = [];
+        try {
+          if (h.downtime_events) {
+            dtEvents = typeof h.downtime_events === 'string'
+              ? JSON.parse(h.downtime_events)
+              : h.downtime_events;
+          }
+        } catch (e) { }
+
+        let totalDowntimeSecs = 0;
+
+        if (dtEvents.length > 0) {
+          // Build the set of meter values present in this row
+          const detailDefects = item.production_defects || [];
+          const metersInThisRow = new Set<string>();
+
+          detailDefects.forEach((d: any) => {
+            if (d.meter) metersInThisRow.add(cleanMeterVal(d.meter));
+          });
+          // Also include the defectMeterStr (fallback from older data path)
+          if (defectMeterStr) metersInThisRow.add(cleanMeterVal(defectMeterStr));
+
+          if (metersInThisRow.size > 0) {
+            // Sum durations from downtime events whose problems reference any meter in this row
+            dtEvents.forEach((e: any) => {
+              if (!e.problems || !Array.isArray(e.problems)) return;
+              const hasMatch = e.problems.some((p: any) => {
+                if (!p.meter) return false;
+                return metersInThisRow.has(cleanMeterVal(p.meter));
+              });
+              if (hasMatch) {
+                totalDowntimeSecs += parseInt(e.durasiDetik, 10) || 0;
+              }
+            });
+          } else {
+            // No meter context on this row — show total downtime only on first active row of this header
+            const firstActiveIdx = processed.findIndex((pp: any) => {
+              const ppH = pp.item.production_headers || {};
+              return ppH.id === h.id && !pp.isIstirahat;
+            });
+            if (idx === firstActiveIdx) {
+              totalDowntimeSecs = dtEvents.reduce((acc: number, e: any) => acc + (parseInt(e.durasiDetik, 10) || 0), 0);
+            }
+          }
+        } else if (actualDowntimeRecords && actualDowntimeRecords.length > 0) {
+          // No downtime_events JSON — fallback to downtime_records total on first row only
+          const headerRecords = actualDowntimeRecords.filter((r: any) => r.header_id === h.id);
+          const firstActiveIdx = processed.findIndex((pp: any) => {
+            const ppH = pp.item.production_headers || {};
+            return ppH.id === h.id && !pp.isIstirahat;
+          });
+          if (idx === firstActiveIdx) {
+            totalDowntimeSecs = headerRecords.reduce((acc: number, r: any) => acc + (parseInt(r.durasi_detik, 10) || 0), 0);
+          }
+        }
+
+        if (totalDowntimeSecs > 0) {
+          const mins = Math.floor(totalDowntimeSecs / 60);
+          const secs = totalDowntimeSecs % 60;
+          downtimeDisplay = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+        }
+      }
+
 
       items.push({
         id: item.id || `item-${idx}-${Math.random()}`,
@@ -345,8 +472,10 @@ export default function MeterHistoryTable({
         showOpr: isIstirahat ? true : showOpr,
         hasErrorDetail,
         isIstirahat,
+        downtimeDisplay,
         db_id: item.id,
-        header_id: h.id
+        header_id: h.id,
+        pcs_index: item.pcs_index  // ← fix: was missing, caused pcs=undefined in edit URL
       });
       globalRowCount += 1;
     });
@@ -378,6 +507,7 @@ export default function MeterHistoryTable({
           <th className="px-1 py-2 text-center w-12 border-r border-slate-100">METER</th>
           <th className="px-1 py-2 text-center w-12 border-r border-slate-100">KET ✓/X</th>
           <th className="px-2 py-2 min-w-[250px] w-full border-r border-slate-100">KETERANGAN CACAT</th>
+          <th className="px-1 py-2 text-center w-16 border-r border-slate-100">DOWNTIME</th>
           <th className="px-1 py-2 text-center w-12">AKSI</th>
         </tr>
       </thead>
@@ -386,7 +516,7 @@ export default function MeterHistoryTable({
           if (item.isTotalRow) {
             return (
               <tr key={item.id || index} className="bg-slate-100 border-t-2 border-b-2 border-slate-300">
-                <td colSpan={8} className="px-3 py-2 text-center text-xs font-semibold text-slate-600">
+                <td colSpan={9} className="px-3 py-2 text-center text-xs font-semibold text-slate-600">
                   {item.totalLabel} <span className="font-extrabold text-slate-800 ml-1">{item.totalMeter}</span>
                 </td>
               </tr>
@@ -416,6 +546,9 @@ export default function MeterHistoryTable({
                 </td>
                 <td className="px-3 py-1.5 text-[11px] font-medium text-slate-400 whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
                   START
+                </td>
+                <td className="px-1 py-1.5 text-center text-[11px] font-medium text-slate-400 border-r border-slate-100 border-b border-slate-100">
+                  -
                 </td>
                 <td className="px-1 py-1.5 text-center w-24 border-r border-slate-100 border-b border-slate-100">
                   {/* Empty AKSI for START */}
@@ -461,10 +594,13 @@ export default function MeterHistoryTable({
                <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${meterCacatColor}`}>
                  {item.cacatDisplay}
                </td>
+               <td className={`px-1 py-1.5 text-center text-[11px] font-bold border-r border-slate-100 border-b border-slate-100 ${item.downtimeDisplay && item.downtimeDisplay !== "-" ? "text-rose-600" : "text-slate-400"}`}>
+                 {item.downtimeDisplay || "-"}
+               </td>
                <td className="px-1 py-1.5 text-center w-12 border-b border-slate-100">
                  {hasMeterDefect && item.header_id && (
                    <Link
-                     href={`/edit/${item.header_id}`}
+                     href={`/edit/${item.header_id}${item.meterDisplay && item.meterDisplay !== '-' ? `?meter=${encodeURIComponent(item.meterDisplay)}&pcs=${item.pcs_index}` : `?pcs=${item.pcs_index}`}`}
                      className="inline-flex items-center justify-center p-1.5 rounded hover:bg-sky-100 text-[#0070bc] transition-colors"
                      title="Edit Data"
                    >

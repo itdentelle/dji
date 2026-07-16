@@ -121,45 +121,45 @@ export default function MachineMonitoringPage() {
       {/* Summary Cards */}
       <div
         data-tour="machine-summary"
-        className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+        className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8"
       >
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-4 bg-blue-50 text-blue-500 rounded-xl">
-            <Activity className="w-8 h-8" />
+        <div className="bg-white p-4 lg:p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3 lg:gap-4">
+          <div className="p-3 lg:p-4 bg-blue-50 text-blue-500 rounded-xl shrink-0">
+            <Activity className="w-6 h-6 lg:w-8 lg:h-8" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider">
+            <div className="text-[10px] sm:text-xs lg:text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider leading-tight">
               Total Mesin Aktif
             </div>
-            <div className="text-3xl font-bold text-slate-800">
+            <div className="text-2xl sm:text-3xl font-bold text-slate-800">
               {machines.length}
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-4 bg-emerald-50 text-emerald-500 rounded-xl">
-            <Power className="w-8 h-8" />
+        <div className="bg-white p-4 lg:p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3 lg:gap-4">
+          <div className="p-3 lg:p-4 bg-emerald-50 text-emerald-500 rounded-xl shrink-0">
+            <Power className="w-6 h-6 lg:w-8 lg:h-8" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider">
+            <div className="text-[10px] sm:text-xs lg:text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider leading-tight">
               Beroperasi Hari Ini
             </div>
-            <div className="text-3xl font-bold text-slate-800">
+            <div className="text-2xl sm:text-3xl font-bold text-slate-800">
               {totalOperating}
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-4 bg-amber-50 text-amber-500 rounded-xl">
-            <Clock className="w-8 h-8" />
+        <div className="bg-white p-4 lg:p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3 lg:gap-4">
+          <div className="p-3 lg:p-4 bg-amber-50 text-amber-500 rounded-xl shrink-0">
+            <Clock className="w-6 h-6 lg:w-8 lg:h-8" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider">
+            <div className="text-[10px] sm:text-xs lg:text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider leading-tight">
               Idle / Standby
             </div>
-            <div className="text-3xl font-bold text-slate-800">{totalIdle}</div>
+            <div className="text-2xl sm:text-3xl font-bold text-slate-800">{totalIdle}</div>
           </div>
         </div>
       </div>

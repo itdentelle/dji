@@ -214,8 +214,8 @@ export default function MendingHistoryPage() {
         className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6"
       >
         <form onSubmit={handleSearch} className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="flex flex-col gap-1 w-full sm:w-1/4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div className="flex flex-col gap-1 w-full">
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" />
                 Tanggal Mending
@@ -230,7 +230,7 @@ export default function MendingHistoryPage() {
               />
             </div>
 
-            <div className="flex flex-col gap-1 w-full sm:w-1/4">
+            <div className="flex flex-col gap-1 w-full">
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                 <Hash className="w-3.5 h-3.5" />
                 Nomor Mesin
@@ -264,7 +264,7 @@ export default function MendingHistoryPage() {
               </select>
             </div>
 
-            <div className="flex flex-col gap-1 w-full sm:w-1/4">
+            <div className="flex flex-col gap-1 w-full">
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                 <Box className="w-3.5 h-3.5" />
                 Potongan Ke
@@ -283,7 +283,7 @@ export default function MendingHistoryPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="h-11 px-6 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
+              className="h-11 px-6 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm w-full"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -293,142 +293,6 @@ export default function MendingHistoryPage() {
               Cari Data
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 font-semibold transition-all shadow-sm flex items-center gap-2 shrink-0 hidden sm:flex"
-            >
-              <Filter className="w-4 h-4" />
-              {showAdvanced ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="h-11 px-4 w-full rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 font-semibold transition-all shadow-sm flex items-center justify-center gap-2 sm:hidden"
-          >
-            <Filter className="w-4 h-4" />
-            Filter Lanjutan{" "}
-            {showAdvanced ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
-          </button>
-
-          {/* Advanced Filters Container */}
-          <div
-            data-tour="mending-history-advanced"
-            className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdvanced ? "max-h-[800px] opacity-100 mt-2" : "max-h-0 opacity-0"}`}
-          >
-            <div className="p-5 bg-slate-50/50 rounded-xl border border-slate-200 space-y-5">
-              <div className="flex flex-col sm:flex-row gap-6">
-                <div className="w-full">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mb-3">
-                    <User className="w-3.5 h-3.5" /> Petugas Mending
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {MENDING_OPERATORS.map((op) => (
-                      <label
-                        key={op.id}
-                        className="flex items-center gap-2 cursor-pointer group"
-                      >
-                        <div className="relative flex items-center justify-center">
-                          <input
-                            type="checkbox"
-                            className="peer sr-only"
-                            checked={filters.petugas_ids.includes(
-                              op.id.toString(),
-                            )}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setFilters({
-                                  ...filters,
-                                  petugas_ids: [
-                                    ...filters.petugas_ids,
-                                    op.id.toString(),
-                                  ],
-                                });
-                              } else {
-                                setFilters({
-                                  ...filters,
-                                  petugas_ids: filters.petugas_ids.filter(
-                                    (id) => id !== op.id.toString(),
-                                  ),
-                                });
-                              }
-                            }}
-                          />
-                          <div className="w-5 h-5 rounded bg-white border border-slate-300 peer-checked:bg-[#0070bc] peer-checked:border-[#0070bc] transition-all flex items-center justify-center">
-                            <X
-                              className={`w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity ${filters.petugas_ids.includes(op.id.toString()) ? "rotate-45" : ""}`}
-                              style={
-                                filters.petugas_ids.includes(op.id.toString())
-                                  ? { transform: "none" }
-                                  : {}
-                              }
-                            />
-                            {filters.petugas_ids.includes(op.id.toString()) && (
-                              <svg
-                                className="w-3 h-3 text-white absolute inset-0 m-auto"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="3"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                              </svg>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-sm text-slate-700 font-medium group-hover:text-slate-900 transition-colors">
-                          {op.name}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-slate-200/60 pt-5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    Design
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Cari Design..."
-                    value={filters.design_id}
-                    onChange={(e) =>
-                      setFilters({ ...filters, design_id: e.target.value })
-                    }
-                    className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-sm focus:border-sky-400 outline-none w-full"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    No Customer
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Cari No Cust..."
-                    value={filters.no_customer}
-                    onChange={(e) =>
-                      setFilters({ ...filters, no_customer: e.target.value })
-                    }
-                    className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-sm focus:border-sky-400 outline-none w-full"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
         </form>
       </div>
@@ -463,7 +327,6 @@ export default function MendingHistoryPage() {
                       <th className="px-4 py-4 text-center w-32">Panel / Meter</th>
                       <th className="px-4 py-4">Petugas Mending</th>
                       <th className="px-4 py-4 text-center">Hasil Mending</th>
-                      <th className="px-4 py-4 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -485,7 +348,8 @@ export default function MendingHistoryPage() {
                       return (
                         <tr
                           key={d.id || idx}
-                          className="hover:bg-slate-50/80 transition-colors group/row"
+                          onClick={() => handleOpenDetail(d)}
+                          className="hover:bg-slate-50/80 transition-colors group/row cursor-pointer"
                         >
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div className="font-bold text-slate-800">
@@ -547,15 +411,6 @@ export default function MendingHistoryPage() {
                                 gradeBVal === 0 &&
                                 gradeBSVal === 0 && <span>-</span>}
                             </div>
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <button
-                              onClick={() => handleOpenDetail(d)}
-                              className="p-2 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm group mx-auto"
-                              title="Lihat Detail Mending"
-                            >
-                              <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                            </button>
                           </td>
                         </tr>
                       );

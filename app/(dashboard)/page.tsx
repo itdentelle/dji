@@ -1596,7 +1596,7 @@ export default function DashboardPage() {
         data-tour="dashboard-header"
         className="bg-white border border-[#e9ecef] rounded-[24px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.015)] relative z-10"
       >
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-wrap">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
@@ -1681,17 +1681,20 @@ export default function DashboardPage() {
       {/* Slicers Container */}
       <div
         data-tour="dashboard-slicers"
-        className="flex flex-col lg:flex-row gap-4"
+        className="flex flex-col lg:flex-row lg:flex-wrap xl:flex-nowrap gap-4"
       >
         {/* Date Range Slicer */}
-        <div className="flex-1 flex flex-wrap items-center gap-2 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
-          <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
-            <Calendar className="w-4 h-4" />
+        <div className="flex-1 flex flex-wrap items-center justify-between gap-2 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] w-full">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1 whitespace-nowrap">
+              Range Waktu:
+            </span>
           </div>
-          <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1 whitespace-nowrap">
-            Range Waktu:
-          </span>
-          <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-150">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-150">
             <button
               onClick={() => setDateRangeMode("ALL")}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -1761,16 +1764,19 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+          </div>
         </div>
 
         {/* Metric Mode Slicer */}
-        <div className="flex items-center gap-2 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0">
-          <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
-            <SlidersHorizontal className="w-4 h-4" />
+        <div className="flex items-center justify-between gap-2 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0 w-full lg:w-auto">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400">
+              <SlidersHorizontal className="w-4 h-4" />
+            </div>
+            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1 whitespace-nowrap">
+              Kategori:
+            </span>
           </div>
-          <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mr-1 whitespace-nowrap">
-            Kategori:
-          </span>
           <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-150">
             <button
               onClick={() => setMetricMode("PCS")}
@@ -4462,7 +4468,7 @@ export default function DashboardPage() {
           {/* Leaderboard Section (Top/Bottom Performers) */}
           <div
             data-tour="dashboard-leaderboard"
-            className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6"
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6"
           >
             {/* Card 1: Top Operators */}
             <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between transition-all duration-300 hover:shadow-md">

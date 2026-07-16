@@ -70,7 +70,8 @@ export async function getPendingQCDetails(headerId: string) {
         roll_no,
         indikator_stop,
         final_inspection_id,
-        keterangan_qc
+        keterangan_qc,
+        production_defects(*)
       `)
       .eq("header_id", headerId)
       .is("status_inspeksi", null)

@@ -141,6 +141,12 @@ export default function Sidebar() {
           icon: FileSpreadsheet,
           roles: ["admin", "manager"],
         },
+        {
+          name: "Laporan Potong Kain",
+          href: "/reports/mending-potong",
+          icon: FileSpreadsheet,
+          roles: ["admin", "manager"],
+        },
       ],
     },
     {

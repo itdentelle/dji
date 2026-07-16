@@ -7,12 +7,15 @@ import { PROBLEM_DETAILS } from "@/app/qc/page";
 
 export default function PanelHistoryTable({
   panels,
-  pcsKey
+  pcsKey,
+  downtimeRecords
 }: {
   panels: any[];
   pcsKey: string;
+  downtimeRecords?: any[];
 }) {
   const header = panels[0] || {};
+  const actualDowntimeRecords = downtimeRecords || panels.flatMap(p => p.downtime_records || []);
 
   const detailsToDisplay = React.useMemo(() => {
     const list: any[] = [];
@@ -44,8 +47,21 @@ export default function PanelHistoryTable({
       const tgl = h.tgl || "";
       const operatorStr = (grp ? `(${grp}) ` : '') + opr;
 
-      const isIstirahatOnly = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") && !item.kategori_masalah && !item.detail_masalah;
-      const hasIstirahat = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT");
+      const hasIstirahatDetail = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT");
+      
+      let hasIstirahatBatch = false;
+      const hDetails = h.production_details || [];
+      if (hDetails.some((d: any) => (d.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT"))) {
+        hasIstirahatBatch = true;
+      }
+      const dRecs = h.downtime_records || [];
+      if (dRecs.some((r: any) => (r.kategori || "").toUpperCase().includes("ISTIRAHAT"))) {
+        hasIstirahatBatch = true;
+      }
+
+      const hasIstirahat = hasIstirahatDetail || hasIstirahatBatch;
+      const isIstirahatOnly = hasIstirahat && !item.kategori_masalah && !item.detail_masalah;
+
       const isFinish = item.keterangan_cacat === "FINISH" || item.production_headers?.panel_no === "FINISH";
       const isStart = item.keterangan_cacat === "START" || item.production_headers?.panel_no === "START";
       const isGradable = !isIstirahatOnly && !isFinish && !isStart;
@@ -97,6 +113,9 @@ export default function PanelHistoryTable({
           showOpr = false;
         }
       }
+
+      if (tgl === lastTgl) showTgl = false;
+      if (grp === lastGrp && !showOpr) showGrp = false;
 
       lastTgl = tgl;
       lastGrp = grp;
@@ -157,6 +176,7 @@ export default function PanelHistoryTable({
           <th className="px-1 py-2 w-24 border-r border-slate-100">Operator</th>
           <th className="px-1 py-2 text-center w-12 border-r border-slate-100">KET ✓/X</th>
           <th className="px-2 py-2 min-w-[250px] w-full border-r border-slate-100">KETERANGAN CACAT</th>
+          <th className="px-1 py-2 text-center w-16 border-r border-slate-100">DOWNTIME</th>
           <th className="px-1 py-2 text-center w-12">AKSI</th>
         </tr>
       </thead>
@@ -171,7 +191,7 @@ export default function PanelHistoryTable({
                 <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap">
                   {item.totalCount}
                 </td>
-                <td colSpan={2} className="bg-slate-100"></td>
+                <td colSpan={3} className="bg-slate-100"></td>
               </tr>
             );
           }
@@ -185,74 +205,90 @@ export default function PanelHistoryTable({
           const displayTgl = item.showTgl ? (item.tglStr || "-") : "";
           const displayGrp = item.showGrp ? (item.grpStr || "-") : "";
 
+          let downtimeDisplay = "-";
           let masalahLines: string[] = [];
           if (isIstirahatOnly) {
             // break rows have no defects, so masalahLines remains empty (rendering as "-")
           } else {
-            let dtEvents: any[] = [];
-            try {
-              if (itemHeader.downtime_events) {
-                dtEvents = typeof itemHeader.downtime_events === 'string'
-                  ? JSON.parse(itemHeader.downtime_events)
-                  : itemHeader.downtime_events;
+            let matchedEvents: any[] = [];
+            
+            if (actualDowntimeRecords && actualDowntimeRecords.length > 0) {
+              // Since downtime records are now native rows, we filter by header_id.
+              // Note: For panels, downtime_records doesn't store pcs_index natively, 
+              // but we can just map all downtimes of the header to the first PCS, 
+              // or display it globally. The old logic filtered by `e.pcsKe`. 
+              // If we didn't migrate pcs_index to downtime_records, we might just show it on the first PCS of the batch.
+              // For safety, let's also read the legacy dtEvents if downtimeRecords is empty.
+              matchedEvents = actualDowntimeRecords.filter(r => r.header_id === itemHeader.id);
+              
+              // Only display downtime on the very first PCS of the header to avoid repeating it for every PCS,
+              // unless it's specifically for this PCS (which we don't have in the new table).
+              if (detail.pcs_index !== 1 && detail.pcs_index !== "1") {
+                matchedEvents = []; // Don't show downtime again on subsequent PCS
               }
-            } catch (e) { }
+            } else {
+              // Fallback to legacy
+              let dtEvents: any[] = [];
+              try {
+                if (itemHeader.downtime_events) {
+                  dtEvents = typeof itemHeader.downtime_events === 'string'
+                    ? JSON.parse(itemHeader.downtime_events)
+                    : itemHeader.downtime_events;
+                }
+              } catch (e) { }
 
-            const matchedEvents = dtEvents.filter((e: any) =>
-              !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe == detail.pcs_index
-            );
+              matchedEvents = dtEvents.filter((e: any) =>
+                !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe == detail.pcs_index
+              );
+            }
 
             if (matchedEvents.length > 0) {
-              matchedEvents.forEach((e: any) => {
-                if (e.problems && Array.isArray(e.problems)) {
-                  e.problems.forEach((p: any) => {
-                    const c = p.kategori || "";
-                    let rawDetails: string[] = [];
-                    if (p.details && Array.isArray(p.details)) {
-                      rawDetails = [...p.details];
-                    } else if (typeof p.details === "string") {
-                      rawDetails = [p.details];
-                    }
-                    const b = p.blok || "";
+              const totalSeconds = matchedEvents.reduce((acc: number, e: any) => acc + (parseInt(e.durasiDetik || e.durasi_detik, 10) || 0), 0);
+              if (totalSeconds > 0) {
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = totalSeconds % 60;
+                if (mins > 0) {
+                  downtimeDisplay = `${mins}m ${secs}s`;
+                } else {
+                  downtimeDisplay = `${secs}s`;
+                }
+              }
+            }
 
-                    rawDetails.forEach((det: string) => {
-                      const d = typeof det === 'string' ? det.trim() : det;
-                      let line = "";
-                      if (c && d) line = `${c} - ${d}`;
-                      else if (c) line = c;
-                      else if (d) line = d;
-
-                      if (b && b !== "-") {
-                        if (line) line += ` (Blok ${b})`;
-                        else line = `(Blok ${b})`;
-                      }
-                      if (line) masalahLines.push(line);
-                    });
-                  });
-                } else if (e.kategori) {
-                  const c = e.kategori;
-                  const rawDetails = e.detail ? (Array.isArray(e.detail) ? e.detail : [e.detail]) : [];
-                  const b = e.blok || "";
-
-                  rawDetails.forEach((det: string) => {
-                    const d = typeof det === 'string' ? det.trim() : det;
-                    let line = "";
-                    if (c && d) line = `${c} - ${d}`;
-                    else if (c) line = c;
-                    else if (d) line = d;
-
-                    if (b && b !== "-") {
-                      if (line) line += ` (Blok ${b})`;
-                      else line = `(Blok ${b})`;
-                    }
-                    if (line) masalahLines.push(line);
-                  });
+            let cacatLines: string[] = [];
+            
+            const katsRaw = detail.kategori_masalah;
+            const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
+            
+            if (detail.production_defects && Array.isArray(detail.production_defects) && detail.production_defects.length > 0) {
+              detail.production_defects.forEach((defect: any) => {
+                const k = defect.kategori;
+                const d = defect.detail;
+                const b = defect.blok;
+                
+                let lineStr = "";
+                if (k && d) lineStr = `${k} - ${d}`;
+                else if (k) lineStr = k;
+                else if (d) lineStr = d;
+                
+                if (b) {
+                  const cleanB = b.replace(/blok\s*/gi, "").trim();
+                  lineStr += ` (Blok ${cleanB})`;
+                }
+                
+                if (lineStr) {
+                  cacatLines.push(lineStr);
                 }
               });
+              
+              let ketCacat = detail.keterangan_cacat || "";
+              const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
+              if (hasTambahanQC) {
+                if (cacatLines.length === 0) cacatLines.push("[TAMBAHAN QC]");
+                else cacatLines = cacatLines.map(line => line + " [TAMBAHAN QC]");
+              }
             } else {
-              let cacatLines: string[] = [];
-              const katsRaw = detail.kategori_masalah;
-              const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
+              // Fallback to legacy string parsing if defects table is empty (for backward compatibility)
               const displayDetail = detail.detail_masalah || "";
 
               const pushDetailsForCat = (k: string, d: string) => {
@@ -320,7 +356,9 @@ export default function PanelHistoryTable({
               }
 
               let ketCacat = detail.keterangan_cacat || "";
-              ketCacat = ketCacat.replace("[TAMBAHAN QC]", "").trim();
+              ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
+              ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
+              ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
 
               if (ketCacat) {
                 if (cacatLines.length > 0) {
@@ -346,19 +384,15 @@ export default function PanelHistoryTable({
                    cacatLines.push(`(Blok ${cleanB})`);
                 }
               }
-
-              masalahLines.push(...cacatLines);
-
-              if (detail.keterangan_cacat && detail.keterangan_cacat.includes("[TAMBAHAN QC]")) {
-                if (masalahLines.length === 0) {
-                  masalahLines.push("[TAMBAHAN QC]");
-                } else {
-                  for (let i = 0; i < masalahLines.length; i++) {
-                    masalahLines[i] = masalahLines[i] + " [TAMBAHAN QC]";
-                  }
-                }
+              
+              const hasTambahanQC = (detail.keterangan_cacat || "").includes("[TAMBAHAN QC]");
+              if (hasTambahanQC) {
+                if (cacatLines.length === 0) cacatLines.push("[TAMBAHAN QC]");
+                else cacatLines = cacatLines.map(line => line + " [TAMBAHAN QC]");
               }
             }
+
+            masalahLines.push(...cacatLines);
 
             if (detail.keterangan_qc && detail.keterangan_qc !== "-") {
               masalahLines.push(`QC: ${detail.keterangan_qc}`);
@@ -393,8 +427,11 @@ export default function PanelHistoryTable({
                   )
                 )}
               </td>
-              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahatOnly ? 'text-slate-600 font-semibold italic' : (hasDefect ? 'text-rose-600' : 'text-slate-400')}`}>
-                {isIstirahatOnly ? "ISTIRAHAT" : (masalahLines.join("\n") || "-")}
+              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${hasDefect ? 'text-rose-600' : 'text-slate-400'}`}>
+                {masalahLines.join("\n") || "-"}
+              </td>
+              <td className={`px-1 py-1 text-center text-[11px] font-bold border-l border-slate-100 ${downtimeDisplay && downtimeDisplay !== "-" ? "text-rose-600" : "text-slate-400"}`}>
+                {downtimeDisplay}
               </td>
               <td className="px-1 py-1 text-center border-l border-slate-100">
                 {itemHeader?.id && detail.keterangan_cacat !== "FINISH" && (

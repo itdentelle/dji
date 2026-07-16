@@ -511,6 +511,32 @@ export default function EmployeeForm({
 
   useEffect(() => {
     if (initialData && isEdit) {
+      let isIstirahat = false;
+      if (initialData.details && initialData.details.length > 0) {
+        isIstirahat = initialData.details.some((d: any) => 
+          (d.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") ||
+          (d.detail_masalah || "").toUpperCase().includes("ISTIRAHAT")
+        );
+      }
+      
+      let parsedDowntimeEvents: any[] = [];
+      try {
+        if (initialData.downtime_events) {
+          parsedDowntimeEvents = typeof initialData.downtime_events === 'string'
+            ? JSON.parse(initialData.downtime_events)
+            : initialData.downtime_events;
+        }
+      } catch (e) {
+        console.error("Error parsing downtime_events", e);
+      }
+      
+      let rawPanelNo = String(initialData.panel_no || "1");
+      let isGagal = false;
+      if (rawPanelNo.includes("(GAGAL)")) {
+        isGagal = true;
+        rawPanelNo = rawPanelNo.replace(/\(GAGAL\)/g, "").trim();
+      }
+
       reset({
         operatorId: String(initialData.operator_id || ""),
         groupId: String(initialData.group_id || ""),
@@ -531,13 +557,17 @@ export default function EmployeeForm({
         potonganKe: String(initialData.potongan_ke || ""),
         course: initialData.course || "",
         pic: initialData.pic || "",
-        panelNo: String(initialData.panel_no || "1"),
+        panelNo: rawPanelNo,
+        isPanelGagal: isGagal,
         totalDowntime: String(initialData.total_downtime_detik || ""),
+        jenisLaporan: isIstirahat ? "Istirahat" : "",
+        downtimeEvents: parsedDowntimeEvents,
         pcsData:
           initialData.details && initialData.details.length > 0
             ? initialData.details.map((d: any, index: number) => ({
               pcsIndex: String(d.pcs_index || index + 1),
               jmlHasilProduksi: String(d.jml_hasil_produksi || "1"),
+              isBs: d.kategori_masalah === "X" || Boolean(d.kategori_masalah && d.kategori_masalah.includes("BS"))
             }))
             : [
               {
@@ -754,34 +784,38 @@ export default function EmployeeForm({
       localStorage.removeItem("dji_unresolved_downtime");
     }
 
-    const headerDataToSave = {
-      operatorId: data.operatorId,
-      groupId: data.groupId,
-      designId: data.designId,
-      nomorMc: data.nomorMc,
-      tanggalProduksi: data.tanggalProduksi,
-      tanggalPotong: "",
-      pick: data.pick,
-      noOrderBarang: data.noOrderBarang,
-      noCustomer: data.noCustomer,
-      jenisBenangDasar: data.jenisBenangDasar,
-      liner: data.liner,
-      heavy: data.heavy,
-      shadow: data.shadow,
-      pinggiran: data.pinggiran,
-      course: data.course,
-      rpm: data.rpm,
-      pic: data.pic,
-      potonganKe: data.potonganKe,
-      nextPanelNo: nextPanelNoForSave, // we store the next available panel no
-    };
-    localStorage.setItem("dji_form_header", JSON.stringify(headerDataToSave));
+    if (!isEdit) {
+      const headerDataToSave = {
+        operatorId: data.operatorId,
+        groupId: data.groupId,
+        designId: data.designId,
+        nomorMc: data.nomorMc,
+        tanggalProduksi: data.tanggalProduksi,
+        tanggalPotong: "",
+        pick: data.pick,
+        noOrderBarang: data.noOrderBarang,
+        noCustomer: data.noCustomer,
+        jenisBenangDasar: data.jenisBenangDasar,
+        liner: data.liner,
+        heavy: data.heavy,
+        shadow: data.shadow,
+        pinggiran: data.pinggiran,
+        course: data.course,
+        rpm: data.rpm,
+        pic: data.pic,
+        potonganKe: data.potonganKe,
+        nextPanelNo: nextPanelNoForSave, // we store the next available panel no
+      };
+      localStorage.setItem("dji_form_header", JSON.stringify(headerDataToSave));
+    }
 
     try {
       if (!navigator.onLine) {
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("employee", submitData);
-        localStorage.removeItem("dji_form_draft_panel");
+        if (!isEdit) {
+          localStorage.removeItem("dji_form_draft_panel");
+        }
         setSuccessData({
           ...data,
           isOfflineSaved: true,
@@ -799,7 +833,9 @@ export default function EmployeeForm({
       }
 
       if (result.success) {
-        localStorage.removeItem("dji_form_draft_panel");
+        if (!isEdit) {
+          localStorage.removeItem("dji_form_draft_panel");
+        }
         setSuccessData({
           ...data,
           id: isEdit ? initialData.id : (result as any).productionId,
@@ -816,7 +852,9 @@ export default function EmployeeForm({
       ) {
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("employee", submitData);
-        localStorage.removeItem("dji_form_draft_panel");
+        if (!isEdit) {
+          localStorage.removeItem("dji_form_draft_panel");
+        }
         setSuccessData({
           ...data,
           isOfflineSaved: true,
@@ -867,7 +905,15 @@ export default function EmployeeForm({
     if (isEdit) {
       sessionStorage.removeItem("dji_history_data");
       sessionStorage.removeItem("dji_history_searched");
-      router.push("/history");
+      if (successData) {
+        const mc = successData.nomorMc || "";
+        const design = successData.designId || "";
+        const potongan = successData.potonganKe || "";
+        const tgl = successData.tanggalProduksi || "";
+        router.push(`/history/detail?mc=${mc}&design=${design}&potongan=${potongan}&tgl=${tgl}`);
+      } else {
+        router.back();
+      }
       return;
     }
 
