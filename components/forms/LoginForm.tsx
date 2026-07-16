@@ -20,7 +20,8 @@ export default function LoginForm() {
     }
 
     try {
-      const loginEmail = nip.includes("@") ? nip : `${nip}@dji.local`;
+      const cleanNip = nip.trim().toLowerCase();
+      const loginEmail = cleanNip.includes("@") ? cleanNip : `${cleanNip}@dji.local`;
       const result = await login(loginEmail, password);
       if (!result.success) {
         setError(result.error || "Gagal masuk.");
@@ -54,6 +55,9 @@ export default function LoginForm() {
             onChange={(e) => setNip(e.target.value)}
             disabled={isLoading}
             placeholder=""
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="username"
             className="w-full h-12.5 rounded-2xl bg-white/80 border border-slate-200 px-4 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-4 focus:ring-[#0070bc]/15 focus:border-[#0070bc] transition-all"
           />
         </div>

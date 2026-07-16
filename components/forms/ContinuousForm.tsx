@@ -346,6 +346,8 @@ export default function ContinuousForm({
     (ContinuousFormInput & { id?: string }) | null
   >(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [backupOperator, setBackupOperator] = useState("");
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [tourRect, setTourRect] = useState<{
@@ -1060,6 +1062,10 @@ export default function ContinuousForm({
     data.grupName = getGroupName(data.groupId);
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;
+
+    if (data.jenisLaporan === "Mulai Istirahat" && backupOperator) {
+      data.jenisLaporan = `Mulai Istirahat (Backup: ${backupOperator})`;
+    }
 
     const meterAkhirNum = parseFormMeterValue(data.meterAkhir);
     const isT2ACutSubmit = data.nomorMc === "T2A" && meterAkhirNum === 0;
@@ -1995,7 +2001,26 @@ export default function ContinuousForm({
                       <span className="block text-[9px] font-medium text-slate-400">Kembali Bekerja</span>
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+
+                  {watchJenisLaporan === "Mulai Istirahat" && (
+                    <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                      <label className="text-[10px] font-black text-amber-800 uppercase block mb-1">
+                        Siapa yang menjaga mesin (Backup)?
+                      </label>
+                      <select
+                        value={backupOperator}
+                        onChange={(e) => setBackupOperator(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg border border-amber-300 text-sm font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-amber-400 outline-none"
+                      >
+                        <option value="">-- Pilih Operator --</option>
+                        {operators.map(op => (
+                          <option key={op.id} value={op.name}>{op.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-2">
                     Pilih <strong>Mulai Istirahat</strong> saat Anda akan pergi istirahat. Pilih <strong>Selesai Istirahat</strong> saat Anda kembali bekerja (meteran akan ditandai dikerjakan helper/saat istirahat).
                   </p>
                 </div>
