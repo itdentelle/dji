@@ -5,9 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 export interface MonthlyMachineReportData {
   tanggal: number;
   desain: string;
-  courses: string;
-  rpm: number;
-  eff_100: number; // Target
   teamData: Record<string, TeamData>; // Keyed by Group (A, B, C)
 }
 
