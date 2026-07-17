@@ -298,13 +298,23 @@ function HistoryDetailContent() {
                   {sortedPcsKeys.map((pcsKey) => {
                     const pcsLabel = `PCS ${pcsKey}`;
                     const panels = pcsGroups[pcsKey].sort((a, b) => {
-                      if (a.panel_no === "METERAN" && b.panel_no === "METERAN") {
-                        return String(a.tanggal_jam || "").localeCompare(String(b.tanggal_jam || ""));
-                      }
-                      if (a.panel_no === "METERAN") return 1;
-                      if (b.panel_no === "METERAN") return -1;
-                      return parseInt(a.panel_no || "0") - parseInt(b.panel_no || "0");
-                    });
+                        if (a.panel_no === "METERAN" && b.panel_no === "METERAN") {
+                          return String(a.tanggal_jam || "").localeCompare(String(b.tanggal_jam || ""));
+                        }
+                        if (a.panel_no === "METERAN") return 1;
+                        if (b.panel_no === "METERAN") return -1;
+                        
+                        const pA = parseInt(a.panel_no || "0");
+                        const pB = parseInt(b.panel_no || "0");
+                        if (pA === pB) {
+                          const isABs = String(a.panel_no || "").includes("(BS)") || String(a.panel_no || "").includes("(GAGAL)");
+                          const isBBs = String(b.panel_no || "").includes("(BS)") || String(b.panel_no || "").includes("(GAGAL)");
+                          if (isABs && !isBBs) return -1;
+                          if (!isABs && isBBs) return 1;
+                          return String(a.tanggal_jam || "").localeCompare(String(b.tanggal_jam || ""));
+                        }
+                        return pA - pB;
+                      });
 
                     const isMeter = detailData.is_meter || panels.some((p: any) => p.panel_no === "METERAN");
 

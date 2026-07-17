@@ -11,6 +11,7 @@ export default function ContinuousInputPage() {
   const [isDbConnected, setIsDbConnected] = useState(false);
 
   useEffect(() => {
+    localStorage.setItem("last_input_route", "/input-meter");
     async function checkDb() {
       try {
         const supabase = createClient();

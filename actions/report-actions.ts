@@ -258,13 +258,12 @@ export async function getMonthlyMachineReport(
         }
       }
 
-      // For normal machines (panel), count unique panels and exclude if failed/stopped
-      // For normal machines (panel), count unique panel_no strings per team, ignoring GAGAL and BERHENTI strings
+      // For normal machines (panel), count unique panel_no strings per team, ignoring GAGAL, BS and BERHENTI strings
       if (header.panel_no && header.panel_no !== "METERAN") {
         const panelNoStr = String(header.panel_no).toUpperCase();
         
         const isBerhenti = panelNoStr === "BERHENTI";
-        const isGagal = panelNoStr.includes("(GAGAL)");
+        const isGagal = panelNoStr.includes("(GAGAL)") || panelNoStr.includes("(BS)");
         
         if (!isBerhenti && !isGagal) {
           // Excel logic uses UNIQUE() per group. We simulate this using a Set key.

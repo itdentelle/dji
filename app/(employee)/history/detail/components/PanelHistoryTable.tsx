@@ -87,7 +87,9 @@ export default function PanelHistoryTable({
     processed.forEach((p: any, i: number) => {
       const { item, isIstirahatOnly, hasIstirahat, isGradable, opr, grp, tgl, operatorStr } = p;
 
-      currentOpCount += 1;
+      if (item.kategori_masalah !== "X" && !isIstirahatOnly) {
+        currentOpCount += 1;
+      }
 
       let showTgl = true;
       let showGrp = true;

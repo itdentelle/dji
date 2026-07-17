@@ -11,6 +11,7 @@ export default function EmployeeInputPage() {
   const [isDbConnected, setIsDbConnected] = useState(false);
 
   useEffect(() => {
+    localStorage.setItem("last_input_route", "/input");
     async function checkDb() {
       try {
         const supabase = createClient();

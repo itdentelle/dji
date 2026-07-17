@@ -357,6 +357,21 @@ export default function EmployeeForm({
   // Backup Operator state
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [backupOperatorName, setBackupOperatorName] = useState("");
+  
+  // Persist backupOperatorName to localStorage for drafts
+  useEffect(() => {
+    if (isEdit) return;
+    const saved = localStorage.getItem("dji_backup_operator_name");
+    if (saved) {
+      setBackupOperatorName(saved);
+    }
+  }, [isEdit]);
+
+  useEffect(() => {
+    if (isEdit) return;
+    localStorage.setItem("dji_backup_operator_name", backupOperatorName);
+  }, [backupOperatorName, isEdit]);
+
   const [previews, setPreviews] = useState<{
     before: string | null;
     after: string | null;
@@ -535,11 +550,11 @@ export default function EmployeeForm({
       }
       
       let rawPanelNo = String(initialData.panel_no || "1");
-      let isGagal = false;
-      if (rawPanelNo.includes("(GAGAL)")) {
-        isGagal = true;
-        rawPanelNo = rawPanelNo.replace(/\(GAGAL\)/g, "").trim();
-      }
+        let isGagal = false;
+        if (rawPanelNo.includes("(GAGAL)") || rawPanelNo.includes("(BS)")) {
+          isGagal = true;
+          rawPanelNo = rawPanelNo.replace(/\(GAGAL\)/g, "").replace(/\(BS\)/g, "").trim();
+        }
 
       reset({
         operatorId: String(initialData.operator_id || ""),
@@ -830,7 +845,7 @@ export default function EmployeeForm({
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("employee", submitData);
         if (!isEdit) {
-          localStorage.removeItem("dji_form_draft_panel");
+          localStorage.removeItem("dji_form_draft_panel"); localStorage.removeItem("dji_backup_operator_name");
         }
         setSuccessData({
           ...data,
@@ -850,7 +865,7 @@ export default function EmployeeForm({
 
       if (result.success) {
         if (!isEdit) {
-          localStorage.removeItem("dji_form_draft_panel");
+          localStorage.removeItem("dji_form_draft_panel"); localStorage.removeItem("dji_backup_operator_name");
         }
         setSuccessData({
           ...data,
@@ -869,7 +884,7 @@ export default function EmployeeForm({
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("employee", submitData);
         if (!isEdit) {
-          localStorage.removeItem("dji_form_draft_panel");
+          localStorage.removeItem("dji_form_draft_panel"); localStorage.removeItem("dji_backup_operator_name");
         }
         setSuccessData({
           ...data,
@@ -888,13 +903,15 @@ export default function EmployeeForm({
   const handleClearHeader = () => {
     if (window.confirm("Yakin ingin mereset/mengosongkan data Header?")) {
       localStorage.removeItem("dji_form_header");
-      localStorage.removeItem("dji_form_draft_panel");
+      localStorage.removeItem("dji_form_draft_panel"); localStorage.removeItem("dji_backup_operator_name");
+      localStorage.removeItem("dji_backup_operator_name");
       reset({
         ...watch(), // Keep current panel inputs
         nomorMc: "",
         tanggalPotong: "",
         pick: "",
         noOrderBarang: "",
+        noCustomer: "",
         jenisBenangDasar: "",
         liner: "",
         heavy: "",

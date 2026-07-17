@@ -31,6 +31,14 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [inputRoute, setInputRoute] = React.useState("/input");
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem("last_input_route");
+    if (saved) {
+      setInputRoute(saved);
+    }
+  }, []);
 
   if (!user) return null;
 
@@ -71,7 +79,7 @@ export default function Sidebar() {
       items: [
         {
           name: "Input Produksi",
-          href: "/input",
+          href: inputRoute,
           icon: ClipboardList,
           roles: ["admin", "operator"],
         },

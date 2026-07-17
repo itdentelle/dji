@@ -94,7 +94,7 @@ export async function createProductionReport(
       potongan_ke: validated.potonganKe ? parseInt(validated.potonganKe) : null,
       panel_no: validated.panelNo
         ? validated.isPanelGagal
-          ? `${validated.panelNo} (GAGAL)`
+          ? `${validated.panelNo} (BS)`
           : validated.panelNo
         : null,
       pcs: pcsTarget,
@@ -121,9 +121,7 @@ export async function createProductionReport(
     };
 
     // 2. Siapkan Data Details & Defects
-    const pcsDataToProcess = validated.isPanelGagal
-      ? validated.pcsData.filter((pcs) => pcs.isBs)
-      : validated.pcsData;
+    const pcsDataToProcess = validated.pcsData;
 
     const downtimeRecordsData: any[] = [];
     if (validated.downtimeEvents && validated.downtimeEvents.length > 0) {
@@ -154,9 +152,10 @@ export async function createProductionReport(
 
     const detailData = pcsDataToProcess.map((pcsItem, idx) => {
       const detailId = generateExcelStyleId() + "-" + idx;
-      const jmlHasilNum = pcsItem.jmlHasilProduksi
+      const isBsForce = validated.isPanelGagal || pcsItem.isBs;
+      const jmlHasilNum = isBsForce ? 0 : (pcsItem.jmlHasilProduksi
         ? parseInt(pcsItem.jmlHasilProduksi)
-        : null;
+        : null);
       const pcsIndexStr = pcsItem.pcsIndex || (idx + 1).toString();
       const pcsIndexNum = parseInt(pcsIndexStr);
 
@@ -230,7 +229,7 @@ export async function createProductionReport(
         indikatorStop = true;
       }
 
-      if (pcsItem.isBs) {
+      if (isBsForce) {
         kategoriStr = "X";
       }
 
