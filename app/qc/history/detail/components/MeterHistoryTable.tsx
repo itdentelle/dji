@@ -28,9 +28,22 @@ export default function MeterHistoryTable({
 
     detailsToDisplay.forEach((item: any, idx: number) => {
       const h = item.production_headers || {};
-      const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
-                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
-                          !item.kategori_masalah && !item.detail_masalah;
+      let hasRealDefects = false;
+      if (item.production_defects && Array.isArray(item.production_defects)) {
+        item.production_defects.forEach((d: any) => {
+          if (!((d.kategori || "").toUpperCase().includes("ISTIRAHAT") || (d.detail || "").toUpperCase().includes("ISTIRAHAT"))) {
+            hasRealDefects = true;
+          }
+        });
+      }
+      if (!item.production_defects || item.production_defects.length === 0) {
+        if (item.kategori_masalah && !item.kategori_masalah.toUpperCase().includes("ISTIRAHAT")) {
+          hasRealDefects = true;
+        }
+      }
+      const hasIstirahatRaw = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT");
+      const hasIstirahat = hasIstirahatRaw && !hasRealDefects;
+      const isIstirahat = hasIstirahat && !item.kategori_masalah && !item.detail_masalah;
       const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
       const hasDefect = !!item.kategori_masalah || !!item.detail_masalah || (item.keterangan_cacat && item.keterangan_cacat !== "START" && item.keterangan_cacat !== "FINISH" && !isIstirahat);
 
@@ -252,15 +265,28 @@ export default function MeterHistoryTable({
           return true;
         })
         .join("\n");
-      const cacatText = isIstirahat ? "ISTIRAHAT" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
+      let backupOpName = "";
+      if (hasIstirahat) {
+        let extractedBackupOp = h.operator_backup || "";
+        if (!extractedBackupOp && item.keterangan_cacat) {
+          const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+          if (match && match[1]) {
+            extractedBackupOp = match[1].trim();
+          }
+        }
+        backupOpName = extractedBackupOp;
+      }
 
-      const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !isIstirahat && !isFinishReport;
+      const cacatText = hasIstirahat && !hasErrorDetail ? "ISTIRAHAT" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
+
+      const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !hasIstirahat && !isFinishReport;
       if (!isPlaceholder) {
         items.push({
           ...item,
           isStartRow: false,
           isMeter: true,
           isIstirahat,
+          hasIstirahat,
           isFinishReport,
           displayNo: (globalRowCount + 1).toString(),
           tglStr: finalTglStr,
@@ -268,10 +294,11 @@ export default function MeterHistoryTable({
           oprStr: finalOprStr,
           meterDisplay,
           cacatDisplay: cacatText,
+          backupOpName,
           isGradable,
-          showTgl,
-          showGrp,
-          showOpr,
+          showTgl: hasIstirahat ? false : showTgl,
+          showGrp: hasIstirahat ? false : showGrp,
+          showOpr: hasIstirahat ? true : showOpr,
           hasErrorDetail
         });
         globalRowCount += 1;
@@ -376,13 +403,13 @@ export default function MeterHistoryTable({
                 {item.displayNo}
               </td>
               <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100 border-b border-slate-100">
-                {item.showTgl ? item.tglStr : ""}
+                {item.hasIstirahat ? "" : (item.showTgl ? item.tglStr : "")}
               </td>
               <td className="px-1 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
-                {item.showGrp ? item.grpStr : ""}
+                {item.hasIstirahat ? "" : (item.showGrp ? item.grpStr : "")}
               </td>
-              <td className="px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100">
-                {item.showOpr ? item.oprStr : ""}
+              <td className={`px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100 ${item.hasIstirahat ? "italic font-bold text-slate-500" : ""}`}>
+                {item.hasIstirahat ? "Istirahat" : (item.showOpr ? item.oprStr : "")}
               </td>
               <td className="px-1 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100 border-b border-slate-100">
                 {item.meterDisplay}
@@ -391,11 +418,16 @@ export default function MeterHistoryTable({
                 {Icon ? <Icon className={`w-4 h-4 mx-auto ${iconColor}`} /> : null}
               </td>
               <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${
-                item.isIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH"
-                  ? "text-slate-600 font-semibold italic"
+                item.hasIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH"
+                  ? "text-slate-500"
                   : (item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay !== "START" ? "text-rose-600" : "text-slate-400")
               }`}>
-                {item.cacatDisplay}
+                {item.backupOpName && item.hasIstirahat && <div className="text-slate-700 font-bold mb-0.5">{item.backupOpName}</div>}
+                {!item.hasIstirahat && (item.cacatDisplay || "-")}
+                {item.hasIstirahat && item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay !== "ISTIRAHAT" && (
+                  <div className="text-rose-600">{item.cacatDisplay}</div>
+                )}
+                {item.hasIstirahat && (!item.cacatDisplay || item.cacatDisplay === "-" || item.cacatDisplay === "ISTIRAHAT") && !item.backupOpName && "-"}
               </td>
               <td className="px-1 py-1.5 text-center w-24 border-r border-slate-100 border-b border-slate-100">
                 {item.isGradable && (

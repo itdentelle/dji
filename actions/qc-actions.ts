@@ -306,7 +306,7 @@ export async function getPendingQCDetailsByBatch(mesin: string, designId: string
 
     let query = supabase
       .from("production_headers")
-      .select("id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operators(nama_operator), groups(nama_grup), production_details(id, pcs_index, meter_kain, detail_masalah)")
+      .select("id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operator_backup, operators(nama_operator), groups(nama_grup), production_details(id, pcs_index, meter_kain, detail_masalah)")
       .eq("nomor_mc", mesin)
       .eq("design_id", designId)
       .eq("potongan_ke", parseInt(potonganKe));
@@ -324,7 +324,7 @@ export async function getPendingQCDetailsByBatch(mesin: string, designId: string
 
     const { data: details, error: detailsError } = await supabase
       .from("production_details")
-      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id")
+      .select("id, pcs_index, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, meter_kain, roll_no, indikator_stop, final_inspection_id, header_id, production_defects(*)")
       .in("header_id", headerIds)
       .is("final_inspection_id", null);
 
@@ -515,7 +515,7 @@ export async function searchQCHistory(filters: {
           id, final_inspection_id,
           detail:production_details!inner (
             id, pcs_index, final_inspection_id, header_id, roll_no, meter_kain, keterangan_qc, keterangan_cacat, kategori_masalah, detail_masalah,
-            header:production_headers!inner (id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operators(nama_operator), groups(nama_grup))
+            header:production_headers!inner (id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operator_backup, operators(nama_operator), groups(nama_grup))
           )
         )
       `)
@@ -712,8 +712,9 @@ export async function getPendingQCDetailsByDate(tanggal: string) {
         indikator_stop, 
         final_inspection_id, 
         header_id,
+        production_defects(*),
         production_headers!inner (
-          id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operators(nama_operator), groups(nama_grup)
+          id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operator_backup, operators(nama_operator), groups(nama_grup)
         )
       `)
       .is("final_inspection_id", null);
@@ -921,10 +922,12 @@ export async function insertMissingPanel(params: {
   pcsIndex?: number;
   /** Kategori cacat (optional) */
   kategoriMasalah?: string[];
-  /** Detail cacat (optional) */
+  /** Detail masalah (optional) */
   detailMasalah?: string;
-  /** Keterangan cacat (optional) */
+  /** Keterangan cacat tambahan (optional) */
   keteranganCacat?: string;
+  /** Jika true, ini adalah panel reject/BS sehingga panel lain tidak tergeser */
+  isBs?: boolean;
 }) {
   try {
     const supabase = await createAdminClient();
@@ -984,22 +987,37 @@ export async function insertMissingPanel(params: {
       return { success: false, error: "Harus menyebutkan insertAt atau appendToEnd." };
     }
 
-    // Check if header already exists
+    // Cek apakah header sudah ada
     const existingHeader = panelHeaders.find(h => parseInt(h.panel_no) === newPanelNo);
     const isAlreadyLinkedToCurrentPcs = existingHeader?.production_details?.some((d: any) => String(d.pcs_index) === String(params.pcsIndex));
 
     let targetHeaderId = existingHeader?.id;
     
-    // Kita HANYA perlu menggeser (shift) jika panel tersebut sudah ada DAN sudah dipakai oleh PCS ini.
-    // Jika panel tersebut belum ada (gap), kita cukup membuat panel baru tanpa menggeser panel setelahnya.
-    let needsShift = existingHeader && isAlreadyLinkedToCurrentPcs;
-    let needsNewHeader = !existingHeader || isAlreadyLinkedToCurrentPcs;
+    let needsShift = false;
+    let needsNewHeader = false;
+
+    if (existingHeader) {
+      if (params.isBs) {
+        // Jika BS, jangan geser dan jangan buat header baru (gunakan yang ada)
+        needsShift = false;
+        needsNewHeader = false;
+        targetHeaderId = existingHeader.id;
+      } else {
+        // Jika bukan BS, jika header sudah dipakai, kita harus geser dan buat header baru untuk panel yang disisipkan
+        needsShift = isAlreadyLinkedToCurrentPcs;
+        needsNewHeader = isAlreadyLinkedToCurrentPcs;
+      }
+    } else {
+      needsShift = false;
+      needsNewHeader = true;
+    }
 
     console.log("INSERT PANEL:", {
       newPanelNo,
       existingHeaderFound: !!existingHeader,
       existingHeaderId: existingHeader?.id,
       isAlreadyLinkedToCurrentPcs,
+      isBs: params.isBs,
       needsShift,
       needsNewHeader,
     });
@@ -1130,7 +1148,7 @@ export async function insertMissingPanel(params: {
         id: newDetailId,
         header_id: targetHeaderId,
         pcs_index: params.pcsIndex || 1,
-        jml_hasil_produksi: 1,
+        jml_hasil_produksi: params.isBs ? 0 : 1,
         indikator_stop: false,
         kategori_masalah: params.kategoriMasalah && params.kategoriMasalah.length > 0 ? params.kategoriMasalah.join(", ") : null,
         detail_masalah: params.detailMasalah || null,
@@ -1167,7 +1185,7 @@ export async function getQCDetailsByGroup(nomor_mc: string, design_id: string, p
         final_inspection_id, 
         header_id,
         production_headers!inner (
-          id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operators(nama_operator), groups(nama_grup)
+          id, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operator_backup, operators(nama_operator), groups(nama_grup)
         )
       `)
       .is("final_inspection_id", null)
@@ -1228,7 +1246,7 @@ export async function getQCHistoryDetailById(batchId: string) {
           id, final_inspection_id,
           detail:production_details (
             id, pcs_index, final_inspection_id, header_id, roll_no, meter_kain, keterangan_qc, keterangan_cacat, kategori_masalah, detail_masalah,
-            header:production_headers (id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operators(nama_operator), groups(nama_grup))
+            header:production_headers (id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operator_backup, operators(nama_operator), groups(nama_grup))
           )
         )
       `)

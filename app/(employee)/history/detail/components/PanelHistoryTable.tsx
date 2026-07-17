@@ -96,22 +96,16 @@ export default function PanelHistoryTable({
       if (tgl === lastTgl) showTgl = false;
       if (grp === lastGrp) showGrp = false;
 
-      if (hasIstirahat) {
-        showTgl = false;
-        showGrp = false;
-        showOpr = true;
-      } else {
-        let prevActualOprStr = "-";
-        for (let k = items.length - 1; k >= 0; k--) {
-          const pItem = items[k];
-          if (!pItem.isTotalRow && !pItem.hasIstirahat) {
-            prevActualOprStr = pItem.production_headers?.operators?.nama_operator || pItem.production_headers?.pic || "-";
-            break;
-          }
+      let prevActualOprStr = "-";
+      for (let k = items.length - 1; k >= 0; k--) {
+        const pItem = items[k];
+        if (!pItem.isTotalRow) {
+          prevActualOprStr = pItem.oprStr || "-";
+          break;
         }
-        if (prevActualOprStr === opr) {
-          showOpr = false;
-        }
+      }
+      if (prevActualOprStr === opr) {
+        showOpr = false;
       }
 
       if (tgl === lastTgl) showTgl = false;
@@ -119,7 +113,7 @@ export default function PanelHistoryTable({
 
       lastTgl = tgl;
       lastGrp = grp;
-      lastOpr = hasIstirahat ? "Istirahat" : opr;
+      lastOpr = opr;
 
       items.push({
         ...item,
@@ -135,7 +129,7 @@ export default function PanelHistoryTable({
         showTgl,
         showGrp,
         showOpr,
-        oprStr: hasIstirahat ? "Istirahat" : opr,
+        oprStr: opr,
         grpStr: grp,
         tglStr: tgl,
         hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
@@ -207,8 +201,11 @@ export default function PanelHistoryTable({
 
           let downtimeDisplay = "-";
           let masalahLines: string[] = [];
+          let backupOpName = "";
           if (isIstirahatOnly) {
-            // break rows have no defects, so masalahLines remains empty (rendering as "-")
+            if (itemHeader?.operator_backup) {
+              backupOpName = itemHeader.operator_backup;
+            }
           } else {
             let matchedEvents: any[] = [];
             
@@ -397,23 +394,27 @@ export default function PanelHistoryTable({
             if (detail.keterangan_qc && detail.keterangan_qc !== "-") {
               masalahLines.push(`QC: ${detail.keterangan_qc}`);
             }
+
+            if (hasIstirahat && itemHeader?.operator_backup) {
+              backupOpName = itemHeader.operator_backup;
+            }
           }
           
-          const hasDefect = masalahLines.length > 0;
+          const hasDefect = masalahLines.length > 0 && masalahLines[0] !== "-";
           if (masalahLines.length === 0) masalahLines.push("-");
 
           return (
-            <tr key={item.id || idx} className={`${isIstirahatOnly ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
+            <tr key={item.id || idx} className={`${hasIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
               <td className="px-1 py-1 font-bold text-slate-800 text-center">
                 {item.displayNo}
               </td>
               <td className="px-1 py-1 text-slate-600 whitespace-nowrap">
                 {displayTgl}
               </td>
-              <td className="px-1 py-1 font-medium text-slate-700 text-center">
+              <td className={`px-1 py-1 font-medium text-center text-slate-700`}>
                 {displayGrp}
               </td>
-              <td className={`px-1 py-1 leading-tight ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
+              <td className={`px-1 py-1 leading-tight text-slate-700 ${hasIstirahat ? "italic font-bold text-slate-500" : "font-medium"}`}>
                 {hasIstirahat ? "Istirahat" : displayOp}
               </td>
               <td className="px-1 py-1 text-center">
@@ -427,8 +428,11 @@ export default function PanelHistoryTable({
                   )
                 )}
               </td>
-              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${hasDefect ? 'text-rose-600' : 'text-slate-400'}`}>
-                {masalahLines.join("\n") || "-"}
+              <td className="px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight">
+                {backupOpName && <div className="text-slate-700 font-bold mb-0.5">{backupOpName}</div>}
+                <div className={hasDefect ? 'text-rose-600' : 'text-slate-400'}>
+                  {masalahLines.join("\n") || "-"}
+                </div>
               </td>
               <td className={`px-1 py-1 text-center text-[11px] font-bold border-l border-slate-100 ${downtimeDisplay && downtimeDisplay !== "-" ? "text-rose-600" : "text-slate-400"}`}>
                 {downtimeDisplay}

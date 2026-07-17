@@ -67,6 +67,7 @@ export const productionFormSchemaBase = z.object({
   fotoBefore: z.string().optional().nullable(),
   fotoAfter: z.string().optional().nullable(),
   jenisLaporan: z.string().optional(),
+  operatorBackup: z.string().optional(),
 
   // Waktu Berhenti (Global)
   totalDowntime: z.string().optional().nullable(),
@@ -125,6 +126,7 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
   hasilProduksiMeter: z.string().optional().nullable(),
   targetMeter: z.string().optional().nullable(),
   jenisLaporan: z.string().optional(),
+  backupOperator: z.string().optional(),
   pcsData: z.array(
     z.object({
       pcsIndex: z.string(),

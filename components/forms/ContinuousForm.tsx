@@ -1063,8 +1063,8 @@ export default function ContinuousForm({
     data.designName = getDesignName(data.designId);
     data.created_by_name = user?.fullName || null;
 
-    if (data.jenisLaporan === "Mulai Istirahat" && backupOperator) {
-      data.jenisLaporan = `Mulai Istirahat (Backup: ${backupOperator})`;
+    if (backupOperator) {
+      data.backupOperator = backupOperator;
     }
 
     const meterAkhirNum = parseFormMeterValue(data.meterAkhir);
@@ -2020,9 +2020,6 @@ export default function ContinuousForm({
                     </div>
                   )}
 
-                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-2">
-                    Pilih <strong>Mulai Istirahat</strong> saat Anda akan pergi istirahat. Pilih <strong>Selesai Istirahat</strong> saat Anda kembali bekerja (meteran akan ditandai dikerjakan helper/saat istirahat).
-                  </p>
                 </div>
 
                 <div className="flex gap-3 mt-6 relative z-10">

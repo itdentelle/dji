@@ -68,8 +68,30 @@ export default function MeterQCTable({
                            !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
                           !item.kategori_masalah && !item.detail_masalah &&
                           h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
-      const hasIstirahat = !!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
-                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT");
+      let hasIstirahatFromDefects = false;
+      let hasRealDefects = false;
+
+      if (item.production_defects && Array.isArray(item.production_defects)) {
+        item.production_defects.forEach((d: any) => {
+          if ((d.kategori || "").toUpperCase().includes("ISTIRAHAT") || (d.detail || "").toUpperCase().includes("ISTIRAHAT")) {
+            hasIstirahatFromDefects = true;
+          } else {
+            hasRealDefects = true;
+          }
+        });
+      }
+
+      if (!item.production_defects || item.production_defects.length === 0) {
+         if (item.kategori_masalah && !item.kategori_masalah.toUpperCase().includes("ISTIRAHAT")) {
+            hasRealDefects = true;
+         }
+      }
+
+      const hasIstirahatRaw = !!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
+                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT") ||
+                           hasIstirahatFromDefects;
+                           
+      const hasIstirahat = hasIstirahatRaw && !hasRealDefects;
       const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
 
       let cacatLines: string[] = [];
@@ -179,10 +201,10 @@ export default function MeterQCTable({
             }
             if (parts[partIndex] && parts[partIndex] !== "") {
               const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
-              return `${line} (Blok ${cleanB})`;
+              return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
             } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
               const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
-              return `${line} (Blok ${cleanB})`;
+              return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
             }
             return line;
           });
@@ -279,6 +301,14 @@ export default function MeterQCTable({
       const cacatText = isIstirahatOnly ? "-" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
 
       const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !isIstirahatOnly && !isFinishReport;
+      let extractedBackupOp = h.operator_backup || "";
+      if (!extractedBackupOp && item.keterangan_cacat) {
+        const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+        if (match && match[1]) {
+          extractedBackupOp = match[1].trim();
+        }
+      }
+
       if (!isPlaceholder) {
         items.push({
           ...item,
@@ -293,6 +323,7 @@ export default function MeterQCTable({
           oprStr: finalOprStr,
           meterDisplay,
           cacatDisplay: cacatText,
+          backupOpName: extractedBackupOp,
           isGradable: !isFinishReport && !hasIstirahat,
           showTgl,
           showGrp,
@@ -354,7 +385,7 @@ export default function MeterQCTable({
               );
             }
             return (
-              <tr key={item.id} className={`${item.isIstirahatOnly ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
+              <tr key={item.id} className={`${item.hasIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
                 <td className="px-1 py-1.5 font-bold text-slate-800 text-center text-xs w-7 border-r border-slate-100">
                   {item.displayNo}
                 </td>
@@ -373,8 +404,10 @@ export default function MeterQCTable({
                 <td className="px-1 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100">
                   {!item.isGradable ? "" : (item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
                 </td>
-                <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${item.hasIstirahat ? 'text-slate-500 italic' : ((!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600')}`}>
-                  {item.cacatDisplay || "-"}
+                <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${item.hasIstirahat ? 'text-slate-500' : ((!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600')}`}>
+                  {item.backupOpName && item.hasIstirahat && <div className="font-bold text-slate-700">{item.backupOpName}</div>}
+                  {!item.hasIstirahat && (item.cacatDisplay || "-")}
+                  {item.hasIstirahat && !item.backupOpName && "-"}
                 </td>
                 <td className="px-1 py-1.5 text-center w-24 border-r border-slate-100">
                   {item.isGradable && (

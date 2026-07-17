@@ -422,7 +422,7 @@ export async function searchMendingHistory(filters: {
           id, hasil_mending,
           detail:production_details!inner (
             id, pcs_index, final_inspection_id, header_id, roll_no, meter_kain, keterangan_qc, keterangan_cacat, kategori_masalah, detail_masalah,
-            header:production_headers!inner (id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operators(nama_operator), groups(nama_grup))
+            header:production_headers!inner (id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, no_customer, course, rpm, status_matching, operator_backup, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, operators(nama_operator), groups(nama_grup))
           )
         )
       `, { count: "exact" })
@@ -533,7 +533,7 @@ export async function getPendingMendingDetailsByDate(tanggal: string) {
         status_mending,
         header_id,
         production_headers!inner (
-          id, tanggal_jam, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operators(nama_operator), groups(nama_grup)
+          id, tanggal_jam, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operator_backup, operators(nama_operator), groups(nama_grup)
         ),
         qc_inspection_items (
           qc_inspection_batches (berat_kain, inspeksi_ceklis, inspeksi_silang)
@@ -588,7 +588,7 @@ export async function getMendingDetailsByGroup(nomor_mc: string, design_id: stri
         status_mending,
         header_id,
         production_headers!inner (
-          id, tanggal_jam, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operators(nama_operator), groups(nama_grup)
+          id, tanggal_jam, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operator_backup, operators(nama_operator), groups(nama_grup)
         ),
         qc_inspection_items (
           qc_inspection_batches (berat_kain, inspeksi_ceklis, inspeksi_silang)
@@ -671,7 +671,7 @@ export async function getMendingReportData(nomor_mc?: string, potongan_ke?: stri
           detail:production_details!inner (
             id, pcs_index, final_inspection_id, header_id, roll_no, meter_kain, keterangan_qc, jml_hasil_produksi, kategori_masalah, detail_masalah, keterangan_cacat, indikator_stop,
             header:production_headers!inner (
-              id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, meter_awal, meter_akhir,
+              id, tanggal_jam, design_id, potongan_ke, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operator_backup, meter_awal, meter_akhir,
               operators(nama_operator), groups(nama_grup)
             ),
             qc_items:qc_inspection_items (
@@ -740,7 +740,7 @@ export async function getAllDetailsForPcs(nomor_mc: string, design_id: string, p
         status_mending,
         header_id,
         production_headers!inner (
-          id, tanggal_jam, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operators(nama_operator), groups(nama_grup)
+          id, tanggal_jam, panel_no, nomor_mc, pic:created_by_name, tgl, tanggal_potong, pick, no_order_barang, design_id, potongan_ke, meter_awal, meter_akhir, course, rpm, no_customer, jenis_benang_dasar, liner, heavy, shadow, pinggiran, status_matching, operator_backup, operators(nama_operator), groups(nama_grup)
         )
       `)
       .eq("production_headers.nomor_mc", nomor_mc)

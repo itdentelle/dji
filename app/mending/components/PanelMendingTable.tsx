@@ -85,8 +85,13 @@ export default function PanelMendingTable({
               <td className="px-2 py-1 text-center font-bold text-sm border-r border-slate-100 border-b border-slate-100">
                 {item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>}
               </td>
-              <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
-                {item.cacatDisplay || "-"}
+              <td className="px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
+                {item.backupOpName && item.isIstirahat && <div className="text-slate-700 font-bold mb-0.5">{item.backupOpName}</div>}
+                <div className={item.cacatDisplay && item.cacatDisplay !== "-" ? "text-rose-600" : "text-slate-400"}>
+                  {!item.isIstirahat && (item.cacatDisplay || "-")}
+                  {item.isIstirahat && item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay}
+                  {item.isIstirahat && (!item.cacatDisplay || item.cacatDisplay === "-") && !item.backupOpName && "-"}
+                </div>
               </td>
               <td className="px-2 py-1 border-r border-slate-100 border-b border-slate-100">
                 {item.isGradable ? (

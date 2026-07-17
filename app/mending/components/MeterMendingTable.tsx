@@ -93,8 +93,8 @@ export default function MeterMendingTable({
               <td className="px-1.5 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
                 {item.showGrp ? item.grpStr : ""}
               </td>
-              <td className="px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100">
-                {item.showOpr ? item.oprStr : ""}
+              <td className={`px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100 ${item.hasIstirahat ? "italic font-bold text-slate-500" : ""}`}>
+                {item.hasIstirahat ? "Istirahat" : (item.showOpr ? item.oprStr : "")}
               </td>
               <td className="px-1.5 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100 border-b border-slate-100">
                 {item.meterDisplay}
@@ -102,8 +102,17 @@ export default function MeterMendingTable({
               <td className="px-1.5 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100 border-b border-slate-100">
                 {!item.isGradable ? "" : (item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
               </td>
-              <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${(!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600'}`}>
-                {item.cacatDisplay || "-"}
+              <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${
+                item.hasIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH"
+                  ? "text-slate-500"
+                  : (item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay !== "START" ? "text-rose-600" : "text-slate-400")
+              }`}>
+                {item.backupOpName && item.hasIstirahat && <div className="text-slate-700 font-bold mb-0.5">{item.backupOpName}</div>}
+                {!item.hasIstirahat && (item.cacatDisplay || "-")}
+                {item.hasIstirahat && item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay !== "ISTIRAHAT" && (
+                  <div className="text-rose-600">{item.cacatDisplay}</div>
+                )}
+                {item.hasIstirahat && (!item.cacatDisplay || item.cacatDisplay === "-" || item.cacatDisplay === "ISTIRAHAT") && !item.backupOpName && "-"}
               </td>
               <td className="px-2 py-1.5 text-center w-24 border-r border-slate-100 border-b border-slate-100">
                 {item.isGradable ? (

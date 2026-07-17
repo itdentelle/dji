@@ -157,9 +157,15 @@ function HistoryDetailContent() {
 
       {/* Laporan Produksi Table */}
       <div className="pb-4">
-        <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-          Rincian per Panel
-        </h4>
+        {(() => {
+          const isMeterReport = detailData.panels?.some((p: any) => p.panel_no === "METERAN");
+          if (isMeterReport) return null;
+          return (
+            <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+              Rincian per Panel
+            </h4>
+          );
+        })()}
           {(() => {
             // Group panels by pcs
             const pcsGroups: { [key: string]: any[] } = {};

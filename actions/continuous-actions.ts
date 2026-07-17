@@ -282,6 +282,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
       created_by_name: validated.created_by_name || null,
       pic: validated.pic || null,
       downtime_events: validated.downtimeEvents && validated.downtimeEvents.length > 0 ? JSON.stringify(validated.downtimeEvents) : null,
+      operator_backup: validated.backupOperator || null,
     };
 
     const pcsDataToProcess = validated.isPanelGagal 

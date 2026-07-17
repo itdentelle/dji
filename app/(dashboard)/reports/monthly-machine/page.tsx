@@ -205,7 +205,7 @@ export default function MonthlyMachineReportPage() {
                     const isFirst = idx === 0;
                     const td = dayData.teamData[team];
                     
-                    const p100 = td.hasil_produksi > 0 && dayData.eff_100 > 0 ? ((td.hasil_produksi / dayData.eff_100) * 100).toFixed(2) + "%" : "0.00%";
+                    const p100 = td.hasil_produksi > 0 && td.eff_100 > 0 ? ((td.hasil_produksi / td.eff_100) * 100).toFixed(2) + "%" : "0.00%";
                     const pCacat = td.jumlah_cacat > 0 && td.hasil_produksi > 0 ? ((td.jumlah_cacat / td.hasil_produksi) * 100).toFixed(2) + "%" : "0.00%";
                     const pEff = ((shiftDurationSecs - td.downtime_detik) / shiftDurationSecs * 100).toFixed(2) + "%";
 
@@ -220,11 +220,11 @@ export default function MonthlyMachineReportPage() {
                             <td rowSpan={3} className="border border-slate-300 p-2 text-center sticky left-0 bg-slate-50 z-10">{dayData.tanggal}</td>
                             <td rowSpan={3} className="border border-slate-300 p-2 text-center font-bold text-slate-800">{dayData.desain}</td>
                             <td rowSpan={3} className="border border-slate-300 p-2"></td>
-                            <td rowSpan={3} className="border border-slate-300 p-2 text-center">{dayData.courses || ""}</td>
-                            <td rowSpan={3} className="border border-slate-300 p-2 text-center">{dayData.rpm || ""}</td>
-                            <td rowSpan={3} className="border border-slate-300 p-2 text-center">{dayData.eff_100 || ""}</td>
                           </>
                         )}
+                        <td className="border border-slate-300 p-1.5 text-center bg-slate-50/50 font-medium">{td.courses || ""}</td>
+                        <td className="border border-slate-300 p-1.5 text-center bg-slate-50/50 font-medium">{td.rpm || ""}</td>
+                        <td className="border border-slate-300 p-1.5 text-center bg-slate-50/50 font-medium">{td.eff_100 || ""}</td>
                         <td className="border border-slate-300 p-1.5 text-center font-black text-slate-500 bg-slate-50/50">{team}</td>
                         <td className="border border-slate-300 p-1.5 px-3 truncate max-w-[120px]">{td.operator_name}</td>
                         <td className="border border-slate-300 p-1.5 text-center bg-sky-50/30">{td.hasil_produksi}</td>

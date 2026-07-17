@@ -21,12 +21,20 @@ export default function PanelQCTable({
     const items: any[] = [];
     
     // Step 1: Pre-process items to identify operators and Istirahat
-    const processed = detailsToDisplay.map((item) => {
+    const sorted = [...detailsToDisplay].sort((a, b) => {
+      const pA = parseInt(a.production_headers?.panel_no || "0");
+      const pB = parseInt(b.production_headers?.panel_no || "0");
+      if (pA !== pB) return pA - pB;
+      return (b.jml_hasil_produksi || 0) - (a.jml_hasil_produksi || 0);
+    });
+
+    const processed = sorted.map((item) => {
       const h = item.production_headers || {};
-      const opr = h.operators?.nama_operator || h.pic || h.created_by_name || "";
+      const oprBase = h.operators?.nama_operator || h.pic || h.created_by_name || "";
+      const opr = h.operator_backup ? `${oprBase} (Backup: ${h.operator_backup})` : oprBase;
       const grp = h.groups?.nama_grup || "";
       const tgl = h.tgl || "";
-      const operatorStr = (grp ? `(${grp}) ` : '') + opr;
+      const operatorStr = (grp ? `(${grp}) ` : '') + oprBase;
 
       const isIstirahatOnly = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
                            !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
@@ -38,6 +46,7 @@ export default function PanelQCTable({
         item,
         isIstirahatOnly,
         hasIstirahat,
+        oprBase,
         opr,
         grp,
         tgl,
@@ -52,7 +61,7 @@ export default function PanelQCTable({
     let lastOpr = "";
 
     processed.forEach((p, i) => {
-      const { item, isIstirahatOnly, hasIstirahat, opr, grp, tgl, operatorStr } = p;
+      const { item, isIstirahatOnly, hasIstirahat, oprBase, opr, grp, tgl, operatorStr } = p;
 
       currentOpCount += 1;
 
@@ -62,11 +71,11 @@ export default function PanelQCTable({
 
       if (tgl === lastTgl) showTgl = false;
       if (grp === lastGrp) showGrp = false;
-      if (opr === lastOpr) showOpr = false;
+      if (oprBase === lastOpr) showOpr = false;
 
       lastTgl = tgl;
       lastGrp = grp;
-      lastOpr = opr;
+      lastOpr = oprBase;
 
       items.push({
         ...item,
@@ -82,6 +91,7 @@ export default function PanelQCTable({
         showTgl,
         showGrp,
         showOpr,
+        oprBase,
         hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
       });
 
@@ -265,10 +275,10 @@ export default function PanelQCTable({
                   
                   if (parts[partIndex] && parts[partIndex] !== "") {
                     const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
-                    return `${line} (Blok ${cleanB})`;
+                    return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
                   } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
                      const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
-                     return `${line} (Blok ${cleanB})`;
+                     return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
                   }
                   return line;
                 });
@@ -289,26 +299,38 @@ export default function PanelQCTable({
             }
             let cacat = cacatLines.join("\n");
 
+            let extractedBackupOp = item.production_headers?.operator_backup || "";
+            if (!extractedBackupOp && item.keterangan_cacat) {
+              const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+              if (match && match[1]) {
+                extractedBackupOp = match[1].trim();
+              }
+            }
+
             return (
-            <tr key={item.id} className={`${isIstirahatOnly ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
-              <td className="px-1 py-1 font-bold text-slate-800 text-center">
-                {item.production_headers?.panel_no || "-"}
+            <tr key={item.id} className={`${hasIstirahat ? "bg-amber-50/30" : (item.jml_hasil_produksi === 0 ? "bg-rose-50/30" : "hover:bg-slate-50")} transition-colors`}>
+              <td className="px-1 py-1 font-bold text-slate-800 text-center flex flex-col items-center justify-center">
+                <span>{item.production_headers?.panel_no || "-"}</span>
+                {item.jml_hasil_produksi === 0 && (
+                  <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded mt-0.5 leading-none shadow-sm border border-rose-200">BS</span>
+                )}
               </td>
               <td className="px-1 py-1 text-slate-600 whitespace-nowrap">
-                {showTgl ? tglStr : ""}
+                {hasIstirahat ? "" : (showTgl ? tglStr : "")}
               </td>
               <td className="px-1 py-1 font-medium text-slate-700 text-center">
-                {showGrp ? grpStr : ""}
+                {hasIstirahat ? "" : (showGrp ? grpStr : "")}
               </td>
               <td className={`px-1 py-1 leading-tight ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
-                {hasIstirahat ? "Istirahat" : (showOpr ? oprStr : "")}
+                {hasIstirahat ? "Istirahat" : (showOpr ? item.oprBase : "")}
               </td>
               <td className="px-1 py-1 text-center font-bold text-sm">
                 {item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>}
               </td>
               
-              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${hasIstirahat ? 'text-slate-500 italic' : 'text-rose-600'}`}>
-                {cacat || "-"}
+              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahatOnly ? 'text-slate-500' : 'text-rose-600'}`}>
+                {extractedBackupOp && hasIstirahat && <div className="font-bold text-slate-700 mb-0.5">{extractedBackupOp}</div>}
+                {!isIstirahatOnly && (cacat || "-")}
               </td>
               
               <td className="px-1 py-1">

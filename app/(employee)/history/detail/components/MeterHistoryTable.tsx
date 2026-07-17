@@ -49,19 +49,21 @@ export default function MeterHistoryTable({
   const displayItems = React.useMemo(() => {
     const filtered = detailsToDisplay.filter((item: any) => {
       const h = item.production_headers || {};
-      const hasIstirahatDetail = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT");
-      
-      let hasIstirahatBatch = false;
-      const hDetails = h.production_details || [];
-      if (hDetails.some((d: any) => (d.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (d.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT"))) {
-        hasIstirahatBatch = true;
+      let hasRealDefects = false;
+      if (item.production_defects && Array.isArray(item.production_defects)) {
+        item.production_defects.forEach((d: any) => {
+          if (!((d.kategori || "").toUpperCase().includes("ISTIRAHAT") || (d.detail || "").toUpperCase().includes("ISTIRAHAT"))) {
+            hasRealDefects = true;
+          }
+        });
       }
-      const dRecs = h.downtime_records || [];
-      if (dRecs.some((r: any) => (r.kategori || "").toUpperCase().includes("ISTIRAHAT"))) {
-        hasIstirahatBatch = true;
+      if (!item.production_defects || item.production_defects.length === 0) {
+        if (item.kategori_masalah && !item.kategori_masalah.toUpperCase().includes("ISTIRAHAT")) {
+          hasRealDefects = true;
+        }
       }
-
-      const hasIstirahat = hasIstirahatDetail || hasIstirahatBatch;
+      const hasIstirahatRaw = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT");
+      const hasIstirahat = hasIstirahatRaw && !hasRealDefects;
       const isIstirahat = hasIstirahat && !item.kategori_masalah && !item.detail_masalah;
       const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
       const hasDefect = !!item.kategori_masalah || !!item.detail_masalah || (item.keterangan_cacat && item.keterangan_cacat !== "START" && item.keterangan_cacat !== "FINISH" && !isIstirahat);
@@ -79,23 +81,27 @@ export default function MeterHistoryTable({
 
     const processed = filtered.map((item: any) => {
       const h = item.production_headers || {};
-      const opr = h.operators?.nama_operator || h.pic || "";
+      const actualOpr = h.operators?.nama_operator || h.pic || "";
+      const opr = actualOpr;
       const grp = h.groups?.nama_grup || "";
       const tgl = h.tgl || "";
       const operatorStr = (grp ? `(${grp}) ` : '') + opr;
 
-      const hasIstirahatDetail = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT");
-      let hasIstirahatBatch = false;
-      const hDetails = h.production_details || [];
-      if (hDetails.some((d: any) => (d.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (d.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT"))) {
-        hasIstirahatBatch = true;
+      let hasRealDefectsMap = false;
+      if (item.production_defects && Array.isArray(item.production_defects)) {
+        item.production_defects.forEach((d: any) => {
+          if (!((d.kategori || "").toUpperCase().includes("ISTIRAHAT") || (d.detail || "").toUpperCase().includes("ISTIRAHAT"))) {
+            hasRealDefectsMap = true;
+          }
+        });
       }
-      const dRecs = h.downtime_records || [];
-      if (dRecs.some((r: any) => (r.kategori || "").toUpperCase().includes("ISTIRAHAT"))) {
-        hasIstirahatBatch = true;
+      if (!item.production_defects || item.production_defects.length === 0) {
+        if (item.kategori_masalah && !item.kategori_masalah.toUpperCase().includes("ISTIRAHAT")) {
+          hasRealDefectsMap = true;
+        }
       }
-
-      const hasIstirahat = hasIstirahatDetail || hasIstirahatBatch;
+      const hasIstirahatRaw = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT");
+      const hasIstirahat = hasIstirahatRaw && !hasRealDefectsMap;
       const isIstirahat = hasIstirahat && !item.kategori_masalah && !item.detail_masalah;
       
       const isFinish = item.keterangan_cacat === "FINISH" || item.production_headers?.panel_no === "FINISH" || item.production_headers?.meter_akhir;
@@ -110,6 +116,8 @@ export default function MeterHistoryTable({
         grp,
         tgl,
         operatorStr,
+        hasIstirahat,
+        backupOp: h.operator_backup,
       };
     });
 
@@ -122,7 +130,7 @@ export default function MeterHistoryTable({
     let lastOprString = "";
 
     processed.forEach((p: any, idx: number) => {
-      const { item, isIstirahat, isGradable, opr, grp, tgl, operatorStr } = p;
+      const { item, isIstirahat, isGradable, opr, grp, tgl, operatorStr, hasIstirahat, backupOp } = p;
       const h = item.production_headers || {};
 
       let cacatLines: string[] = [];
@@ -155,7 +163,6 @@ export default function MeterHistoryTable({
           else cacatLines = cacatLines.map(line => line + " [TAMBAHAN QC]");
         }
       } else {
-        // Fallback to legacy string parsing
         let cleanD = item.detail_masalah 
           ? item.detail_masalah.replace(/\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").replace(/\|\s*$/, "").replace(/,\s*$/, "").trim()
           : "";
@@ -242,10 +249,10 @@ export default function MeterHistoryTable({
               }
               if (parts[partIndex] && parts[partIndex] !== "") {
                 const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
-                return `${line} (Blok ${cleanB})`;
+                return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
               } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
                 const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
-                return `${line} (Blok ${cleanB})`;
+                return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
               }
               return line;
             });
@@ -356,42 +363,46 @@ export default function MeterHistoryTable({
 
       let prevTgl = "";
       let prevGrp = "";
-      let prevOpr = "";
-
+      let prevActualOprStr = "-";
       for (let k = items.length - 1; k >= 0; k--) {
         const pItem = items[k];
         if (!pItem.isTotalRow) {
-          prevTgl = pItem.tglStr;
-          prevGrp = pItem.grpStr;
-          prevOpr = pItem.oprStr;
-          break;
+          if (!prevTgl) prevTgl = pItem.tglStr;
+          if (!prevGrp) prevGrp = pItem.grpStr;
+          if (prevActualOprStr === "-") prevActualOprStr = pItem.oprStr || "-";
+          
+          if (prevTgl && prevGrp && prevActualOprStr !== "-") break;
         }
       }
-
-      if (opr === prevOpr) showOpr = false;
-      if (tgl === prevTgl) showTgl = false;
-      if (grp === prevGrp && !showOpr) showGrp = false;
 
       const cleanedCacatLines = cacatLines
         .map((line: string) => line.replace(/\s*\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").trim())
         .filter(Boolean);
 
-      let cacatText = isStartRow ? "START" : (isFinishReport ? "FINISH" : (cleanedCacatLines.join("\n") || "-"));
-      if (isIstirahat) {
-        showTgl = false;
-        showGrp = false;
-        showOpr = true;
-        if (cleanedCacatLines.length === 0) {
-          cacatText = "-";
+      let cacatText = isStartRow 
+        ? "START" 
+        : (cleanedCacatLines.length > 0 ? cleanedCacatLines.join("\n") : (isFinishReport && !hasIstirahat ? "FINISH" : "-"));
+
+      let backupOpName = "";
+      if (hasIstirahat) {
+        if (backupOp) {
+          backupOpName = backupOp;
+        } else if (item.keterangan_cacat) {
+          const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+          if (match && match[1]) {
+            backupOpName = match[1].trim();
+          }
         }
       }
+
+      if (opr === prevActualOprStr) showOpr = false;
+      if (tgl === prevTgl) showTgl = false;
+      if (grp === prevGrp && !showOpr) showGrp = false;
 
       const hasErrorDetail = !!item.kategori_masalah || !!item.detail_masalah;
 
       let downtimeDisplay = "-";
       if (!isStartRow && !isIstirahat) {
-        // Always use downtime_events JSON for per-row meter matching.
-        // downtime_records has no meter column, so it cannot be used for per-row matching.
         let dtEvents: any[] = [];
         try {
           if (h.downtime_events) {
@@ -404,18 +415,15 @@ export default function MeterHistoryTable({
         let totalDowntimeSecs = 0;
 
         if (dtEvents.length > 0) {
-          // Build the set of meter values present in this row
           const detailDefects = item.production_defects || [];
           const metersInThisRow = new Set<string>();
 
           detailDefects.forEach((d: any) => {
             if (d.meter) metersInThisRow.add(cleanMeterVal(d.meter));
           });
-          // Also include the defectMeterStr (fallback from older data path)
           if (defectMeterStr) metersInThisRow.add(cleanMeterVal(defectMeterStr));
 
           if (metersInThisRow.size > 0) {
-            // Sum durations from downtime events whose problems reference any meter in this row
             dtEvents.forEach((e: any) => {
               if (!e.problems || !Array.isArray(e.problems)) return;
               const hasMatch = e.problems.some((p: any) => {
@@ -427,7 +435,6 @@ export default function MeterHistoryTable({
               }
             });
           } else {
-            // No meter context on this row — show total downtime only on first active row of this header
             const firstActiveIdx = processed.findIndex((pp: any) => {
               const ppH = pp.item.production_headers || {};
               return ppH.id === h.id && !pp.isIstirahat;
@@ -437,7 +444,6 @@ export default function MeterHistoryTable({
             }
           }
         } else if (actualDowntimeRecords && actualDowntimeRecords.length > 0) {
-          // No downtime_events JSON — fallback to downtime_records total on first row only
           const headerRecords = actualDowntimeRecords.filter((r: any) => r.header_id === h.id);
           const firstActiveIdx = processed.findIndex((pp: any) => {
             const ppH = pp.item.production_headers || {};
@@ -466,16 +472,18 @@ export default function MeterHistoryTable({
         oprStr: opr,
         meterDisplay,
         cacatDisplay: cacatText,
+        backupOpName,
         isGradable,
         showTgl,
         showGrp,
-        showOpr: isIstirahat ? true : showOpr,
+        showOpr: hasIstirahat ? true : showOpr,
         hasErrorDetail,
         isIstirahat,
+        hasIstirahat,
         downtimeDisplay,
         db_id: item.id,
         header_id: h.id,
-        pcs_index: item.pcs_index  // ← fix: was missing, caused pcs=undefined in edit URL
+        pcs_index: item.pcs_index
       });
       globalRowCount += 1;
     });
@@ -542,7 +550,6 @@ export default function MeterHistoryTable({
                   {item.meterDisplay}
                 </td>
                 <td className="px-1 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100 border-b border-slate-100">
-                  {/* Empty KET for START */}
                 </td>
                 <td className="px-3 py-1.5 text-[11px] font-medium text-slate-400 whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
                   START
@@ -551,30 +558,29 @@ export default function MeterHistoryTable({
                   -
                 </td>
                 <td className="px-1 py-1.5 text-center w-24 border-r border-slate-100 border-b border-slate-100">
-                  {/* Empty AKSI for START */}
                 </td>
               </tr>
             );
           }
 
           const hasMeterDefect = item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay !== "START" && item.cacatDisplay !== "FINISH" && item.cacatDisplay !== "ISTIRAHAT";
-          const meterCacatColor = item.isIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH"
+          const meterCacatColor = item.hasIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH"
             ? "text-slate-600 font-semibold italic"
             : (hasMeterDefect ? "text-rose-600" : "text-slate-400");
 
           return (
-            <tr key={item.id || index} className={`${item.isIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
+            <tr key={item.id || index} className={`${item.hasIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
               <td className="px-1 py-1.5 font-bold text-slate-800 text-center text-xs w-7 border-r border-slate-100 border-b border-slate-100">
                 {item.displayNo}
               </td>
               <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100 border-b border-slate-100">
-                {item.isIstirahat ? "" : (item.showTgl ? item.tglStr : "")}
+                {item.hasIstirahat ? "" : (item.showTgl ? item.tglStr : "")}
               </td>
-              <td className="px-1 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
-                {item.isIstirahat ? "" : (item.showGrp ? item.grpStr : "")}
+              <td className={`px-1 py-1.5 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100 font-medium text-slate-700`}>
+                {item.hasIstirahat ? "" : (item.showGrp ? item.grpStr : "")}
               </td>
-              <td className={`px-2 py-1.5 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100 ${item.isIstirahat ? "text-slate-500 italic font-bold" : "font-medium text-slate-700"}`}>
-                {item.isIstirahat ? "Istirahat" : (item.showOpr ? item.oprStr : "")}
+              <td className={`px-2 py-1.5 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100 ${item.hasIstirahat ? "italic font-bold text-slate-500" : "font-medium text-slate-700"}`}>
+                {item.hasIstirahat ? "Istirahat" : (item.showOpr ? item.oprStr : "")}
               </td>
               <td className="px-1 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100 border-b border-slate-100">
                 {item.meterDisplay}
@@ -582,7 +588,7 @@ export default function MeterHistoryTable({
                <td className="px-1 py-1.5 text-center w-14 border-r border-slate-100 border-b border-slate-100">
                  {(() => {
                    if (item.isStartRow || item.cacatDisplay === "START") return null;
-                   if (item.isIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH") {
+                   if (item.hasIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH") {
                      return null;
                    }
                    if (hasMeterDefect) {
@@ -591,9 +597,15 @@ export default function MeterHistoryTable({
                    return <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />;
                  })()}
                </td>
-               <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${meterCacatColor}`}>
-                 {item.cacatDisplay}
-               </td>
+                <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${item.hasIstirahat ? 'text-slate-500' : 'text-slate-700'}`}>
+                  {item.backupOpName && item.hasIstirahat && <div className="text-slate-700 font-bold mb-0.5">{item.backupOpName}</div>}
+                  {!item.hasIstirahat && item.cacatDisplay && (
+                    <div className={meterCacatColor}>
+                      {item.cacatDisplay}
+                    </div>
+                  )}
+                  {item.hasIstirahat && !item.backupOpName && "-"}
+                </td>
                <td className={`px-1 py-1.5 text-center text-[11px] font-bold border-r border-slate-100 border-b border-slate-100 ${item.downtimeDisplay && item.downtimeDisplay !== "-" ? "text-rose-600" : "text-slate-400"}`}>
                  {item.downtimeDisplay || "-"}
                </td>

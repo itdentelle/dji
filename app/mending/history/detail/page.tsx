@@ -226,9 +226,40 @@ function MendingDetailContent() {
         const grp = h.groups?.nama_grup || "";
         const operatorStr = (grp ? `(${grp}) ` : '') + opr;
         
-        const isIstirahat = (item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
-                             item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
-                            !item.kategori_masalah && !item.detail_masalah;
+        let hasRealDefects = false;
+        if (item.production_defects && Array.isArray(item.production_defects)) {
+          item.production_defects.forEach((d: any) => {
+            if (!((d.kategori || "").toUpperCase().includes("ISTIRAHAT") || (d.detail || "").toUpperCase().includes("ISTIRAHAT"))) {
+              hasRealDefects = true;
+            }
+          });
+        }
+        if (!item.production_defects || item.production_defects.length === 0) {
+          if (item.kategori_masalah && !item.kategori_masalah.toUpperCase().includes("ISTIRAHAT")) {
+            hasRealDefects = true;
+          }
+        }
+        const hasIstirahatRaw = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT") || opr.toUpperCase().includes("ISTIRAHAT");
+        const hasIstirahat = hasIstirahatRaw;
+        const isIstirahat = hasIstirahat && !hasRealDefects && !item.kategori_masalah && !item.detail_masalah;
+        
+        let backupOpName = "";
+        if (hasIstirahat) {
+          let extractedBackupOp = h.operator_backup || "";
+          if (!extractedBackupOp && item.keterangan_cacat) {
+            const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+            if (match && match[1]) {
+              extractedBackupOp = match[1].trim();
+            }
+          }
+          if (!extractedBackupOp && opr.toUpperCase().includes("ISTIRAHAT")) {
+            const cleanName = opr.replace(/istirahat/i, "").trim().replace(/^\(|\)$/g, "").trim();
+            if (cleanName) {
+              extractedBackupOp = cleanName;
+            }
+          }
+          backupOpName = extractedBackupOp;
+        }
         
         const isStartOrFinish = h.panel_no === "START" || h.panel_no === "FINISH" || item.meter_kain === "START" || item.meter_kain === "FINISH";
         const isGradable = !isStartOrFinish;
@@ -236,17 +267,19 @@ function MendingDetailContent() {
         return {
           item,
           isIstirahat,
+          hasIstirahat,
+          backupOpName,
           isGradable,
           opr,
           grp,
           tgl: h.tgl || "-",
           operatorStr,
-          oprStr: isIstirahat ? "Istirahat" : opr
+          oprStr: hasIstirahat ? "Istirahat" : opr
         };
       });
 
       processed.forEach((p: any, idx: number) => {
-        const { item, isIstirahat, isGradable, opr, grp, tgl, operatorStr, oprStr } = p;
+        const { item, isIstirahat, hasIstirahat, backupOpName, isGradable, opr, grp, tgl, operatorStr, oprStr } = p;
 
         if (isGradable) {
           currentOpCount += 1;
@@ -262,7 +295,7 @@ function MendingDetailContent() {
         if (tgl === lastTgl) showTgl = false;
         if (grp === lastGrp) showGrp = false;
 
-        if (isIstirahat) {
+        if (hasIstirahat) {
           showTgl = false;
           showGrp = false;
           showOpr = true;
@@ -270,7 +303,7 @@ function MendingDetailContent() {
           let prevActualOprStr = "-";
           for (let k = items.length - 1; k >= 0; k--) {
             const pItem = items[k];
-            if (!pItem.isTotalRow && !pItem.isIstirahat) {
+            if (!pItem.isTotalRow && !pItem.hasIstirahat) {
               const ph = pItem.production_headers || {};
               prevActualOprStr = ph.operators?.nama_operator || ph.pic || "-";
               break;
@@ -283,13 +316,15 @@ function MendingDetailContent() {
 
         lastTgl = tgl;
         lastGrp = grp;
-        lastOpr = isIstirahat ? "Istirahat" : opr;
+        lastOpr = hasIstirahat ? "Istirahat" : opr;
 
         items.push({
           ...item,
           isMeter: false,
           isStartRow: false,
           isIstirahat,
+          hasIstirahat,
+          backupOpName,
           isFinishReport: false,
           displayNo: item.production_headers?.panel_no || "-",
           meterDisplay: "-",
@@ -382,9 +417,22 @@ function MendingDetailContent() {
         isSameAsPrev = true;
       }
 
-      const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
-                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
-                          !item.kategori_masalah && !item.detail_masalah;
+      let hasRealDefects = false;
+      if (item.production_defects && Array.isArray(item.production_defects)) {
+        item.production_defects.forEach((d: any) => {
+          if (!((d.kategori || "").toUpperCase().includes("ISTIRAHAT") || (d.detail || "").toUpperCase().includes("ISTIRAHAT"))) {
+            hasRealDefects = true;
+          }
+        });
+      }
+      if (!item.production_defects || item.production_defects.length === 0) {
+        if (item.kategori_masalah && !item.kategori_masalah.toUpperCase().includes("ISTIRAHAT")) {
+          hasRealDefects = true;
+        }
+      }
+      const hasIstirahatRaw = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT") || opr.toUpperCase().includes("ISTIRAHAT");
+      const hasIstirahat = hasIstirahatRaw;
+      const isIstirahat = hasIstirahat && !hasRealDefects && !item.kategori_masalah && !item.detail_masalah;
       const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
 
       let cacatLines: string[] = [];
@@ -567,7 +615,25 @@ function MendingDetailContent() {
           return true;
         })
         .join("\n");
-      const cacatText = isIstirahat ? "ISTIRAHAT" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
+      let backupOpName = "";
+      if (hasIstirahat) {
+        let extractedBackupOp = h.operator_backup || "";
+        if (!extractedBackupOp && item.keterangan_cacat) {
+          const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+          if (match && match[1]) {
+            extractedBackupOp = match[1].trim();
+          }
+        }
+        if (!extractedBackupOp && opr.toUpperCase().includes("ISTIRAHAT")) {
+          const cleanName = opr.replace(/istirahat/i, "").trim().replace(/^\(|\)$/g, "").trim();
+          if (cleanName) {
+            extractedBackupOp = cleanName;
+          }
+        }
+        backupOpName = extractedBackupOp;
+      }
+
+      const cacatText = hasIstirahat && !hasErrorDetail ? "ISTIRAHAT" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
 
       const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !isIstirahat && !isFinishReport;
       if (!isPlaceholder) {
@@ -576,6 +642,7 @@ function MendingDetailContent() {
           isStartRow: false,
           isMeter: true,
           isIstirahat,
+          hasIstirahat,
           isFinishReport,
           displayNo: (globalRowCount + 1).toString(),
           tglStr: finalTglStr,
@@ -583,10 +650,11 @@ function MendingDetailContent() {
           oprStr: finalOprStr,
           meterDisplay,
           cacatDisplay: cacatText,
+          backupOpName,
           isGradable,
-          showTgl,
-          showGrp,
-          showOpr,
+          showTgl: hasIstirahat ? false : showTgl,
+          showGrp: hasIstirahat ? false : showGrp,
+          showOpr: hasIstirahat ? true : showOpr,
           hasErrorDetail
         });
         globalRowCount += 1;
@@ -827,8 +895,8 @@ function MendingDetailContent() {
                           <td className="px-1.5 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
                             {item.showGrp ? item.grpStr : ""}
                           </td>
-                          <td className="px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100">
-                            {item.showOpr ? item.oprStr : ""}
+                          <td className={`px-2 py-1.5 font-medium text-slate-700 leading-tight text-xs w-28 border-r border-slate-100 border-b border-slate-100 ${item.hasIstirahat ? "italic font-bold text-slate-500" : ""}`}>
+                            {item.hasIstirahat ? "Istirahat" : (item.showOpr ? item.oprStr : "")}
                           </td>
                           <td className="px-1.5 py-1.5 text-center font-bold text-slate-800 text-xs w-14 border-r border-slate-100 border-b border-slate-100">
                             {item.meterDisplay}
@@ -836,8 +904,17 @@ function MendingDetailContent() {
                           <td className="px-1.5 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100 border-b border-slate-100">
                             {!item.isGradable ? "" : (item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
                           </td>
-                          <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${(!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600'}`}>
-                            {item.cacatDisplay || "-"}
+                          <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${
+                            item.hasIstirahat || item.cacatDisplay === "ISTIRAHAT" || item.cacatDisplay === "FINISH"
+                              ? "text-slate-500"
+                              : (item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay !== "START" ? "text-rose-600" : "text-slate-700")
+                          }`}>
+                            {item.backupOpName && item.hasIstirahat && <div className="text-slate-700 font-bold mb-0.5">{item.backupOpName}</div>}
+                            {!item.hasIstirahat && (item.cacatDisplay || "-")}
+                            {item.hasIstirahat && item.cacatDisplay && item.cacatDisplay !== "-" && item.cacatDisplay !== "ISTIRAHAT" && (
+                              <div className="text-rose-600">{item.cacatDisplay}</div>
+                            )}
+                            {item.hasIstirahat && (!item.cacatDisplay || item.cacatDisplay === "-" || item.cacatDisplay === "ISTIRAHAT") && !item.backupOpName && "-"}
                           </td>
                           <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">
                             {item.isGradable ? (
@@ -1128,19 +1205,31 @@ function MendingDetailContent() {
                           <td className="px-1.5 py-1 font-medium text-slate-700 text-center border-r border-slate-100 border-b border-slate-100">
                             {displayGrp}
                           </td>
-                          <td className="px-2 py-1 font-medium text-slate-700 leading-tight border-r border-slate-100 border-b border-slate-100">
-                            {displayOp}
+                          <td className={`px-2 py-1 font-medium text-slate-700 leading-tight border-r border-slate-100 border-b border-slate-100 ${item.hasIstirahat ? "italic font-bold text-slate-500" : ""}`}>
+                            {item.hasIstirahat ? "Istirahat" : displayOp}
                           </td>
                           <td className="px-2 py-1 text-center font-bold text-sm border-r border-slate-100 border-b border-slate-100">
                             {Icon ? <Icon className={`w-3.5 h-3.5 mx-auto ${iconColor}`} /> : <span className="text-slate-300">-</span>}
                           </td>
-                          <td className="px-2 py-1 text-[11px] text-rose-600 font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100">
+                          <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 border-b border-slate-100 ${
+                            item.hasIstirahat || (masalahLines.length === 1 && (masalahLines[0] === "ISTIRAHAT" || masalahLines[0] === "FINISH" || masalahLines[0] === "-"))
+                              ? "text-slate-500"
+                              : "text-rose-600"
+                          }`}>
                             <div className="flex flex-col gap-0.5">
-                              {masalahLines.map((line: string, i: number) => (
-                                <span key={i} title={line}>
-                                  {line}
-                                </span>
-                              ))}
+                              {item.backupOpName && item.hasIstirahat && <div className="text-slate-700 font-bold mb-0.5">{item.backupOpName}</div>}
+                              {masalahLines.map((line: string, i: number) => {
+                                if (item.hasIstirahat && line === "ISTIRAHAT") return null;
+                                if (item.hasIstirahat && item.backupOpName && line === "-") return null;
+                                if (item.hasIstirahat && !item.backupOpName && masalahLines.length === 1 && line === "-") {
+                                    return <span key={i} title={line}>-</span>;
+                                }
+                                return (
+                                  <span key={i} title={line} className={item.hasIstirahat && line !== "-" ? "text-rose-600" : ""}>
+                                    {line}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </td>
                           <td className="px-1 py-1.5 text-center border-r border-slate-100 border-b border-slate-100">

@@ -16,6 +16,9 @@ export interface TeamData {
   hasil_produksi: number;
   jumlah_cacat: number;
   downtime_detik: number;
+  courses: string;
+  rpm: number;
+  eff_100: number;
   kode_tindakan: Record<string, number>; // e.g. { "A": 2, "B": 0 }
 }
 
@@ -84,9 +87,6 @@ export async function getMonthlyMachineReport(
       reportMap.set(d, {
         tanggal: d,
         desain: "",
-        courses: "",
-        rpm: 0,
-        eff_100: 0, // Calculated dynamically
         teamData: {
           "A": createEmptyTeamData(),
           "B": createEmptyTeamData(),
@@ -115,16 +115,6 @@ export async function getMonthlyMachineReport(
 
       // Update shift/day metadata (we take the last one or accumulate, here we just take truthy values)
       if (header.design_id && !reportDay.desain) reportDay.desain = header.design_id;
-      if (header.course && !reportDay.courses) reportDay.courses = header.course;
-      if (header.rpm && !reportDay.rpm) reportDay.rpm = header.rpm;
-      
-      // Calculate Eff 100% if rpm and courses are present and valid
-      if (reportDay.rpm > 0 && reportDay.courses) {
-        const courseNum = parseFloat(reportDay.courses);
-        if (!isNaN(courseNum) && courseNum > 0) {
-          reportDay.eff_100 = Math.round((reportDay.rpm * 8 * 60) / courseNum);
-        }
-      }
 
       // Ensure the team exists in the map
       if (!reportDay.teamData[groupName]) {
@@ -134,6 +124,17 @@ export async function getMonthlyMachineReport(
       const team = reportDay.teamData[groupName];
       if (operatorName && !team.operator_name) {
         team.operator_name = operatorName;
+      }
+      
+      // Update team-specific courses, rpm and efficiency
+      if (header.course && !team.courses) team.courses = header.course;
+      if (header.rpm && !team.rpm) team.rpm = header.rpm;
+      
+      if (team.rpm > 0 && team.courses) {
+        const courseNum = parseFloat(team.courses);
+        if (!isNaN(courseNum) && courseNum > 0) {
+          team.eff_100 = Math.round((team.rpm * 8 * 60) / courseNum);
+        }
       }
 
       // Aggregate defects (moved outside so we can still count defects from details)
@@ -295,6 +296,9 @@ function createEmptyTeamData(): TeamData {
     hasil_produksi: 0,
     jumlah_cacat: 0,
     downtime_detik: 0,
+    courses: "",
+    rpm: 0,
+    eff_100: 0,
     kode_tindakan: {
       "A": 0, "B": 0, "C": 0, "D": 0, "E": 0, "F": 0, "G": 0, "H": 0
     }

@@ -182,9 +182,36 @@ export default function MendingProductionReportPage() {
             isSameAsPrev = true;
           }
 
-          const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
-                               !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
-                              !item.kategori_masalah && !item.detail_masalah;
+          let hasRealDefects = false;
+          if (item.kategori_masalah && !item.kategori_masalah.toUpperCase().includes("ISTIRAHAT")) {
+            hasRealDefects = true;
+          }
+          const hasIstirahatRaw = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT") || opr.toUpperCase().includes("ISTIRAHAT");
+          const hasIstirahat = hasIstirahatRaw;
+          const isIstirahat = hasIstirahat && !hasRealDefects && !item.kategori_masalah && !item.detail_masalah;
+
+          let backupOpName = "";
+          if (hasIstirahat) {
+            let extractedBackupOp = h.operator_backup || "";
+            if (!extractedBackupOp && item.keterangan_cacat) {
+              const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+              if (match && match[1]) {
+                extractedBackupOp = match[1].trim();
+              }
+            }
+            if (!extractedBackupOp && opr.toUpperCase().includes("ISTIRAHAT")) {
+              const match = opr.match(/Istirahat\s*\(([^)]+)\)/i);
+              if (match && match[1]) {
+                extractedBackupOp = match[1].trim();
+              } else {
+                const parts = opr.split(/Istirahat/i);
+                if (parts.length > 1 && parts[1].trim() !== "") {
+                  extractedBackupOp = parts[1].trim();
+                }
+              }
+            }
+            if (extractedBackupOp) backupOpName = extractedBackupOp;
+          }
           const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
 
           let meterDisplay = "-";
@@ -271,6 +298,8 @@ export default function MendingProductionReportPage() {
               showTgl,
               showGrp,
               showOpr,
+              hasIstirahat,
+              backupOpName,
               hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
             });
             globalRowCount += 1;
@@ -340,8 +369,36 @@ export default function MendingProductionReportPage() {
           isSameAsPrev = true;
         }
 
+        const hasIstirahatRaw = (det.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (det.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT") || opr.toUpperCase().includes("ISTIRAHAT");
+        const hasIstirahat = hasIstirahatRaw;
+        
+        let backupOpName = "";
+        if (hasIstirahat) {
+          let extractedBackupOp = det.header?.operator_backup || "";
+          if (!extractedBackupOp && det.keterangan_cacat) {
+            const match = det.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+            if (match && match[1]) {
+              extractedBackupOp = match[1].trim();
+            }
+          }
+          if (!extractedBackupOp && opr.toUpperCase().includes("ISTIRAHAT")) {
+            const match = opr.match(/Istirahat\s*\(([^)]+)\)/i);
+            if (match && match[1]) {
+              extractedBackupOp = match[1].trim();
+            } else {
+              const parts = opr.split(/Istirahat/i);
+              if (parts.length > 1 && parts[1].trim() !== "") {
+                extractedBackupOp = parts[1].trim();
+              }
+            }
+          }
+          if (extractedBackupOp) backupOpName = extractedBackupOp;
+        }
+
         displayItems.push({
           ...item,
+          hasIstirahat,
+          backupOpName,
           hideOperatorAndDate: isSameAsPrev
         });
 
@@ -583,9 +640,16 @@ export default function MendingProductionReportPage() {
             const pnlNo = item.meterDisplay;
             const tgl = item.tglStr;
             const grpStr = item.grpStr;
-            const oprStr = item.oprStr;
+            let oprStr = item.oprStr;
+            if (item.hasIstirahat) oprStr = "Istirahat";
+            
             const ket = !item.isGradable ? "" : (item.hasErrorDetail ? "X" : "✓");
-            const cacat = item.cacatDisplay;
+            
+            let cacat = item.cacatDisplay;
+            if (item.backupOpName && item.hasIstirahat) {
+              cacat = item.backupOpName + "\n" + cacat;
+            }
+            
             const grade = item.hasil_mending_original || item.hasil_mending;
             const gradeA = (item.isGradable && grade === "A") ? "A" : "";
             const gradeB = (item.isGradable && grade === "B") ? "B" : "";
@@ -598,10 +662,9 @@ export default function MendingProductionReportPage() {
             let opr = det.header?.operators?.nama_operator || det.header?.pic || "";
             const grp = det.header?.groups?.nama_grup || "";
             const grpStr = item.hideOperatorAndDate ? "" : grp;
-            let oprStr = item.hideOperatorAndDate ? "" : opr;
+            let oprStr = item.hasIstirahat ? "Istirahat" : (item.hideOperatorAndDate ? "" : opr);
             let displayKeterangan = det.keterangan_cacat || "";
-            if (displayKeterangan.includes("ISTIRAHAT")) {
-              oprStr = "Istirahat";
+            if (item.hasIstirahat) {
               displayKeterangan = displayKeterangan.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
               displayKeterangan = displayKeterangan.replace(/^,\s*|\s*,\s*$/g, "");
             }
@@ -716,6 +779,9 @@ export default function MendingProductionReportPage() {
                   cacatLines[i] = cacatLines[i] + " [TAMBAHAN QC]";
                 }
               }
+            }
+            if (item.backupOpName && item.hasIstirahat) {
+              cacatLines.unshift(item.backupOpName);
             }
             
             let cacat = cacatLines.join("\n");
@@ -1470,7 +1536,8 @@ export default function MendingProductionReportPage() {
                               const meterVal = isMeterRow ? item.meterDisplay : null;
                               const tgl = isMeterRow ? item.tglStr : (item.hideOperatorAndDate ? "" : (det.header?.tgl || ""));
                               const grpStr = isMeterRow ? item.grpStr : (item.hideOperatorAndDate ? "" : (det.header?.groups?.nama_grup || "-"));
-                              const oprStr = isMeterRow ? item.oprStr : (item.hideOperatorAndDate ? "" : (det.header?.operators?.nama_operator || det.header?.pic || "-"));
+                              let oprStr = isMeterRow ? item.oprStr : (item.hasIstirahat ? "Istirahat" : (item.hideOperatorAndDate ? "" : (det.header?.operators?.nama_operator || det.header?.pic || "-")));
+                              if (isMeterRow && item.hasIstirahat) oprStr = "Istirahat";
                               const grade = item.hasil_mending_original || item.hasil_mending;
 
                               let cacatLines: string[] = [];
@@ -1612,13 +1679,19 @@ export default function MendingProductionReportPage() {
                                   
                                   <td className="px-2 py-1 text-[11px] font-medium whitespace-pre-wrap leading-tight min-w-[160px]">
                                     {isMeterRow ? (
-                                      <span className={
-                                        cacat === "START" || cacat === "FINISH" || cacat === "ISTIRAHAT"
-                                          ? "text-slate-400 font-semibold italic"
-                                          : "text-rose-600"
-                                      }>{cacat || "-"}</span>
+                                      <>
+                                        {item.backupOpName && item.hasIstirahat && <div className="text-slate-700 font-bold mb-0.5">{item.backupOpName}</div>}
+                                        <span className={
+                                          cacat === "START" || cacat === "FINISH" || cacat === "ISTIRAHAT"
+                                            ? "text-slate-400 font-semibold italic"
+                                            : "text-rose-600"
+                                        }>{cacat || "-"}</span>
+                                      </>
                                     ) : (
-                                      <span className="text-rose-600">{cacat || "-"}</span>
+                                      <>
+                                        {item.backupOpName && item.hasIstirahat && <div className="text-slate-700 font-bold mb-0.5">{item.backupOpName}</div>}
+                                        <span className={cacat === "-" ? "text-slate-400" : "text-rose-600"}>{cacat || "-"}</span>
+                                      </>
                                     )}
                                   </td>
 

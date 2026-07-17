@@ -57,7 +57,7 @@ export default function PanelHistoryTable({
 
       if (hasIstirahat) {
         showTgl = false;
-        showGrp = false;
+        showGrp = true;
         showOpr = true;
       } else {
         let prevActualOprStr = "-";
@@ -75,7 +75,7 @@ export default function PanelHistoryTable({
 
       lastTgl = tgl;
       lastGrp = grp;
-      lastOpr = hasIstirahat ? "Istirahat" : opr;
+      lastOpr = hasIstirahat ? (item.production_headers?.operator_backup || opr) : opr;
 
       items.push({
         ...item,
@@ -91,7 +91,7 @@ export default function PanelHistoryTable({
         showTgl,
         showGrp,
         showOpr,
-        oprStr: hasIstirahat ? "Istirahat" : opr,
+        oprStr: opr,
         grpStr: grp,
         tglStr: tgl,
         hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
@@ -312,10 +312,10 @@ export default function PanelHistoryTable({
 
                       if (parts[partIndex] && parts[partIndex] !== "") {
                         const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
-                        return `${line} (Blok ${cleanB})`;
+                        return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
                       } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
-                         const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
-                         return `${line} (Blok ${cleanB})`;
+                        const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
+                        return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
                       }
                       return line;
                     });
@@ -345,16 +345,24 @@ export default function PanelHistoryTable({
             const hasDefect = masalahLines.length > 0;
             if (masalahLines.length === 0) masalahLines.push("-");
 
+            let extractedBackupOp = itemHeader?.operator_backup || "";
+            if (!extractedBackupOp && detail.keterangan_cacat) {
+              const match = detail.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+              if (match && match[1]) {
+                extractedBackupOp = match[1].trim();
+              }
+            }
+
             return (
-              <tr key={item.id || idx} className={`${isIstirahatOnly ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
+              <tr key={item.id || idx} className={`${hasIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
                 <td className="px-1 py-1 font-bold text-slate-800 text-center">
                   {item.displayNo}
                 </td>
                 <td className="px-1 py-1 text-slate-600 whitespace-nowrap">
                   {displayTgl}
                 </td>
-                <td className="px-1 py-1 font-medium text-slate-700 text-center">
-                  {displayGrp}
+                <td className={`px-1 py-1 font-medium text-center text-slate-700`}>
+                  {hasIstirahat ? "" : displayGrp}
                 </td>
                 <td className={`px-1 py-1 leading-tight ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
                   {hasIstirahat ? "Istirahat" : displayOp}
@@ -370,8 +378,9 @@ export default function PanelHistoryTable({
                      )
                    )}
                  </td>
-                 <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${isIstirahatOnly ? 'text-slate-600 font-semibold italic' : (hasDefect ? 'text-rose-600' : 'text-slate-400')}`}>
-                   {isIstirahatOnly ? "ISTIRAHAT" : (masalahLines.join("\n") || "-")}
+                 <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${hasIstirahat ? 'text-slate-500' : (masalahLines.length > 0 ? 'text-rose-600' : 'text-slate-700')}`}>
+                   {extractedBackupOp && hasIstirahat && <div className="font-bold text-slate-700 mb-0.5">{extractedBackupOp}</div>}
+                   {!isIstirahatOnly && (masalahLines.length > 0 ? masalahLines.join("\n") : "-")}
                  </td>
 
                 <td className="px-1 py-1 text-center">

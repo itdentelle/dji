@@ -309,6 +309,14 @@ export default function MendingPage() {
         const isStart = item.keterangan_cacat === "START" || item.production_headers?.panel_no === "START";
         const isGradable = !isFinish && !isStart;
 
+        let extractedBackupOp = h.operator_backup || "";
+        if (!extractedBackupOp && item.keterangan_cacat) {
+          const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+          if (match && match[1]) {
+            extractedBackupOp = match[1].trim();
+          }
+        }
+
         let displayDetail = item.detail_masalah || "";
         let displayKeterangan = item.keterangan_cacat || "";
         let oprStr = opr;
@@ -439,6 +447,7 @@ export default function MendingPage() {
           operatorStr,
           oprStr,
           cacatText,
+          backupOpName: extractedBackupOp,
         };
       });
 
@@ -495,6 +504,7 @@ export default function MendingPage() {
           displayNo: item.production_headers?.panel_no || "-",
           meterDisplay: "-",
           cacatDisplay: cacatText,
+          backupOpName: p.backupOpName,
           isGradable,
           showTgl,
           showGrp,
@@ -576,9 +586,22 @@ export default function MendingPage() {
         isSameAsPrev = true;
       }
 
-      const isIstirahat = (!!item.keterangan_cacat?.toUpperCase().includes("ISTIRAHAT") || 
-                           !!item.kategori_masalah?.toUpperCase().includes("ISTIRAHAT")) && 
-                          !item.kategori_masalah && !item.detail_masalah;
+      let hasRealDefects = false;
+      if (item.production_defects && Array.isArray(item.production_defects)) {
+        item.production_defects.forEach((d: any) => {
+          if (!((d.kategori || "").toUpperCase().includes("ISTIRAHAT") || (d.detail || "").toUpperCase().includes("ISTIRAHAT"))) {
+            hasRealDefects = true;
+          }
+        });
+      }
+      if (!item.production_defects || item.production_defects.length === 0) {
+        if (item.kategori_masalah && !item.kategori_masalah.toUpperCase().includes("ISTIRAHAT")) {
+          hasRealDefects = true;
+        }
+      }
+      const hasIstirahatRaw = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") || (item.kategori_masalah || "").toUpperCase().includes("ISTIRAHAT");
+      const hasIstirahat = hasIstirahatRaw && !hasRealDefects;
+      const isIstirahat = hasIstirahat && !item.kategori_masalah && !item.detail_masalah;
       const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
 
       let cacatLines: string[] = [];
@@ -761,7 +784,19 @@ export default function MendingPage() {
           return true;
         })
         .join("\n");
-      const cacatText = isIstirahat ? "ISTIRAHAT" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
+      let backupOpName = "";
+      if (hasIstirahat) {
+        let extractedBackupOp = h.operator_backup || "";
+        if (!extractedBackupOp && item.keterangan_cacat) {
+          const match = item.keterangan_cacat.match(/\(Backup:\s*([^)]+)\)/i);
+          if (match && match[1]) {
+            extractedBackupOp = match[1].trim();
+          }
+        }
+        backupOpName = extractedBackupOp;
+      }
+
+      const cacatText = hasIstirahat && !hasErrorDetail ? "ISTIRAHAT" : (isFinishReport && !hasErrorDetail ? "FINISH" : (hasErrorDetail && cacatForMeter ? cacatForMeter : "-"));
 
       const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !isIstirahat && !isFinishReport;
       if (!isPlaceholder) {
@@ -770,6 +805,7 @@ export default function MendingPage() {
           isStartRow: false,
           isMeter: true,
           isIstirahat,
+          hasIstirahat,
           isFinishReport,
           displayNo: (globalRowCount + 1).toString(),
           tglStr: finalTglStr,
@@ -777,10 +813,11 @@ export default function MendingPage() {
           oprStr: finalOprStr,
           meterDisplay,
           cacatDisplay: cacatText,
+          backupOpName,
           isGradable,
-          showTgl,
-          showGrp,
-          showOpr,
+          showTgl: hasIstirahat ? false : showTgl,
+          showGrp: hasIstirahat ? false : showGrp,
+          showOpr: hasIstirahat ? true : showOpr,
           hasErrorDetail
         });
         globalRowCount += 1;

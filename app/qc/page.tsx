@@ -189,6 +189,7 @@ export default function QCPage() {
   const [insertPanelError, setInsertPanelError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [insertPanelHasDefect, setInsertPanelHasDefect] = useState(false);
+  const [insertPanelIsBs, setInsertPanelIsBs] = useState(false);
 
   // States for defect selection within Insert Panel Modal
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -205,7 +206,6 @@ export default function QCPage() {
   const [isSubmittingDefect, setIsSubmittingDefect] = useState(false);
   const [defectError, setDefectError] = useState<string | null>(null);
 
-  // Load available filters
   useEffect(() => {
     const loadFilters = async () => {
       const res = await getAvailableQCFilters();
@@ -216,6 +216,23 @@ export default function QCPage() {
     };
     loadFilters();
   }, []);
+
+  // Auto-select BS (value 4) for panels with jml_hasil_produksi === 0
+  useEffect(() => {
+    if (fullActiveQcDetails.length > 0) {
+      setSelections((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        fullActiveQcDetails.forEach((d) => {
+          if (d.jml_hasil_produksi === 0 && next[d.id] !== 4) {
+            next[d.id] = 4;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [fullActiveQcDetails]);
 
   const availableTanggals = Array.from(new Set(availableFilters.map((f) => f.tgl))).sort().reverse();
   const availableMesins = Array.from(new Set(availableFilters.map((f) => f.nomor_mc))).sort();
@@ -553,6 +570,7 @@ export default function QCPage() {
         kategoriMasalah: selectedCategories.length > 0 ? selectedCategories : undefined,
         detailMasalah: detailMasalahStr || undefined,
         keteranganCacat: keteranganCacatStr || undefined,
+        isBs: insertPanelMode === "insert" && insertPanelIsBs,
       });
 
       if (res.success) {
@@ -920,9 +938,33 @@ export default function QCPage() {
                       min="1"
                       value={insertPanelAt}
                       onChange={(e) => setInsertPanelAt(e.target.value)}
-                      className="w-full h-11 px-4 rounded-xl border-2 border-slate-200 focus:border-[#0070bc] focus:ring-4 focus:ring-[#0070bc]/10 outline-none font-medium text-slate-700 transition-all"
+                      className="w-full h-11 px-4 rounded-xl border-2 border-slate-200 focus:border-[#0070bc] focus:ring-4 focus:ring-[#0070bc]/10 outline-none font-medium text-slate-700 transition-all mb-3"
                       placeholder="Contoh: 3"
                     />
+                    
+                    <div className="flex items-center gap-3 py-2 px-3 rounded-lg border border-rose-100 bg-rose-50/50">
+                      <input
+                        type="checkbox"
+                        id="insertPanelIsBs"
+                        checked={insertPanelIsBs}
+                        onChange={(e) => {
+                          setInsertPanelIsBs(e.target.checked);
+                          if (e.target.checked) {
+                            setInsertPanelHasDefect(true);
+                          }
+                        }}
+                        className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500 cursor-pointer"
+                      />
+                      <label
+                        htmlFor="insertPanelIsBs"
+                        className="text-xs font-bold text-rose-700 cursor-pointer select-none"
+                      >
+                        Tandai sebagai Barang Sisa (BS)
+                      </label>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 pl-1 font-medium leading-tight">
+                      * Jika dicentang, panel lain tidak akan bergeser, dan panel {insertPanelAt || "?"} akan memiliki 1 hasil Gagal.
+                    </p>
                   </div>
                 )}
 

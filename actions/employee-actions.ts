@@ -117,6 +117,7 @@ export async function createProductionReport(
         validated.downtimeEvents && validated.downtimeEvents.length > 0
           ? JSON.stringify(validated.downtimeEvents)
           : null,
+      operator_backup: validated.operatorBackup || null,
     };
 
     // 2. Siapkan Data Details & Defects
@@ -240,7 +241,7 @@ export async function createProductionReport(
       if (validated.jenisLaporan === "Mulai Istirahat") {
         keteranganStr = keteranganStr ? keteranganStr + " [SEBELUM ISTIRAHAT]" : "[SEBELUM ISTIRAHAT]";
       }
-      if (validated.jenisLaporan === "Selesai Istirahat" || validated.jenisLaporan === "Istirahat") {
+      if (validated.jenisLaporan === "Selesai Istirahat" || validated.jenisLaporan?.startsWith("Istirahat")) {
         keteranganStr = keteranganStr ? keteranganStr + " [LAPORAN ISTIRAHAT]" : "[LAPORAN ISTIRAHAT]";
       }
 
@@ -719,7 +720,7 @@ export async function searchEmployeeHistory(filters: {
 
     const supabase = await createClient();
     let selectFields =
-      "id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, no_customer, panel_no, nomor_mc, total_downtime_detik, operators(nama_operator), groups(nama_grup), design_id, production_details(id, pcs_index, kategori_masalah, detail_masalah, keterangan_cacat, jml_hasil_produksi, meter_kain, production_defects(*)), created_by_name, tanggal_potong, pick, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, downtime_records(*)";
+      "id, tgl, tanggal_jam, pic, potongan_ke, pcs, no_order_barang, no_customer, panel_no, nomor_mc, total_downtime_detik, operator_backup, operators(nama_operator), groups(nama_grup), design_id, production_details(id, pcs_index, kategori_masalah, detail_masalah, keterangan_cacat, jml_hasil_produksi, meter_kain, production_defects(*)), created_by_name, tanggal_potong, pick, course, rpm, status_matching, jenis_benang_dasar, liner, heavy, shadow, pinggiran, downtime_events, meter_awal, meter_akhir, downtime_records(*)";
 
     // Prepare base query with exact count
     let query = supabase
@@ -1056,6 +1057,7 @@ export async function updateProductionReport(
           data.downtimeEvents && data.downtimeEvents.length > 0
             ? JSON.stringify(data.downtimeEvents)
             : null,
+        operator_backup: data.operatorBackup || null,
       })
       .eq("id", headerId);
 
@@ -1217,7 +1219,7 @@ export async function updateProductionReport(
           }
           if (data.jenisLaporan === "Mulai Istirahat") {
             keteranganStr = keteranganStr ? keteranganStr + " [SEBELUM ISTIRAHAT]" : "[SEBELUM ISTIRAHAT]";
-          } else if (data.jenisLaporan === "Selesai Istirahat" || data.jenisLaporan === "Istirahat") {
+          } else if (data.jenisLaporan === "Selesai Istirahat" || data.jenisLaporan?.startsWith("Istirahat")) {
             keteranganStr = keteranganStr ? keteranganStr + " [LAPORAN ISTIRAHAT]" : "[LAPORAN ISTIRAHAT]";
           }
           
