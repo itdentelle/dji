@@ -283,7 +283,7 @@ export default function MeterQCTable({
       const showOpr = !isSameAsPrev;
 
       // TAMBAHAN QC dengan data cacat tetap gradable meski header sudah finish
-      const isGradable = !isIstirahatOnly && (!isFinishReport || hasErrorDetail);
+      const isGradable = !isIstirahatOnly && (!isFinishReport || hasErrorDetail || hasTambahanQC);
       // Format "Kategori - Detail (Blok n)" per baris, hilangkan (Titik: ...) karena sudah di kolom Meter
       const cacatForMeter = combinedCacat
         .split("\n")
@@ -324,7 +324,8 @@ export default function MeterQCTable({
           meterDisplay,
           cacatDisplay: cacatText,
           backupOpName: extractedBackupOp,
-          isGradable: !isFinishReport && !hasIstirahat,
+          isGradable: isGradable,
+          hasTambahanQC: hasTambahanQC,
           showTgl,
           showGrp,
           showOpr,
@@ -402,9 +403,9 @@ export default function MeterQCTable({
                   {item.meterDisplay}
                 </td>
                 <td className="px-1 py-1.5 text-center font-bold text-sm w-14 border-r border-slate-100">
-                  {!item.isGradable ? "" : (item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
+                  {!item.isGradable ? "" : (item.indikator_stop || item.kategori_masalah || item.hasTambahanQC ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>)}
                 </td>
-                <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${item.hasIstirahat ? 'text-slate-500' : ((!item.isGradable || !item.hasErrorDetail) ? 'text-slate-700' : 'text-rose-600')}`}>
+                <td className={`px-3 py-1.5 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${item.hasIstirahat ? 'text-slate-500' : ((!item.isGradable || (!item.hasErrorDetail && !item.hasTambahanQC)) ? 'text-slate-700' : 'text-rose-600')}`}>
                   {item.backupOpName && item.hasIstirahat && <div className="font-bold text-slate-700">{item.backupOpName}</div>}
                   {!item.hasIstirahat && (item.cacatDisplay || "-")}
                   {item.hasIstirahat && !item.backupOpName && "-"}
@@ -439,7 +440,7 @@ export default function MeterQCTable({
                 <td className="px-1 py-1.5 text-center w-10">
                   {item.isGradable && item.id && (
                     <button
-                      onClick={() => setDetailToDelete({ id: item.id, name: `${item.kategori_masalah || 'Masalah'} - ${item.detail_masalah || 'Tidak ada detail'}` })}
+                      onClick={() => setDetailToDelete({ id: item.id, name: `${item.hasTambahanQC ? 'Tambahan QC' : (item.kategori_masalah || 'Masalah')} - ${item.detail_masalah || 'Tidak ada detail'}` })}
                       className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 transition-all shadow-sm mx-auto flex items-center justify-center"
                       title="Hapus Rincian"
                     >
