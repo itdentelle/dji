@@ -38,7 +38,7 @@ export default function Sidebar() {
     if (saved) {
       setInputRoute(saved);
     }
-  }, []);
+  }, [pathname]);
 
   if (!user) return null;
 
