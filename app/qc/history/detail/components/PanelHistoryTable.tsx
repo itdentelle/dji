@@ -131,7 +131,7 @@ export default function PanelHistoryTable({
             <th className="px-1 py-2 w-14">Tgl</th>
             <th className="px-0.5 py-2 w-8 text-center">Group</th>
             <th className="px-1 py-2 w-16">Operator</th>
-            <th className="px-0.5 py-2 text-center w-8"><div className="flex flex-col items-center justify-center gap-0.5"><span>Ket</span><div className="flex items-center gap-0.5"><CheckCircle className="w-3 h-3 text-emerald-500" /><X className="w-3 h-3 text-rose-500" /></div></div></th>
+            <th className="px-0.5 py-2 text-center w-8">KET <br /> ✓/X</th>
             <th className="px-1 py-2 min-w-[150px] w-full">KETERANGAN CACAT</th>
             <th className="px-0.5 py-2 text-center text-emerald-600 font-black w-5">✓</th>
             <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">X</th>

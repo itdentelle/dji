@@ -368,7 +368,7 @@ export default function MeterQCTable({
             <th className="px-0.5 py-2 w-8 text-center border-r border-slate-200">Group</th>
             <th className="px-1 py-2 w-16 border-r border-slate-200">Operator</th>
             <th className="px-1 py-2 text-center w-12 border-r border-slate-200">Meter</th>
-            <th className="px-0.5 py-2 text-center w-8 border-r border-slate-200"><div className="flex flex-col items-center justify-center gap-0.5"><span>Ket</span><div className="flex items-center gap-0.5"><CheckCircle className="w-3 h-3 text-emerald-500" /><X className="w-3 h-3 text-rose-500" /></div></div></th>
+            <th className="px-0.5 py-2 text-center w-8 border-r border-slate-200">KET <br /> ✓/X</th>
             <th className="px-1 py-2 min-w-[150px] w-full border-r border-slate-200">Keterangan Cacat</th>
             <th className="px-1 py-2 text-center w-20 border-r border-slate-200">Inspeksi</th>
             <th className="px-1 py-2 text-center w-10">Aksi</th>
