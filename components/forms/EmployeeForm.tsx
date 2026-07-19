@@ -1432,7 +1432,7 @@ export default function EmployeeForm({
               Jenis Laporan / Info Istirahat
             </label>
             
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Normal */}
               <div className="relative">
                 <input
@@ -1448,7 +1448,7 @@ export default function EmployeeForm({
                 />
                 <label 
                   htmlFor="jenisLaporanNormal"
-                  className="flex items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-[#0070bc]/40 hover:bg-sky-50 text-slate-600 font-black text-xs sm:text-sm uppercase peer-checked:border-[#0070bc] peer-checked:bg-sky-50 peer-checked:text-[#0070bc] shadow-sm peer-checked:shadow-md"
+                  className="flex h-full items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-[#0070bc]/40 hover:bg-sky-50 text-slate-600 font-black text-xs sm:text-[13px] uppercase peer-checked:border-[#0070bc] peer-checked:bg-sky-50 peer-checked:text-[#0070bc] shadow-sm peer-checked:shadow-md"
                 >
                   Normal
                 </label>
@@ -1469,7 +1469,7 @@ export default function EmployeeForm({
                 />
                 <label 
                   htmlFor="jenisLaporanIstirahat"
-                  className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-amber-400 hover:bg-amber-50 text-slate-600 font-black text-xs sm:text-sm uppercase peer-checked:border-amber-500 peer-checked:bg-gradient-to-br peer-checked:from-amber-400 peer-checked:to-amber-500 peer-checked:text-white shadow-sm peer-checked:shadow-md peer-checked:shadow-amber-500/30"
+                  className="flex h-full flex-col items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-amber-400 hover:bg-amber-50 text-slate-600 font-black text-xs sm:text-[13px] uppercase peer-checked:border-amber-500 peer-checked:bg-gradient-to-br peer-checked:from-amber-400 peer-checked:to-amber-500 peer-checked:text-white shadow-sm peer-checked:shadow-md peer-checked:shadow-amber-500/30"
                 >
                   <div className="flex flex-col items-center gap-0.5">
                     <span>Istirahat</span>
@@ -1481,10 +1481,33 @@ export default function EmployeeForm({
                   </div>
                 </label>
               </div>
+
+              {/* Proofing / Setup */}
+              <div className="relative">
+                <input
+                  type="radio"
+                  id="jenisLaporanProofing"
+                  value="Proofing"
+                  {...register("jenisLaporan")}
+                  onChange={(e) => {
+                    register("jenisLaporan").onChange(e);
+                    setBackupOperatorName("");
+                  }}
+                  className="peer hidden"
+                />
+                <label 
+                  htmlFor="jenisLaporanProofing"
+                  className="flex h-full flex-col items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 text-slate-600 font-black text-xs sm:text-[13px] uppercase peer-checked:border-emerald-500 peer-checked:bg-gradient-to-br peer-checked:from-emerald-400 peer-checked:to-emerald-500 peer-checked:text-white shadow-sm peer-checked:shadow-md peer-checked:shadow-emerald-500/30"
+                >
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span>Proofing / Setup</span>
+                  </div>
+                </label>
+              </div>
             </div>
             
             <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-1">
-              Pilih <strong>Istirahat</strong> jika panel ini adalah hasil kerja saat Anda beristirahat (operator pengganti).
+              Pilih <strong>Istirahat</strong> jika dibantu operator lain. Pilih <strong>Proofing</strong> untuk mencatat waktu persiapan mesin tanpa adanya hasil kain.
             </p>
           </div>
 

@@ -103,7 +103,7 @@ export const productionFormSchemaBase = z.object({
 });
 
 export const productionFormSchema = productionFormSchemaBase.superRefine((data, ctx) => {
-  if (!data.tanggalPotong && (!data.panelNo || data.panelNo.trim() === "")) {
+  if (data.jenisLaporan !== "Proofing" && !data.tanggalPotong && (!data.panelNo || data.panelNo.trim() === "")) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Nomor Panel harus diisi",
