@@ -35,6 +35,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Scissors,
+  Info,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
@@ -347,6 +348,7 @@ export default function EmployeeForm({
   const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
   const [highlightPotonganKe, setHighlightPotonganKe] = useState(false);
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
+  const [activeInfo, setActiveInfo] = useState<string | null>(null);
 
   // States untuk upload foto
   const [isUploading, setIsUploading] = useState<{
@@ -1240,130 +1242,249 @@ export default function EmployeeForm({
             )}
           </button>
 
-          {/* Tindakan Akhir Panel */}
+          {/* Tindakan Akhir Panel Modal */}
           {showAdvancedActions && (
-            <div className="flex flex-col gap-3 mb-6 animate-fadeIn">
-              {/* Potong Kain Toggle */}
-              <div
-                data-tour="cut-panel"
-                className={`p-4 border rounded-2xl transition-all duration-300 ${isLastPanel ? "bg-sky-50 border-sky-300 shadow-sm" : "bg-slate-50 border-slate-200"}`}
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn" onClick={() => setShowAdvancedActions(false)}>
+              <div 
+                className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-scaleIn"
+                onClick={(e) => e.stopPropagation()}
               >
-                <label className="flex items-center justify-between cursor-pointer select-none">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={isLastPanel}
-                      onChange={(e) => {
-                        setIsLastPanel(e.target.checked);
-                        if (e.target.checked) {
-                          setValue(
-                            "tanggalPotong",
-                            new Date().toISOString().split("T")[0],
-                          );
-                        } else {
-                          setValue("tanggalPotong", "");
-                        }
-                      }}
-                      className="w-5 h-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
-                    />
-                    <div>
-                      <h5
-                        className={`text-sm font-bold ${isLastPanel ? "text-sky-700" : "text-slate-600"}`}
-                      >
-                        Potong Kain
-                      </h5>
-                    </div>
-                  </div>
-                  <Scissors
-                    className={`w-5 h-5 shrink-0 ${isLastPanel ? "text-sky-600" : "text-slate-400"}`}
-                    style={{ transform: "scaleX(-1)" }}
-                  />
-                </label>
-
-                {isLastPanel && (
-                  <div className="mt-4 pt-4 border-t border-sky-200/60 animate-fadeIn">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-sky-600 uppercase">
-                        Tanggal Potong
-                      </label>
+                <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50">
+                  <h3 className="font-black text-slate-800 text-lg">Opsi Lanjutan Panel</h3>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowAdvancedActions(false);
+                      setActiveInfo(null);
+                    }}
+                    className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <div 
+                  className="p-5 sm:p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/30 custom-scrollbar"
+                  onClick={() => setActiveInfo(null)}
+                >
+                  {/* Potong Kain Toggle */}
+                  <div className="flex flex-col gap-2 relative" data-tour="cut-panel">
+                    <label className={`relative flex flex-col items-center justify-center p-4 h-32 rounded-2xl border-2 cursor-pointer transition-all duration-300 text-center ${
+                      isLastPanel 
+                        ? "bg-gradient-to-br from-[#0070bc] to-[#004777] border-transparent shadow-lg shadow-sky-500/30 text-white" 
+                        : "bg-white border-slate-200 hover:border-sky-300 text-slate-600 hover:bg-sky-50"
+                    }`}>
                       <input
-                        type="date"
-                        {...register("tanggalPotong")}
-                        className="h-10 px-3 rounded-lg bg-white border border-sky-200 text-sm font-semibold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none shadow-sm"
+                        type="checkbox"
+                        checked={isLastPanel}
+                        onChange={(e) => {
+                          setIsLastPanel(e.target.checked);
+                          if (e.target.checked) {
+                            setValue("tanggalPotong", new Date().toISOString().split("T")[0]);
+                          } else {
+                            setValue("tanggalPotong", "");
+                          }
+                        }}
+                        className="hidden"
                       />
-                    </div>
-                  </div>
-                )}
-              </div>
+                      <Scissors className={`w-8 h-8 mb-2 transition-transform duration-300 ${isLastPanel ? "-rotate-12 scale-110" : "text-slate-400"}`} style={{ transform: isLastPanel ? "scaleX(-1) rotate(12deg)" : "scaleX(-1)" }} />
+                      <span className="font-black uppercase text-xs tracking-wide">Potong Kain</span>
+                      
+                      {isLastPanel && (
+                        <div className="absolute top-2 right-2 bg-white/20 rounded-full p-1">
+                          <CheckCircle2 className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                    </label>
 
-              {/* Pilih PCS yang BS */}
-              {fields.length > 0 && (
-                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 transition-all duration-300 shadow-sm">
-                  <h5 className="text-xs font-black text-rose-800 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <AlertCircle className="w-4 h-4" />
-                    Tandai PCS BS
-                  </h5>
-                  <p className="text-[10px] font-medium text-rose-600 mb-4">
-                    Centang PCS yang rusak. Jika ada 1 saja yang dicentang, nomor panel akan otomatis diulang untuk panel selanjutnya.
-                  </p>
-                  <div className="flex flex-wrap gap-4">
-                    {fields.map((field, index) => (
-                      <label key={field.id} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setActiveInfo(activeInfo === "potong" ? null : "potong");
+                      }}
+                      className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${
+                        activeInfo === "potong" 
+                          ? "bg-slate-800 text-white" 
+                          : isLastPanel ? "bg-white/20 text-white hover:bg-white/30" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                      }`}
+                    >
+                      <Info className="w-4 h-4" />
+                    </button>
+                    {activeInfo === "potong" && (
+                      <div className="absolute top-12 left-0 w-full p-3 bg-slate-800 text-white text-[11px] leading-relaxed rounded-xl z-50 shadow-xl animate-fadeIn">
+                        Tandai khusus untuk potongan terakhir dalam roll kain.
+                      </div>
+                    )}
+
+                    {isLastPanel && (
+                      <div className="animate-fadeIn">
                         <input
-                          type="checkbox"
-                          {...register(`pcsData.${index}.isBs` as const)}
-                          className="w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                          type="date"
+                          {...register("tanggalPotong")}
+                          className="h-10 px-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-800 text-xs font-bold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none shadow-sm w-full text-center"
                         />
-                        <span className="text-xs font-bold text-rose-700">
-                          PCS {index + 1}
-                        </span>
-                      </label>
-                    ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
 
-              {/* Lanjut Shift Checkbox */}
-              {!isEdit && (
-                <div className="bg-orange-50/80 border border-orange-200/60 rounded-2xl p-4 transition-all duration-300">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      {...register("mesinMasihStop")}
-                      className="w-5 h-5 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black text-orange-800 uppercase tracking-wide">Masalah Lanjut Shift (Mesin Stop)</span>
-                      <span className="text-[10px] font-medium text-orange-600/80">Centang jika masalah belum selesai dan panel dilanjutkan shift berikutnya.</span>
+                  {/* Pilih PCS yang BS */}
+                  {fields.length > 0 && (
+                    <div className="flex flex-col gap-2 relative">
+                      <div className="relative flex flex-col items-center justify-center p-4 min-h-32 h-auto rounded-2xl border-2 bg-gradient-to-br from-rose-50 to-white border-rose-200 text-center shadow-sm">
+                        <AlertCircle className="w-7 h-7 mb-2 text-rose-500" />
+                        <span className="font-black uppercase text-xs text-rose-700 tracking-wide mb-2">Tandai PCS BS</span>
+                        
+                        <div className="flex flex-wrap justify-center gap-1.5 w-full">
+                          {fields.map((field, index) => (
+                            <div key={field.id} className="relative flex-1 min-w-[45%] z-10">
+                              <input
+                                type="checkbox"
+                                id={`pcsBs-${index}`}
+                                {...register(`pcsData.${index}.isBs` as const)}
+                                className="peer hidden"
+                              />
+                              <label htmlFor={`pcsBs-${index}`} className="flex items-center justify-center cursor-pointer py-1.5 px-2 rounded-lg border-2 bg-white border-rose-200 text-rose-600 font-bold text-[10px] uppercase transition-all duration-300 hover:border-rose-400 hover:bg-rose-50 peer-checked:bg-rose-500 peer-checked:border-rose-600 peer-checked:text-white peer-checked:shadow-md">
+                                PCS {index + 1}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActiveInfo(activeInfo === "pcs" ? null : "pcs");
+                        }}
+                        className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${
+                          activeInfo === "pcs" ? "bg-slate-800 text-white" : "bg-rose-100 text-rose-400 hover:bg-rose-200"
+                        }`}
+                      >
+                        <Info className="w-4 h-4" />
+                      </button>
+                      {activeInfo === "pcs" && (
+                        <div className="absolute top-12 left-0 w-full p-3 bg-slate-800 text-white text-[11px] leading-relaxed rounded-xl z-50 shadow-xl animate-fadeIn">
+                          Klik tombol PCS yang cacat/rusak. Otomatis akan menahan nomor urut panel selanjutnya.
+                        </div>
+                      )}
                     </div>
-                  </label>
+                  )}
+
+                  {/* Lanjut Shift Checkbox */}
+                  {!isEdit && (
+                    <div className="flex flex-col gap-2 relative h-32">
+                      <input
+                        type="checkbox"
+                        id="masalahLanjutShift"
+                        {...register("mesinMasihStop")}
+                        className="peer hidden"
+                      />
+                      <label htmlFor="masalahLanjutShift" className="absolute inset-0 flex flex-col items-center justify-center p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 text-slate-600 hover:border-orange-300 hover:bg-orange-50 peer-checked:bg-gradient-to-br peer-checked:from-orange-500 peer-checked:to-amber-500 peer-checked:border-transparent peer-checked:shadow-lg peer-checked:shadow-orange-500/30 peer-checked:text-white group z-10">
+                        <Timer className="w-8 h-8 mb-2 transition-transform duration-300 peer-checked:-rotate-12 peer-checked:scale-110 text-slate-400 group-hover:text-orange-400 peer-checked:text-white" />
+                        <span className="font-black uppercase text-xs tracking-wide">Lanjut Shift</span>
+                        
+                        <div className="absolute top-2 right-2 bg-white/20 rounded-full p-1 opacity-0 peer-checked:opacity-100 transition-opacity">
+                          <CheckCircle2 className="w-4 h-4 text-white" />
+                        </div>
+                      </label>
+                      
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActiveInfo(activeInfo === "shift" ? null : "shift");
+                        }}
+                        className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${
+                          activeInfo === "shift" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                        }`}
+                      >
+                        <Info className="w-4 h-4" />
+                      </button>
+                      {activeInfo === "shift" && (
+                        <div className="absolute top-12 left-0 w-full p-3 bg-slate-800 text-white text-[11px] leading-relaxed rounded-xl z-50 shadow-xl animate-fadeIn">
+                          Centang jika mesin stop dan masalah belum beres untuk diwariskan ke shift depan.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                <div className="p-5 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedActions(false)}
+                    className="w-full h-12 sm:h-14 bg-slate-900 hover:bg-slate-800 text-white font-black text-sm rounded-xl shadow-lg shadow-slate-900/20 transition-all active:scale-[0.98] uppercase tracking-wider"
+                  >
+                    Selesai & Tutup
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
-          <div className="mt-4 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col gap-2">
-            <label htmlFor="jenisLaporanMain" className="text-xs font-bold text-slate-700 uppercase">
+          <div className="mt-4 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col gap-3">
+            <label className="text-xs font-bold text-slate-700 uppercase">
               Jenis Laporan / Info Istirahat
             </label>
-            <select
-              id="jenisLaporanMain"
-              {...register("jenisLaporan")}
-              onChange={(e) => {
-                register("jenisLaporan").onChange(e);
-                if (e.target.value === "Istirahat") {
-                  setShowBackupModal(true);
-                } else {
-                  setBackupOperatorName("");
-                }
-              }}
-              className="w-full h-11 px-3 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-[#0070bc] focus:ring-2 focus:ring-blue-100 outline-none transition-all"
-            >
-              <option value="">Normal</option>
-              <option value="Istirahat">Istirahat {backupOperatorName ? `(Backup: ${backupOperatorName})` : ""}</option>
-            </select>
-            <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-              Pilih <strong>Istirahat</strong> jika panel ini adalah hasil kerja saat Anda beristirahat.
+            
+            <div className="grid grid-cols-2 gap-3">
+              {/* Normal */}
+              <div className="relative">
+                <input
+                  type="radio"
+                  id="jenisLaporanNormal"
+                  value=""
+                  {...register("jenisLaporan")}
+                  onChange={(e) => {
+                    register("jenisLaporan").onChange(e);
+                    setBackupOperatorName("");
+                  }}
+                  className="peer hidden"
+                />
+                <label 
+                  htmlFor="jenisLaporanNormal"
+                  className="flex items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-[#0070bc]/40 hover:bg-sky-50 text-slate-600 font-black text-xs sm:text-sm uppercase peer-checked:border-[#0070bc] peer-checked:bg-sky-50 peer-checked:text-[#0070bc] shadow-sm peer-checked:shadow-md"
+                >
+                  Normal
+                </label>
+              </div>
+
+              {/* Istirahat */}
+              <div className="relative">
+                <input
+                  type="radio"
+                  id="jenisLaporanIstirahat"
+                  value="Istirahat"
+                  {...register("jenisLaporan")}
+                  onChange={(e) => {
+                    register("jenisLaporan").onChange(e);
+                    setShowBackupModal(true);
+                  }}
+                  className="peer hidden"
+                />
+                <label 
+                  htmlFor="jenisLaporanIstirahat"
+                  className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-amber-400 hover:bg-amber-50 text-slate-600 font-black text-xs sm:text-sm uppercase peer-checked:border-amber-500 peer-checked:bg-gradient-to-br peer-checked:from-amber-400 peer-checked:to-amber-500 peer-checked:text-white shadow-sm peer-checked:shadow-md peer-checked:shadow-amber-500/30"
+                >
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span>Istirahat</span>
+                    {backupOperatorName && (
+                      <span className="text-[9px] sm:text-[10px] bg-white/20 text-amber-900 px-2 py-0.5 rounded-md mt-0.5 font-bold tracking-wide">
+                        {backupOperatorName}
+                      </span>
+                    )}
+                  </div>
+                </label>
+              </div>
+            </div>
+            
+            <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-1">
+              Pilih <strong>Istirahat</strong> jika panel ini adalah hasil kerja saat Anda beristirahat (operator pengganti).
             </p>
           </div>
 

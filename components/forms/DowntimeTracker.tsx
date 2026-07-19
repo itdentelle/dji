@@ -135,6 +135,14 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
   const pcsCount = pcsKeys.length;
 
   useEffect(() => {
+    // 1. Recover saved timer if it exists (for long downtimes)
+    const savedStart = localStorage.getItem("dji_active_downtime_start");
+    if (savedStart && !isTimerRunning) {
+      setTimerStartRef(parseInt(savedStart));
+      setIsTimerRunning(true);
+    }
+
+    // 2. Setup the interval for live ticking
     let interval: NodeJS.Timeout;
     if (isTimerRunning && timerStartRef) {
       interval = setInterval(() => {
@@ -147,8 +155,10 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
   }, [isTimerRunning, timerStartRef]);
 
   const handleStartTimer = () => {
+    const now = Date.now();
     setIsTimerRunning(true);
-    setTimerStartRef(Date.now());
+    setTimerStartRef(now);
+    localStorage.setItem("dji_active_downtime_start", now.toString());
   };
 
   // Pre-fill meter input when the modal opens and defaultMeter is provided
@@ -198,6 +208,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     const duration = Math.floor((Date.now() - timerStartRef) / 1000);
     setIsTimerRunning(false);
     setTimerStartRef(null);
+    localStorage.removeItem("dji_active_downtime_start");
 
     // Pre-fill if resuming from previous shift
     if (unresolvedDowntime) {

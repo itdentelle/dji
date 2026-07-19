@@ -1601,25 +1601,25 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
                 <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
-                  Selamat Datang,{" "}
-                  {user?.fullName.replace(" (Demo)", "") || "Supervisor"}!
+                  DASHBOARD
                 </span>
               </h1>
               {isLive ? (
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold bg-white border border-sky-100 shadow-[0_2px_10px_-3px_rgba(14,165,233,0.15)] text-[#0070bc] tracking-widest uppercase">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.6)] animate-pulse" />
-                  Live Database
+                <span 
+                  title="Indikator Biru: Terhubung ke Database"
+                  className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white border border-sky-100 shadow-[0_2px_10px_-3px_rgba(14,165,233,0.15)] cursor-help"
+                >
+                  <span className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.6)] animate-pulse" />
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold bg-white border border-slate-200 shadow-sm text-slate-500 tracking-widest uppercase">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                  Mock Data (Demo)
+                <span 
+                  title="Indikator Abu: Terputus dari Database (Demo)"
+                  className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm cursor-help"
+                >
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
                 </span>
               )}
             </div>
-            <p className="text-slate-500 text-sm font-medium leading-relaxed">
-              Berikut adalah ringkasan hasil produksi.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
