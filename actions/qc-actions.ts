@@ -754,10 +754,10 @@ export async function deleteProductionDetailRow(detailId: string) {
   try {
     const supabase = await createAdminClient();
 
-    // 1. Fetch the detail to get its header_id and pcs_index
+    // 1. Fetch the detail to get its header_id, pcs_index, and jml_hasil_produksi
     const { data: detail, error: detailErr } = await supabase
       .from("production_details")
-      .select("header_id, pcs_index")
+      .select("header_id, pcs_index, jml_hasil_produksi")
       .eq("id", detailId)
       .single();
 
@@ -767,6 +767,7 @@ export async function deleteProductionDetailRow(detailId: string) {
 
     const headerId = detail?.header_id;
     const pcsIndex = detail?.pcs_index;
+    const isBsPanel = detail?.jml_hasil_produksi === 0;
 
     // 2. We will delete all details associated with this header, then the header itself
     // But first, let's get the header info to know which batch and panel to shift
@@ -840,7 +841,8 @@ export async function deleteProductionDetailRow(detailId: string) {
     }
 
     // 3. Shift subsequent panels down by 1 to fill the void for current PCS
-    if (!hasRemainingDetailsForCurrentPcs && deletedPanelNoStr && deletedPanelNoStr !== "METERAN" && batchInfo && pcsIndex !== undefined) {
+    // Tapi JANGAN geser jika yang dihapus adalah panel BS (karena BS tidak menggeser antrean saat ditambahkan)
+    if (!isBsPanel && !hasRemainingDetailsForCurrentPcs && deletedPanelNoStr && deletedPanelNoStr !== "METERAN" && batchInfo && pcsIndex !== undefined) {
       const deletedPanelNo = parseInt(deletedPanelNoStr);
       if (!isNaN(deletedPanelNo)) {
         const { data: allHeaders } = await supabase
