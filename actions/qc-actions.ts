@@ -987,36 +987,42 @@ export async function insertMissingPanel(params: {
       return { success: false, error: "Harus menyebutkan insertAt atau appendToEnd." };
     }
 
-    // Cek apakah header sudah ada
-    const existingHeader = panelHeaders.find(h => parseInt(h.panel_no) === newPanelNo);
-    const isAlreadyLinkedToCurrentPcs = existingHeader?.production_details?.some((d: any) => String(d.pcs_index) === String(params.pcsIndex));
+    // Cek apakah header sudah ada di posisi target
+    const existingHeadersAtPos = panelHeaders.filter(h => parseInt(h.panel_no) === newPanelNo);
+    // Cari header di posisi target yang sudah dipakai oleh PCS ini
+    const existingHeaderLinkedToCurrentPcs = existingHeadersAtPos.find(h => 
+      h.production_details?.some((d: any) => String(d.pcs_index) === String(params.pcsIndex))
+    );
 
-    let targetHeaderId = existingHeader?.id;
-    
+    let targetHeaderId;
     let needsShift = false;
     let needsNewHeader = false;
 
-    if (existingHeader) {
+    if (existingHeaderLinkedToCurrentPcs) {
       if (params.isBs) {
         // Jika BS, jangan geser dan jangan buat header baru (gunakan yang ada)
         needsShift = false;
         needsNewHeader = false;
-        targetHeaderId = existingHeader.id;
+        targetHeaderId = existingHeaderLinkedToCurrentPcs.id;
       } else {
-        // Jika bukan BS, jika header sudah dipakai, kita harus geser dan buat header baru untuk panel yang disisipkan
-        needsShift = isAlreadyLinkedToCurrentPcs;
-        needsNewHeader = isAlreadyLinkedToCurrentPcs;
+        // Jika bukan BS, kita harus geser dan buat header baru untuk panel yang disisipkan
+        needsShift = true;
+        needsNewHeader = true;
       }
     } else {
       needsShift = false;
-      needsNewHeader = true;
+      if (existingHeadersAtPos.length > 0) {
+        needsNewHeader = false;
+        targetHeaderId = existingHeadersAtPos[0].id;
+      } else {
+        needsNewHeader = true;
+      }
     }
 
     console.log("INSERT PANEL:", {
       newPanelNo,
-      existingHeaderFound: !!existingHeader,
-      existingHeaderId: existingHeader?.id,
-      isAlreadyLinkedToCurrentPcs,
+      existingHeadersFound: existingHeadersAtPos.length > 0,
+      existingHeaderLinkedToCurrentPcs: !!existingHeaderLinkedToCurrentPcs,
       isBs: params.isBs,
       needsShift,
       needsNewHeader,
