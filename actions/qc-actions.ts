@@ -829,8 +829,18 @@ export async function deleteProductionDetailRow(detailId: string) {
       }
     }
 
+    let hasRemainingDetailsForCurrentPcs = false;
+    if (headerId && pcsIndex !== undefined) {
+      const { count: remainingCount } = await supabase
+        .from("production_details")
+        .select("id", { count: "exact", head: true })
+        .eq("header_id", headerId)
+        .eq("pcs_index", pcsIndex);
+      hasRemainingDetailsForCurrentPcs = (remainingCount || 0) > 0;
+    }
+
     // 3. Shift subsequent panels down by 1 to fill the void for current PCS
-    if (deletedPanelNoStr && deletedPanelNoStr !== "METERAN" && batchInfo && pcsIndex !== undefined) {
+    if (!hasRemainingDetailsForCurrentPcs && deletedPanelNoStr && deletedPanelNoStr !== "METERAN" && batchInfo && pcsIndex !== undefined) {
       const deletedPanelNo = parseInt(deletedPanelNoStr);
       if (!isNaN(deletedPanelNo)) {
         const { data: allHeaders } = await supabase
