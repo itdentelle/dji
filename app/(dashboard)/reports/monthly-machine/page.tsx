@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { getMonthlyMachineReport, MonthlyMachineReportData } from "@/actions/report-actions";
 import { getMachineStatuses } from "@/actions/dashboard-actions";
-import { FileSpreadsheet, Loader2, Calendar, Monitor, AlertCircle, ArrowLeft } from "lucide-react";
+import { FileSpreadsheet, Loader2, Calendar, Monitor, AlertCircle, ArrowLeft, CloudUpload, X, Info } from "lucide-react";
 import Link from "next/link";
 
 export default function MonthlyMachineReportPage() {
@@ -14,7 +14,16 @@ export default function MonthlyMachineReportPage() {
   
   const [reportData, setReportData] = useState<MonthlyMachineReportData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMeterMachine, setIsMeterMachine] = useState(false);
+
+  // Modal State for Keterangan
+  const [modalData, setModalData] = useState<{ isOpen: boolean; title: string; contentObj: Record<string, string[]> | null }>({
+    isOpen: false,
+    title: "",
+    contentObj: null,
+  });
 
   useEffect(() => {
     // Fetch available machines
@@ -48,8 +57,9 @@ export default function MonthlyMachineReportPage() {
       const res = await getMonthlyMachineReport(selectedMonth, selectedYear, selectedMachine);
       if (res.success && res.data) {
         setReportData(res.data);
+        setIsMeterMachine(res.isMeterMachine || false);
       } else {
-        setError(res.error || "Gagal memuat data laporan.");
+        setError(res.error || "Gagal mengambil laporan.");
       }
     } catch (err: any) {
       setError(err.message);
@@ -57,6 +67,212 @@ export default function MonthlyMachineReportPage() {
       setIsLoading(false);
     }
   };
+
+
+  const syncToGoogleSheets = async () => {
+    setIsSyncing(true);
+    try {
+      const sheetUrl = process.env.NEXT_PUBLIC_REPORT_GOOGLE_SHEET_URL;
+      if (!sheetUrl) {
+        alert("URL Google Sheets belum diatur di .env (NEXT_PUBLIC_REPORT_GOOGLE_SHEET_URL)");
+        return;
+      }
+
+      const wsData: any[][] = [];
+      const headerRow1 = [
+        "Tanggal", "Desain", "Keterangan", isMeterMachine ? "Pick" : "Courses", "RPM", "Eff 100%", 
+        "Team", "Nama Operator", "Hasil Produksi", "Persentase dari 100%",
+        "Jumlah Cacat", "Persentase Cacat", 
+        "KODE TINDAKAN", "", "", "", "", "", "", "", 
+        "Downtime (Detik)", "Persentase Waktu Efektif"
+      ];
+      const headerRow2 = [
+        "", "", "", "", "", "", 
+        "", "", "", "",
+        "", "", 
+        "A", "B", "C", "D", "E", "F", "G", "H",
+        "", ""
+      ];
+      wsData.push(headerRow1);
+      wsData.push(headerRow2);
+      
+      const shiftDurationSecs = 28800;
+      
+      reportData.forEach((dayData) => {
+        const teams = ["A", "B", "C"];
+        teams.forEach((team, idx) => {
+          const isFirst = idx === 0;
+          // @ts-ignore
+          const td = dayData.teamData[team];
+          
+          const p100 = td.hasil_produksi > 0 && td.eff_100 > 0 ? ((td.hasil_produksi / td.eff_100) * 100).toFixed(2) + "%" : "0.00%";
+          const pCacat = td.jumlah_cacat > 0 && td.hasil_produksi > 0 ? ((td.jumlah_cacat / td.hasil_produksi) * 100).toFixed(2) + "%" : "0.00%";
+          const pEff = ((shiftDurationSecs - td.downtime_detik) / shiftDurationSecs * 100).toFixed(2) + "%";
+          
+          let ketString = "";
+          if (td.keterangan_per_kategori) {
+            ketString = Object.entries(td.keterangan_per_kategori)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([kat, details]) => {
+                const d = details as string[];
+                return d.length > 0 ? `[${kat}] ${d.join(", ")}` : `[${kat}]`;
+              }).join(" | ");
+          }
+
+          wsData.push([
+            isFirst ? dayData.tanggal : "",
+            td.desain || "",
+            ketString,
+            td.courses || "",
+            td.rpm || "",
+            td.eff_100 || "",
+            team,
+            td.operator_name,
+            td.hasil_produksi,
+            p100,
+            td.jumlah_cacat,
+            pCacat,
+            td.kode_tindakan["A"] || 0,
+            td.kode_tindakan["B"] || 0,
+            td.kode_tindakan["C"] || 0,
+            td.kode_tindakan["D"] || 0,
+            td.kode_tindakan["E"] || 0,
+            td.kode_tindakan["F"] || 0,
+            td.kode_tindakan["G"] || 0,
+            td.kode_tindakan["H"] || 0,
+            td.downtime_detik,
+            pEff
+          ]);
+        });
+      });
+
+      const response = await fetch(sheetUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ 
+          action: "sync_monthly_report", 
+          machine: selectedMachine,
+          month: selectedMonth,
+          year: selectedYear,
+          data: wsData 
+        }),
+      });
+
+      if (!response.ok) throw new Error("Gagal terhubung ke Google Sheets API.");
+      alert(`Sukses sinkronisasi laporan ${selectedMachine} ke Google Sheets!`);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const exportToExcel = () => {
+    import("xlsx").then((XLSX) => {
+      const wb = XLSX.utils.book_new();
+      const wsData: any[][] = [];
+      
+      // Main Headers
+      const headerRow1 = [
+        "Tanggal", "Desain", "Keterangan", isMeterMachine ? "Pick" : "Courses", "RPM", "Eff 100%", 
+        "Team", "Nama Operator", "Hasil Produksi", "Persentase dari 100%",
+        "Jumlah Cacat", "Persentase Cacat", 
+        "KODE TINDAKAN", "", "", "", "", "", "", "", 
+        "Downtime (Detik)", "Persentase Waktu Efektif"
+      ];
+      const headerRow2 = [
+        "", "", "", "", "", "", 
+        "", "", "", "",
+        "", "", 
+        "A", "B", "C", "D", "E", "F", "G", "H",
+        "", ""
+      ];
+      wsData.push(headerRow1);
+      wsData.push(headerRow2);
+      
+      const shiftDurationSecs = 28800;
+      
+      reportData.forEach((dayData) => {
+        const teams = ["A", "B", "C"];
+        teams.forEach((team, idx) => {
+          const isFirst = idx === 0;
+          // @ts-ignore
+          const td = dayData.teamData[team];
+          
+          const p100 = td.hasil_produksi > 0 && td.eff_100 > 0 ? ((td.hasil_produksi / td.eff_100) * 100).toFixed(2) + "%" : "0.00%";
+          const pCacat = td.jumlah_cacat > 0 && td.hasil_produksi > 0 ? ((td.jumlah_cacat / td.hasil_produksi) * 100).toFixed(2) + "%" : "0.00%";
+          const pEff = ((shiftDurationSecs - td.downtime_detik) / shiftDurationSecs * 100).toFixed(2) + "%";
+          
+          let ketString = "";
+          if (td.keterangan_per_kategori) {
+            ketString = Object.entries(td.keterangan_per_kategori)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([kat, details]) => {
+                const d = details as string[];
+                return d.length > 0 ? `[${kat}] ${d.join(", ")}` : `[${kat}]`;
+              }).join(" | ");
+          }
+
+          const row = [
+            isFirst ? dayData.tanggal : "",
+            td.desain || "",
+            ketString,
+            td.courses || "",
+            td.rpm || "",
+            td.eff_100 || "",
+            team,
+            td.operator_name,
+            td.hasil_produksi,
+            p100,
+            td.jumlah_cacat,
+            pCacat,
+            td.kode_tindakan["A"] || 0,
+            td.kode_tindakan["B"] || 0,
+            td.kode_tindakan["C"] || 0,
+            td.kode_tindakan["D"] || 0,
+            td.kode_tindakan["E"] || 0,
+            td.kode_tindakan["F"] || 0,
+            td.kode_tindakan["G"] || 0,
+            td.kode_tindakan["H"] || 0,
+            td.downtime_detik,
+            pEff
+          ];
+          wsData.push(row);
+        });
+      });
+      
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      
+      const colWidths = [
+        { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 10 }, { wch: 8 }, { wch: 10 },
+        { wch: 8 }, { wch: 25 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 20 }
+      ];
+      ws['!cols'] = colWidths;
+      
+      const merges = [];
+      // Header merges
+      merges.push({ s: { r: 0, c: 12 }, e: { r: 0, c: 19 } }); // KODE TINDAKAN span 8 cols
+      for (let c = 0; c < 22; c++) {
+        if (c < 12 || c > 19) {
+          merges.push({ s: { r: 0, c: c }, e: { r: 1, c: c } }); // Vertical merge for others
+        }
+      }
+
+      let startRow = 2; // Data starts at row index 2
+      for (let i = 0; i < reportData.length; i++) {
+        merges.push({ s: { r: startRow, c: 0 }, e: { r: startRow + 2, c: 0 } });
+        startRow += 3;
+      }
+      ws['!merges'] = merges;
+      
+      XLSX.utils.book_append_sheet(wb, ws, `Laporan ${selectedMachine}`);
+      const fileName = `Laporan_Bulanan_${selectedMachine}_${selectedMonth}_${selectedYear}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    });
+  };
+
 
   const months = [
     { value: 1, label: "Januari" }, { value: 2, label: "Februari" }, { value: 3, label: "Maret" },
@@ -125,8 +341,27 @@ export default function MonthlyMachineReportPage() {
               onClick={loadReportData}
               disabled={isLoading}
               className="bg-sky-600 hover:bg-sky-700 text-white p-2.5 rounded-xl shadow-md transition-all flex items-center justify-center min-w-[44px]"
+              title="Tampilkan Data"
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Monitor className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={syncToGoogleSheets}
+              disabled={isSyncing || reportData.length === 0}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white p-2.5 px-4 rounded-xl shadow-md transition-all flex items-center gap-2 font-bold text-sm disabled:opacity-50"
+              title="Sync ke Google Sheets"
+            >
+              {isSyncing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CloudUpload className="w-5 h-5" />}
+              <span className="hidden lg:inline">Sync ke Sheet</span>
+            </button>
+            <button
+              onClick={exportToExcel}
+              disabled={isLoading || reportData.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 px-4 rounded-xl shadow-md transition-all flex items-center gap-2 font-bold text-sm disabled:opacity-50"
+              title="Download Excel"
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+              <span className="hidden sm:inline">Export Excel</span>
             </button>
           </div>
         </div>
@@ -171,7 +406,7 @@ export default function MonthlyMachineReportPage() {
                   <th className="border border-slate-300 p-2 min-w-[40px] sticky left-0 bg-slate-100/90 z-20">Tanggal</th>
                   <th className="border border-slate-300 p-2 min-w-[100px]">Desain</th>
                   <th className="border border-slate-300 p-2 min-w-[120px]">Keterangan</th>
-                  <th className="border border-slate-300 p-2 min-w-[70px]">Courses</th>
+                  <th className="border border-slate-300 p-2 min-w-[70px]">{isMeterMachine ? "Pick" : "Courses"}</th>
                   <th className="border border-slate-300 p-2 min-w-[60px]">RPM</th>
                   <th className="border border-slate-300 p-2 min-w-[60px]">Eff 100%</th>
                   <th className="border border-slate-300 p-2 min-w-[50px] bg-sky-50">Team</th>
@@ -212,16 +447,34 @@ export default function MonthlyMachineReportPage() {
                     // The background color for Team cell in excel is often light orange for empty or plain.
                     // We'll alternate slightly for rows to look like the image.
                     const rowBgClass = team === "B" ? "bg-[#fdf9f4]" : (team === "C" ? "bg-[#faf5ec]" : "bg-white");
+                    
+                    let ketString = "";
+                    if (td.keterangan_per_kategori) {
+                      ketString = Object.entries(td.keterangan_per_kategori)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([kat, details]) => {
+                          const d = details as string[];
+                          return d.length > 0 ? `[${kat}] ${d.join(", ")}` : `[${kat}]`;
+                        }).join(" | ");
+                    }
 
                     return (
                       <tr key={`${dayData.tanggal}-${team}`} className={`${rowBgClass} hover:bg-sky-50/50 transition-colors`}>
                         {isFirst && (
-                          <>
-                            <td rowSpan={3} className="border border-slate-300 p-2 text-center sticky left-0 bg-slate-50 z-10">{dayData.tanggal}</td>
-                            <td rowSpan={3} className="border border-slate-300 p-2 text-center font-bold text-slate-800">{dayData.desain}</td>
-                            <td rowSpan={3} className="border border-slate-300 p-2"></td>
-                          </>
+                          <td rowSpan={3} className="border border-slate-300 p-2 text-center sticky left-0 bg-slate-50 z-10">{dayData.tanggal}</td>
                         )}
+                        <td className="border border-slate-300 p-2 text-center font-bold text-slate-800">{td.desain || ""}</td>
+                        <td className="border border-slate-300 p-2 text-center text-slate-500 text-xs">
+                          {Object.keys(td.keterangan_per_kategori || {}).length > 0 ? (
+                            <button
+                              onClick={() => setModalData({ isOpen: true, title: `Keterangan (Tgl ${dayData.tanggal} Tim ${team})`, contentObj: td.keterangan_per_kategori! })}
+                              className="w-full text-left truncate max-w-[120px] hover:text-sky-600 transition-colors group relative flex items-center justify-between"
+                            >
+                              <span className="truncate">{ketString}</span>
+                              <Info className="w-3 h-3 ml-1 shrink-0 opacity-50 group-hover:opacity-100" />
+                            </button>
+                          ) : ""}
+                        </td>
                         <td className="border border-slate-300 p-1.5 text-center bg-slate-50/50 font-medium">{td.courses || ""}</td>
                         <td className="border border-slate-300 p-1.5 text-center bg-slate-50/50 font-medium">{td.rpm || ""}</td>
                         <td className="border border-slate-300 p-1.5 text-center bg-slate-50/50 font-medium">{td.eff_100 || ""}</td>
@@ -258,6 +511,56 @@ export default function MonthlyMachineReportPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal for Keterangan */}
+      {modalData.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-100 animate-scaleUp">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="font-bold text-slate-800">{modalData.title}</h3>
+              <button 
+                onClick={() => setModalData({ ...modalData, isOpen: false })}
+                className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              {modalData.contentObj && Object.entries(modalData.contentObj).length > 0 ? (
+                <div className="flex flex-col gap-4">
+                  {Object.entries(modalData.contentObj).sort(([a], [b]) => a.localeCompare(b)).map(([kat, details]) => (
+                    <div key={kat} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      <div className="font-black text-slate-700 text-sm mb-2 flex items-center gap-2">
+                        <span className="bg-amber-100 text-amber-700 w-6 h-6 flex items-center justify-center rounded-md">{kat}</span>
+                        <span>Kategori {kat}</span>
+                      </div>
+                      {details.length > 0 ? (
+                        <ul className="list-disc list-inside text-slate-600 text-sm space-y-1">
+                          {details.map((d, i) => (
+                            <li key={i}>{d}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-slate-400 text-sm italic">Tidak ada detail spesifik.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-400 italic text-center py-4">Tidak ada keterangan.</p>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50/50">
+              <button
+                onClick={() => setModalData({ ...modalData, isOpen: false })}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-xl transition-all shadow-sm"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

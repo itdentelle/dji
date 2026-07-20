@@ -16,7 +16,10 @@ export interface TeamData {
   courses: string;
   rpm: number;
   eff_100: number;
-  kode_tindakan: Record<string, number>; // e.g. { "A": 2, "B": 0 }
+  kode_tindakan: Record<string, number>;
+  desain?: string;
+  keterangan?: string;
+  keterangan_per_kategori?: Record<string, string[]>;
 }
 
 const PROBLEM_DETAILS: Record<string, string[]> = {
@@ -48,6 +51,7 @@ export async function getMonthlyMachineReport(
         id,
         jml_hasil_produksi,
         kategori_masalah,
+        detail_masalah,
         indikator_stop,
         production_defects(kategori),
         production_headers!inner (
@@ -59,6 +63,7 @@ export async function getMonthlyMachineReport(
           pcs,
           design_id,
           course,
+          pick,
           rpm,
           total_downtime_detik,
           pic,
@@ -97,9 +102,15 @@ export async function getMonthlyMachineReport(
     // To track unique panels and whether they have failed/stopped
     const processedPanels = new Map<string, { countedForTeam: string | null, isFailed: boolean }>();
 
+    let isMeterMachine = false;
+
     data?.forEach((row: any) => {
       const header = row.production_headers;
       if (!header || !header.tgl) return;
+      
+      if (header.panel_no === "METERAN") {
+        isMeterMachine = true;
+      }
 
       const dateObj = new Date(header.tgl);
       const day = dateObj.getDate();
@@ -110,7 +121,7 @@ export async function getMonthlyMachineReport(
       const reportDay = reportMap.get(day);
       if (!reportDay) return;
 
-      // Update shift/day metadata (we take the last one or accumulate, here we just take truthy values)
+      // Update shift/day metadata
       if (header.design_id && !reportDay.desain) reportDay.desain = header.design_id;
 
       // Ensure the team exists in the map
@@ -123,14 +134,24 @@ export async function getMonthlyMachineReport(
         team.operator_name = operatorName;
       }
       
-      // Update team-specific courses, rpm and efficiency
-      if (header.course && !team.courses) team.courses = header.course;
+      // Update team-specific courses, rpm, efficiency, and design
+      if (header.panel_no === "METERAN") {
+        if (header.pick && !team.courses) team.courses = header.pick;
+      } else {
+        if (header.course && !team.courses) team.courses = header.course;
+      }
+      
       if (header.rpm && !team.rpm) team.rpm = header.rpm;
+      if (header.design_id && !team.desain) team.desain = header.design_id;
       
       if (team.rpm > 0 && team.courses) {
         const courseNum = parseFloat(team.courses);
         if (!isNaN(courseNum) && courseNum > 0) {
-          team.eff_100 = Math.round((team.rpm * 8 * 60) / courseNum);
+          if (header.panel_no === "METERAN") {
+            team.eff_100 = Math.round((team.rpm * 8 * 60) / (courseNum * 100));
+          } else {
+            team.eff_100 = Math.round((team.rpm * 8 * 60) / courseNum);
+          }
         }
       }
 
@@ -140,6 +161,18 @@ export async function getMonthlyMachineReport(
       let hasDefects = false;
       let defectCountForRow = 0;
 
+      if (!team.keterangan_per_kategori) {
+        team.keterangan_per_kategori = {};
+      }
+      const addKeterangan = (kat: string, detail: string) => {
+        if (!kat || kat === "Unknown") return;
+        if (!team.keterangan_per_kategori![kat]) team.keterangan_per_kategori![kat] = [];
+        const d = detail.trim();
+        if (d && !team.keterangan_per_kategori![kat].includes(d)) {
+          team.keterangan_per_kategori![kat].push(d);
+        }
+      };
+
       const addDefect = (k: string) => {
          const code = k.replace("KODE ", "");
          if (!team.kode_tindakan[code]) team.kode_tindakan[code] = 0;
@@ -147,98 +180,66 @@ export async function getMonthlyMachineReport(
          defectCountForRow += 1;
       };
 
-      if (row.production_defects && Array.isArray(row.production_defects) && row.production_defects.length > 0) {
-        row.production_defects.forEach((d: any) => {
-          if (d.kategori) addDefect(d.kategori);
+
+
+      let cleanD = row.detail_masalah 
+        ? String(row.detail_masalah).replace(/\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").replace(/\|\s*$/, "").replace(/,\s*$/, "").trim()
+        : "";
+        
+      const katsRaw = row.kategori_masalah || "";
+      let kats = katsRaw === "X" ? [] : katsRaw.split(",").map((s: string) => s.trim().toUpperCase()).filter(Boolean);
+      
+      const recordedKats = new Set<string>();
+      const addDefectKeterangan = (kat: string, detail: string) => {
+         addDefect(kat);
+         if (detail) addKeterangan(kat, detail);
+         recordedKats.add(kat);
+      };
+
+      if (cleanD || kats.length > 0) {
+        if (cleanD) {
+           const allKnownProblems: { kat: string; detail: string }[] = [];
+           for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
+             detList.forEach(det => {
+                allKnownProblems.push({ kat, detail: det });
+             });
+           }
+           // Sort by length descending to match longest phrases first
+           allKnownProblems.sort((a, b) => b.detail.length - a.detail.length);
+
+           let remainingD = cleanD;
+
+           // Extract all known problems from the string, regardless of which category was checked
+           allKnownProblems.forEach(known => {
+             const escapedDetail = known.detail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+             const regex = new RegExp(escapedDetail, "gi");
+             if (regex.test(remainingD)) {
+               addDefectKeterangan(known.kat, known.detail);
+               remainingD = remainingD.replace(regex, "");
+             }
+           });
+
+           // Any remaining text is custom/unknown details. Split them by comma or pipe.
+           const leftoverParts = remainingD.split(/\||,/).map(s => s.trim()).filter(Boolean);
+           
+           leftoverParts.forEach(part => {
+             // Assign leftover parts to the first selected category, or "A" as a fallback
+             const targetKat = kats.length > 0 ? kats[0] : "A";
+             addDefectKeterangan(targetKat, part);
+           });
+        }
+
+        kats.forEach((k: string) => {
+          if (k && !recordedKats.has(k)) {
+            addDefectKeterangan(k, "");
+          }
         });
         hasDefects = true;
-      } else if (row.indikator_stop || row.kategori_masalah) {
-        if (row.kategori_masalah && row.kategori_masalah !== "X") {
-          let cleanD = row.detail_masalah 
-            ? String(row.detail_masalah).replace(/\(Titik:\s*[A-Za-z0-9\s.\-]+\)/gi, "").replace(/\|\s*$/, "").replace(/,\s*$/, "").trim()
-            : "";
-            
-          const katsRaw = row.kategori_masalah;
-          const kats = katsRaw.split(",").map((s: string) => s.trim().toUpperCase()).filter(Boolean);
-          
-          const processDefect = (k: string, d: string) => {
-             if (!d) {
-               addDefect(k);
-               return;
-             }
-             const knownDetailsForCat = PROBLEM_DETAILS[k] || [];
-             const matchedDetails: string[] = [];
-             let remainingD = d;
-             const sortedKnown = [...knownDetailsForCat].sort((a, b) => b.length - a.length);
-             sortedKnown.forEach(known => {
-               if (remainingD.toLowerCase().includes(known.toLowerCase())) {
-                 matchedDetails.push(known);
-                 remainingD = remainingD.replace(new RegExp(known, "gi"), "");
-               }
-             });
-             
-             if (matchedDetails.length > 0) {
-               matchedDetails.forEach(() => addDefect(k));
-               const customParts = remainingD.split(",").map((s: string) => s.trim()).filter(Boolean);
-               customParts.forEach(custom => {
-                 const cleanCustom = custom.replace(/^,\s*|\s*,\s*$/g, "").trim();
-                 if (cleanCustom) addDefect(k);
-               });
-             } else {
-               const parts = d.split(",").map((s: string) => s.trim()).filter(Boolean);
-               if (parts.length === 0) addDefect(k);
-               parts.forEach(() => addDefect(k));
-             }
-          };
+      }
 
-          if (kats.length > 0) {
-            if (cleanD.includes(" | ")) {
-              const catDetails = cleanD.split(" | ");
-              for (let i = 0; i < Math.max(kats.length, catDetails.length); i++) {
-                const k = kats[i] || "Unknown";
-                const d = catDetails[i] || "";
-                if (k !== "Unknown") processDefect(k, d);
-              }
-            } else if (cleanD) {
-              if (kats.length === 1) {
-                processDefect(kats[0], cleanD);
-              } else {
-                const dets = cleanD.split(", ");
-                if (kats.length === dets.length) {
-                  for (let i = 0; i < kats.length; i++) {
-                    processDefect(kats[i], dets[i]);
-                  }
-                } else {
-                  dets.forEach((det: string) => {
-                    let foundKat = "Unknown";
-                    for (const [kat, detList] of Object.entries(PROBLEM_DETAILS || {})) {
-                      if ((detList as string[]).some((d: string) => det.toLowerCase().includes(d.toLowerCase()))) {
-                        foundKat = kat;
-                        break;
-                      }
-                    }
-                    if (foundKat !== "Unknown") {
-                      addDefect(foundKat);
-                    } else if (kats.length > 0) {
-                       addDefect(kats[0]);
-                    }
-                  });
-                }
-              }
-            } else {
-              kats.forEach((k: string) => { if (k) addDefect(k); });
-            }
-          }
-          
-          if (defectCountForRow === 0) {
-             defectCountForRow = 1;
-             if (kats.length > 0) addDefect(kats[0]);
-          }
-          hasDefects = true;
-        } else if (row.kategori_masalah === "X") {
-           team.jumlah_cacat += 1;
-           hasDefects = true;
-        }
+      if (row.kategori_masalah === "X") {
+         team.jumlah_cacat += 1;
+         hasDefects = true;
       }
 
       if (hasDefects && defectCountForRow > 0) {
@@ -279,7 +280,7 @@ export async function getMonthlyMachineReport(
 
     const results = Array.from(reportMap.values());
     
-    return { success: true, data: results };
+    return { success: true, data: results, isMeterMachine };
 
   } catch (err: any) {
     return { success: false, error: err.message };

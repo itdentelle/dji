@@ -68,9 +68,8 @@ export default function MeterHistoryTable({
       const isFinishReport = h.meter_akhir !== null && h.meter_akhir !== undefined && String(h.meter_akhir).trim() !== "";
       const hasDefect = !!item.kategori_masalah || !!item.detail_masalah || (item.keterangan_cacat && item.keterangan_cacat !== "START" && item.keterangan_cacat !== "FINISH" && !isIstirahat);
 
-      if (!isIstirahat && !isFinishReport && !hasDefect && (item.meter_kain === null || item.meter_kain === undefined || String(item.meter_kain).trim() === "")) {
-        return false;
-      }
+      // Remove early filtering so that we don't lose the START row injection for operators who have no defects in a specific PCS
+
 
       if (!isIstirahat) return true;
       const hasMeter = (item.meter_kain !== null && item.meter_kain !== undefined && String(item.meter_kain).trim() !== "") ||
@@ -462,30 +461,34 @@ export default function MeterHistoryTable({
       }
 
 
-      items.push({
-        id: item.id || `item-${idx}-${Math.random()}`,
-        isStartRow: false,
-        isMeter: true,
-        displayNo: (globalRowCount + 1).toString(),
-        tglStr: tgl,
-        grpStr: grp,
-        oprStr: opr,
-        meterDisplay,
-        cacatDisplay: cacatText,
-        backupOpName,
-        isGradable,
-        showTgl,
-        showGrp,
-        showOpr: hasIstirahat ? true : showOpr,
-        hasErrorDetail,
-        isIstirahat,
-        hasIstirahat,
-        downtimeDisplay,
-        db_id: item.id,
-        header_id: h.id,
-        pcs_index: item.pcs_index
-      });
-      globalRowCount += 1;
+      const isPlaceholder = meterDisplay === "-" && !hasErrorDetail && !isIstirahat && !isFinishReport && !isStartRow;
+
+      if (!isPlaceholder) {
+        items.push({
+          id: item.id || `item-${idx}-${Math.random()}`,
+          isStartRow: false,
+          isMeter: true,
+          displayNo: (globalRowCount + 1).toString(),
+          tglStr: tgl,
+          grpStr: grp,
+          oprStr: opr,
+          meterDisplay,
+          cacatDisplay: cacatText,
+          backupOpName,
+          isGradable,
+          showTgl,
+          showGrp,
+          showOpr: hasIstirahat ? true : showOpr,
+          hasErrorDetail,
+          isIstirahat,
+          hasIstirahat,
+          downtimeDisplay,
+          db_id: item.id,
+          header_id: h.id,
+          pcs_index: item.pcs_index
+        });
+        globalRowCount += 1;
+      }
     });
 
     if (items.length > 0 && currentOpStartMeter !== null && currentOpLastMeter !== null) {

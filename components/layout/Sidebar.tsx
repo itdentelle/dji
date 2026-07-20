@@ -60,12 +60,6 @@ export default function Sidebar() {
           roles: ["admin", "manager"],
         },
         {
-          name: "Laporan Bulanan",
-          href: "/reports/monthly-machine",
-          icon: FileSpreadsheet,
-          roles: ["admin", "manager"],
-        },
-        {
           name: "Dashboard Pegawai",
           href: "/dashboard",
           icon: LayoutDashboard,
@@ -142,6 +136,18 @@ export default function Sidebar() {
           href: "/mending/history",
           icon: History,
           roles: ["admin", "mending"],
+        },
+      ],
+    },
+    {
+      label: "Laporan",
+      groupIcon: FileSpreadsheet,
+      items: [
+        {
+          name: "Laporan Bulanan",
+          href: "/reports/monthly-machine",
+          icon: FileSpreadsheet,
+          roles: ["admin", "manager"],
         },
         {
           name: "Laporan Produksi",
