@@ -127,14 +127,14 @@ export default function PanelHistoryTable({
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
-            <th className="px-0.5 py-2 w-6 text-center">PNL</th>
-            <th className="px-1 py-2 w-14">Tgl</th>
-            <th className="px-0.5 py-2 w-8 text-center">Group</th>
-            <th className="px-1 py-2 w-16">Operator</th>
-            <th className="px-0.5 py-2 text-center w-8">KET <br /> ✓/X</th>
-            <th className="px-1 py-2 min-w-[150px] w-full">KETERANGAN CACAT</th>
-            <th className="px-0.5 py-2 text-center text-emerald-600 font-black w-5">✓</th>
-            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">X</th>
+            <th className="px-0.5 py-2 w-6 text-center border-r border-slate-200">PNL</th>
+            <th className="px-1 py-2 w-14 border-r border-slate-200">Tgl</th>
+            <th className="px-0.5 py-2 w-8 text-center border-r border-slate-200">Group</th>
+            <th className="px-1 py-2 w-16 border-r border-slate-200">Operator</th>
+            <th className="px-0.5 py-2 text-center w-8 border-r border-slate-200">KET <br /> ✓/X</th>
+            <th className="px-1 py-2 min-w-[150px] w-full border-r border-slate-200">KETERANGAN CACAT</th>
+            <th className="px-0.5 py-2 text-center text-emerald-600 font-black w-5 border-r border-slate-200">✓</th>
+            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5 border-r border-slate-200">X</th>
             <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">BS</th>
           </tr>
         </thead>
@@ -355,19 +355,19 @@ export default function PanelHistoryTable({
 
             return (
               <tr key={item.id || idx} className={`${hasIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
-                <td className="px-1 py-1 font-bold text-slate-800 text-center">
+                <td className="px-1 py-1 font-bold text-slate-800 text-center border-r border-slate-100">
                   {item.displayNo}
                 </td>
-                <td className="px-1 py-1 text-slate-600 whitespace-nowrap">
+                <td className="px-1 py-1 text-slate-600 whitespace-nowrap border-r border-slate-100">
                   {displayTgl}
                 </td>
-                <td className={`px-1 py-1 font-medium text-center text-slate-700`}>
+                <td className={`px-1 py-1 font-medium text-center text-slate-700 border-r border-slate-100`}>
                   {hasIstirahat ? "" : displayGrp}
                 </td>
-                <td className={`px-1 py-1 leading-tight ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
+                <td className={`px-1 py-1 leading-tight border-r border-slate-100 ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
                   {hasIstirahat ? "Istirahat" : displayOp}
                 </td>
-                 <td className="px-1 py-1 text-center border-x border-slate-100">
+                 <td className="px-1 py-1 text-center border-r border-slate-100">
                    {isIstirahatOnly ? (
                      <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
                    ) : (
@@ -383,12 +383,12 @@ export default function PanelHistoryTable({
                    {!isIstirahatOnly && (masalahLines.length > 0 ? masalahLines.join("\n") : "-")}
                  </td>
 
-                <td className="px-1 py-1 text-center">
+                <td className="px-1 py-1 text-center border-r border-slate-100">
                   <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${detail.final_inspection_id === 1 ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-white text-slate-300"}`}>
                     {detail.final_inspection_id === 1 ? <CheckCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5 text-slate-200" />}
                   </div>
                 </td>
-                <td className="px-1 py-1 text-center">
+                <td className="px-1 py-1 text-center border-r border-slate-100">
                   <div className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md border ${detail.final_inspection_id === 3 ? "border-rose-500 bg-rose-100 text-rose-700 shadow-sm" : "border-slate-200 bg-white text-slate-300"}`}>
                     {detail.final_inspection_id === 3 ? <X className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5 text-slate-200" />}
                   </div>

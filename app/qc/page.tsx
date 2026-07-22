@@ -728,6 +728,11 @@ export default function QCPage() {
             </div>
           ) : (
             <>
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-center">
+                <h5 className="font-black text-slate-700 tracking-wide text-sm">
+                  PCS {activeQcPcs.pcs_index}
+                </h5>
+              </div>
               {isMeteranBatch ? (
                 <MeterQCTable detailsToDisplay={detailsToDisplay} handleSelectGrade={handleSelectGrade} selections={selections} setDetailToDelete={setDetailToDelete} />
               ) : (
@@ -1071,9 +1076,13 @@ export default function QCPage() {
                                   </label>
                                   <input
                                     type="text"
+                                    inputMode="numeric"
                                     value={inputBloks[cat.id] || ""}
-                                    onChange={(e) => setInputBloks((prev) => ({ ...prev, [cat.id]: e.target.value }))}
-                                    placeholder="Contoh: 15, atau 1-61"
+                                    onChange={(e) => {
+                                      const filtered = e.target.value.replace(/[^0-9\-]/g, "");
+                                      setInputBloks((prev) => ({ ...prev, [cat.id]: filtered }));
+                                    }}
+                                    placeholder="Contoh: 15 atau 1-61"
                                     className="w-full h-10 px-3 rounded-lg border border-sky-200 focus:outline-none focus:ring-2 focus:ring-sky-500 text-xs font-bold text-slate-700 placeholder:font-medium placeholder:text-slate-400 bg-white"
                                   />
                                 </div>

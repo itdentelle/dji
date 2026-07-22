@@ -25,6 +25,9 @@ import {
   QrCode,
   PowerOff,
   FileSpreadsheet,
+  Calendar,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -164,9 +167,15 @@ export default function Sidebar() {
       ],
     },
     {
-      label: "Lainnya",
-      groupIcon: MoreHorizontal,
+      label: "Admin",
+      groupIcon: ShieldCheck,
       items: [
+        {
+          name: "Jadwal Produksi",
+          href: "/production-plans",
+          icon: Calendar,
+          roles: ["admin", "manager"],
+        },
         {
           name: "Chatbot AI",
           href: "/chatbot",
@@ -174,14 +183,20 @@ export default function Sidebar() {
           roles: ["admin", "manager"],
         },
         {
+          name: "Manajemen Akun",
+          href: "/users",
+          icon: Users,
+          roles: ["admin"],
+        },
+      ],
+    },
+    {
+      label: "Lainnya",
+      groupIcon: MoreHorizontal,
+      items: [
+        {
           name: "Master Data",
           href: "/master-data",
-          icon: FileSpreadsheet,
-          roles: ["admin", "manager"],
-        },
-        {
-          name: "Jadwal Produksi",
-          href: "/production-plans",
           icon: FileSpreadsheet,
           roles: ["admin", "manager"],
         },
@@ -189,12 +204,6 @@ export default function Sidebar() {
           name: "Sync Status",
           href: "/sync",
           icon: RefreshCw,
-          roles: ["admin"],
-        },
-        {
-          name: "Manajemen Akun",
-          href: "/users",
-          icon: User,
           roles: ["admin"],
         },
         {

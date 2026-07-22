@@ -6,6 +6,17 @@ import { getMachineStatuses } from "@/actions/dashboard-actions";
 import { FileSpreadsheet, Loader2, Calendar, Monitor, AlertCircle, ArrowLeft, CloudUpload, X, Info } from "lucide-react";
 import Link from "next/link";
 
+// Helper to format seconds as HH:MM:SS
+const formatHHMMSS = (totalSec: number) => {
+  if (!totalSec || totalSec <= 0) return "00:00:00";
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  return [hours, minutes, seconds]
+    .map((v) => String(v).padStart(2, "0"))
+    .join(":");
+};
+
 export default function MonthlyMachineReportPage() {
   const [machines, setMachines] = useState<string[]>([]);
   const [selectedMachine, setSelectedMachine] = useState<string>("");
@@ -114,8 +125,13 @@ export default function MonthlyMachineReportPage() {
             ketString = Object.entries(td.keterangan_per_kategori)
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([kat, details]) => {
-                const d = details as string[];
-                return d.length > 0 ? `[${kat}] ${d.join(", ")}` : `[${kat}]`;
+                const counts: Record<string, number> = {};
+                (details as string[]).forEach((d) => {
+                  const key = d?.trim() || "Detail umum";
+                  counts[key] = (counts[key] || 0) + 1;
+                });
+                const formatted = Object.entries(counts).map(([d, cnt]) => cnt > 1 ? `${d} (${cnt}x)` : d);
+                return formatted.length > 0 ? `[${kat}] ${formatted.join(", ")}` : `[${kat}]`;
               }).join(" | ");
           }
 
@@ -140,7 +156,7 @@ export default function MonthlyMachineReportPage() {
             td.kode_tindakan["F"] || 0,
             td.kode_tindakan["G"] || 0,
             td.kode_tindakan["H"] || 0,
-            td.downtime_detik,
+            formatHHMMSS(td.downtime_detik),
             pEff
           ]);
         });
@@ -178,7 +194,7 @@ export default function MonthlyMachineReportPage() {
         "Team", "Nama Operator", "Hasil Produksi", "Persentase dari 100%",
         "Jumlah Cacat", "Persentase Cacat", 
         "KODE TINDAKAN", "", "", "", "", "", "", "", 
-        "Downtime (Detik)", "Persentase Waktu Efektif"
+        "Downtime (HH:MM:SS)", "Persentase Waktu Efektif"
       ];
       const headerRow2 = [
         "", "", "", "", "", "", 
@@ -193,11 +209,15 @@ export default function MonthlyMachineReportPage() {
       const shiftDurationSecs = 28800;
       
       reportData.forEach((dayData) => {
-        const teams = ["A", "B", "C"];
-        teams.forEach((team, idx) => {
+        const teamsToRender = dayData.orderedTeams || [
+          { teamName: "A", data: dayData.teamData["A"] },
+          { teamName: "B", data: dayData.teamData["B"] },
+          { teamName: "C", data: dayData.teamData["C"] },
+        ];
+        teamsToRender.forEach((teamObj, idx) => {
           const isFirst = idx === 0;
-          // @ts-ignore
-          const td = dayData.teamData[team];
+          const team = teamObj.teamName;
+          const td = teamObj.data;
           
           const p100 = td.hasil_produksi > 0 && td.eff_100 > 0 ? ((td.hasil_produksi / td.eff_100) * 100).toFixed(2) + "%" : "0.00%";
           const pCacat = td.jumlah_cacat > 0 && td.hasil_produksi > 0 ? ((td.jumlah_cacat / td.hasil_produksi) * 100).toFixed(2) + "%" : "0.00%";
@@ -208,8 +228,13 @@ export default function MonthlyMachineReportPage() {
             ketString = Object.entries(td.keterangan_per_kategori)
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([kat, details]) => {
-                const d = details as string[];
-                return d.length > 0 ? `[${kat}] ${d.join(", ")}` : `[${kat}]`;
+                const counts: Record<string, number> = {};
+                (details as string[]).forEach((d) => {
+                  const key = d?.trim() || "Detail umum";
+                  counts[key] = (counts[key] || 0) + 1;
+                });
+                const formatted = Object.entries(counts).map(([d, cnt]) => cnt > 1 ? `${d} (${cnt}x)` : d);
+                return formatted.length > 0 ? `[${kat}] ${formatted.join(", ")}` : `[${kat}]`;
               }).join(" | ");
           }
 
@@ -234,7 +259,7 @@ export default function MonthlyMachineReportPage() {
             td.kode_tindakan["F"] || 0,
             td.kode_tindakan["G"] || 0,
             td.kode_tindakan["H"] || 0,
-            td.downtime_detik,
+            formatHHMMSS(td.downtime_detik),
             pEff
           ];
           wsData.push(row);
@@ -416,7 +441,7 @@ export default function MonthlyMachineReportPage() {
                   <th className="border border-slate-300 p-2 min-w-[70px]">Jumlah Cacat</th>
                   <th className="border border-slate-300 p-2 min-w-[80px]">Persentase Cacat</th>
                   <th colSpan={8} className="border border-slate-300 p-1 bg-amber-50">Kode Tindakan</th>
-                  <th className="border border-slate-300 p-2 min-w-[80px]">Downtime (Detik)</th>
+                  <th className="border border-slate-300 p-2 min-w-[100px]">Downtime (HH:MM:SS)</th>
                   <th className="border border-slate-300 p-2 min-w-[90px]">Persentase Waktu Efektif</th>
                 </tr>
                 <tr className="bg-slate-100/60 text-[10px] font-bold text-slate-600 text-center">
@@ -434,11 +459,15 @@ export default function MonthlyMachineReportPage() {
               </thead>
               <tbody className="text-[11px] font-semibold text-slate-700 bg-white">
                 {reportData.map((dayData) => {
-                  const teams = ["A", "B", "C"];
-                  
-                  return teams.map((team, idx) => {
+                  const teamsToRender = dayData.orderedTeams || [
+                    { teamName: "A", data: dayData.teamData["A"] },
+                    { teamName: "B", data: dayData.teamData["B"] },
+                    { teamName: "C", data: dayData.teamData["C"] },
+                  ];
+                  return teamsToRender.map((teamObj, idx) => {
                     const isFirst = idx === 0;
-                    const td = dayData.teamData[team];
+                    const team = teamObj.teamName;
+                    const td = teamObj.data;
                     
                     const p100 = td.hasil_produksi > 0 && td.eff_100 > 0 ? ((td.hasil_produksi / td.eff_100) * 100).toFixed(2) + "%" : "0.00%";
                     const pCacat = td.jumlah_cacat > 0 && td.hasil_produksi > 0 ? ((td.jumlah_cacat / td.hasil_produksi) * 100).toFixed(2) + "%" : "0.00%";
@@ -453,8 +482,13 @@ export default function MonthlyMachineReportPage() {
                       ketString = Object.entries(td.keterangan_per_kategori)
                         .sort(([a], [b]) => a.localeCompare(b))
                         .map(([kat, details]) => {
-                          const d = details as string[];
-                          return d.length > 0 ? `[${kat}] ${d.join(", ")}` : `[${kat}]`;
+                          const counts: Record<string, number> = {};
+                          (details as string[]).forEach((d) => {
+                            const key = d?.trim() || "Detail umum";
+                            counts[key] = (counts[key] || 0) + 1;
+                          });
+                          const formatted = Object.entries(counts).map(([d, cnt]) => cnt > 1 ? `${d} (${cnt}x)` : d);
+                          return formatted.length > 0 ? `[${kat}] ${formatted.join(", ")}` : `[${kat}]`;
                         }).join(" | ");
                     }
 
@@ -492,7 +526,7 @@ export default function MonthlyMachineReportPage() {
                           </td>
                         ))}
                         
-                        <td className="border border-slate-300 p-1.5 text-center text-orange-600 bg-orange-50/30">{td.downtime_detik}</td>
+                        <td className="border border-slate-300 p-1.5 text-center text-orange-600 bg-orange-50/30 font-bold whitespace-nowrap">{formatHHMMSS(td.downtime_detik)}</td>
                         <td className="border border-slate-300 p-1.5 text-center font-bold text-emerald-600">{pEff}</td>
                       </tr>
                     );
@@ -535,10 +569,25 @@ export default function MonthlyMachineReportPage() {
                         <span>Kategori {kat}</span>
                       </div>
                       {details.length > 0 ? (
-                        <ul className="list-disc list-inside text-slate-600 text-sm space-y-1">
-                          {details.map((d, i) => (
-                            <li key={i}>{d}</li>
-                          ))}
+                        <ul className="space-y-2">
+                          {(() => {
+                            const counts: Record<string, number> = {};
+                            (details as string[]).forEach((d) => {
+                              const key = d?.trim() || "Detail umum";
+                              counts[key] = (counts[key] || 0) + 1;
+                            });
+                            return Object.entries(counts).map(([d, cnt], i) => (
+                              <li key={i} className="flex items-center justify-between text-xs text-slate-700 bg-white px-3 py-2 rounded-lg border border-slate-200/80 shadow-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                                  <span className="font-medium text-slate-800">{d}</span>
+                                </div>
+                                <span className={`font-extrabold px-2 py-0.5 rounded-md text-[11px] border shrink-0 ${cnt > 1 ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                  {cnt}x kejadian
+                                </span>
+                              </li>
+                            ));
+                          })()}
                         </ul>
                       ) : (
                         <p className="text-slate-400 text-sm italic">Tidak ada detail spesifik.</p>

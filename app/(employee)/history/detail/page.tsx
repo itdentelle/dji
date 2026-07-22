@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { searchEmployeeHistory } from "@/actions/employee-actions";
 import CompactHeaderCard from "@/components/forms/CompactHeaderCard";
-import { Loader2, ArrowLeft, Clock, Edit, AlertCircle, Timer, Wrench } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, AlertCircle, Timer, Wrench, ChevronRight } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import PanelHistoryTable from "./components/PanelHistoryTable";
 import MeterHistoryTable from "./components/MeterHistoryTable";
@@ -108,23 +108,21 @@ function HistoryDetailContent() {
 
   return (
     <div className="flex-1 w-full min-w-0 animate-fadeIn">
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <button
+      {/* Header Nav */}
+      <div className="flex items-center gap-2 mb-6">
+        <button
+          onClick={() => router.push("/history")}
+          className="h-9 w-9 shrink-0 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 flex items-center justify-center transition-colors shadow-sm"
+        >
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold">
+          <span
+            className="hover:text-[#0070bc] cursor-pointer transition-colors"
             onClick={() => router.push("/history")}
-            className="w-10 h-10 shrink-0 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 flex items-center justify-center transition-colors shadow-sm"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Detail Laporan Produksi
-            </h1>
-            <p className="text-xs sm:text-sm font-semibold text-slate-500">
-              Menampilkan rincian batch untuk Mesin {detailData.nomor_mc} Potongan Ke-{detailData.potongan_ke}
-            </p>
-          </div>
+          >Riwayat</span>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+          <span className="text-slate-700 font-black">Detail Laporan</span>
         </div>
       </div>
 
@@ -156,15 +154,15 @@ function HistoryDetailContent() {
 
       {/* Downtime Info */}
       {detailData.total_downtime_detik > 0 && (
-        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-          <Clock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-sm font-bold text-amber-800">
-              Total Downtime: {formatDurationNice(detailData.total_downtime_detik)}
-            </h4>
-            <p className="text-xs text-amber-700 mt-1">
-              Terdapat waktu tunggu (downtime) selama produksi batch ini berjalan.
-            </p>
+        <div className="mb-6 rounded-xl overflow-hidden border border-amber-200 shadow-sm">
+          <div className="bg-amber-500 px-5 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Timer className="w-4 h-4 text-white shrink-0" />
+              <span className="text-white text-xs font-black uppercase tracking-wide">Downtime Terdeteksi</span>
+            </div>
+            <span className="text-white font-black text-sm sm:text-base whitespace-nowrap">
+              {formatDurationNice(detailData.total_downtime_detik)}
+            </span>
           </div>
         </div>
       )}
@@ -370,11 +368,21 @@ function HistoryDetailContent() {
            if (!mechanicPanels || mechanicPanels.length === 0) return null;
 
            const cleanPenanggungJawab = (raw: string) => {
-             if (!raw) return "-";
-             const match = raw.match(/^Perbaikan Khusus\s*\((.*)\)$/i);
-             if (match && match[1]) return match[1].trim();
-             return raw.replace(/^Perbaikan Khusus\s*/i, "").trim() || raw;
-           };
+              if (!raw) return "-";
+              
+              // Handle "Perbaikan Khusus (Name)"
+              const pkMatch = raw.match(/^Perbaikan Khusus\s*\((.*)\)$/i);
+              if (pkMatch && pkMatch[1]) return pkMatch[1].trim();
+
+              // Handle "Operator (Name)"
+              const opMatch = raw.match(/^Operator\s*\((.*)\)$/i);
+              if (opMatch && opMatch[1]) return opMatch[1].trim();
+
+              return raw
+                .replace(/^Perbaikan Khusus\s*/i, "")
+                .replace(/^Operator\s*/i, "")
+                .trim() || raw;
+            };
            
            const rows: any[] = [];
            mechanicPanels.forEach((mp: any) => {
@@ -439,52 +447,70 @@ function HistoryDetailContent() {
            if (rows.length === 0) return null;
 
            return (
-             <div className="mt-8 bg-purple-50/50 border border-purple-200 rounded-2xl overflow-hidden shadow-sm">
-               <div className="bg-purple-100/50 px-6 py-4 border-b border-purple-200 flex items-center justify-between">
-                 <div className="flex items-center gap-3">
-                   <div className="bg-purple-600 text-white w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm">
-                     <Wrench className="w-4 h-4 text-white" />
-                   </div>
-                   <div>
-                     <h3 className="text-sm font-bold text-purple-900">
-                       Laporan Downtime Khusus (Tanpa Produksi)
-                     </h3>
-                     <p className="text-xs font-medium text-purple-600/80">
-                       Data downtime (Mesin berhenti total)
-                     </p>
-                   </div>
+             <div className="mt-8 rounded-2xl overflow-hidden shadow-md border border-slate-200">
+               {/* Section Header */}
+               <div
+                 className="px-6 py-4 flex items-center gap-3"
+                 style={{ background: "linear-gradient(135deg, #0a1628 0%, #0b3068 60%, #0070bc 100%)" }}
+               >
+                 <div className="w-9 h-9 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
+                   <Wrench className="w-4.5 h-4.5 text-white" />
+                 </div>
+                 <div>
+                   <h3 className="text-sm font-black text-white tracking-tight">
+                     Laporan Downtime Khusus
+                   </h3>
+                   <p className="text-[10px] text-sky-200 font-semibold">
+                     Mesin berhenti total — tanpa produksi
+                   </p>
+                 </div>
+                 <div className="ml-auto bg-white/20 border border-white/30 rounded-full px-3 py-1 text-[10px] font-black text-white">
+                   {rows.length} laporan
                  </div>
                </div>
-               
-               <div className="p-0 overflow-x-auto">
-                 <table className="w-full text-left text-sm whitespace-nowrap">
-                   <thead className="bg-purple-50 text-purple-900/70 text-xs uppercase tracking-wider font-bold">
-                     <tr>
-                       <th className="px-6 py-4">Waktu Laporan</th>
-                       <th className="px-6 py-4">Penanggung Jawab</th>
-                       <th className="px-6 py-4">Shift</th>
-                       <th className="px-6 py-4">Durasi</th>
-                       <th className="px-6 py-4">Kategori</th>
-                       <th className="px-6 py-4">Detail Masalah</th>
-                     </tr>
-                   </thead>
-                   <tbody className="divide-y divide-purple-100 bg-white/50">
-                     {rows.map((row) => (
-                       <tr key={row.id} className="hover:bg-purple-50/40 transition-colors">
-                         <td className="px-6 py-4 font-semibold text-purple-900">{row.timeStr}</td>
-                         <td className="px-6 py-4 text-purple-800 font-medium">{row.penanggungJawab}</td>
-                         <td className="px-6 py-4 text-purple-800">{row.shift}</td>
-                         <td className="px-6 py-4 font-bold text-purple-900">{row.durasiDisplay}</td>
-                         <td className="px-6 py-4">
-                           <span className="bg-white border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                             {row.kategori}
-                           </span>
-                         </td>
-                         <td className="px-6 py-4 text-purple-800">{row.detailMasalah}</td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
+
+               {/* Cards */}
+               <div className="bg-slate-50/60 divide-y divide-slate-100">
+                 {rows.map((row) => (
+                   <div key={row.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-slate-50 transition-colors">
+                     {/* Time */}
+                     <div className="flex items-center gap-2 shrink-0 w-20">
+                       <div className="w-2 h-2 rounded-full bg-[#0070bc] shrink-0" />
+                       <span className="text-sm font-black text-slate-800">{row.timeStr}</span>
+                     </div>
+
+                     {/* Operator + Shift */}
+                     <div className="flex items-center gap-2 flex-1 min-w-0">
+                       <div className="w-7 h-7 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0 text-[10px] font-black text-[#0070bc]">
+                         {row.penanggungJawab?.charAt(0)?.toUpperCase() || "?"}
+                       </div>
+                       <div className="min-w-0">
+                         <div className="text-xs font-extrabold text-slate-800 truncate">{row.penanggungJawab}</div>
+                         <div className="text-[10px] text-slate-500 font-semibold">Penanggung Jawab</div>
+                       </div>
+                       <span className="ml-2 shrink-0 bg-[#0070bc] text-white text-[10px] font-black px-2.5 py-1 rounded-full">
+                         Shift {row.shift}
+                       </span>
+                     </div>
+
+                     {/* Duration */}
+                     <div className="shrink-0">
+                       <span className="bg-rose-50 border border-rose-200 text-rose-700 font-black text-xs px-3 py-1.5 rounded-lg inline-block">
+                         ⏱ {row.durasiDisplay}
+                       </span>
+                     </div>
+
+                     {/* Kategori + Detail */}
+                     <div className="flex flex-col items-start sm:items-end gap-1 shrink-0 sm:min-w-[160px]">
+                       <span className="bg-blue-50 border border-blue-200 text-[#0070bc] text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide">
+                         {row.kategori}
+                       </span>
+                       {row.detailMasalah !== "-" && (
+                         <span className="text-[11px] text-slate-600 font-medium">{row.detailMasalah}</span>
+                       )}
+                     </div>
+                   </div>
+                 ))}
                </div>
              </div>
            );

@@ -1102,9 +1102,13 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                               </label>
                               <input
                                 type="text"
+                                inputMode="numeric"
                                 value={inputBloks[cat.id] || ""}
-                                onChange={(e) => setInputBloks((prev) => ({ ...prev, [cat.id]: e.target.value }))}
-                                placeholder="Contoh: 15, atau 1-61"
+                                onChange={(e) => {
+                                  const filtered = e.target.value.replace(/[^0-9\-]/g, "");
+                                  setInputBloks((prev) => ({ ...prev, [cat.id]: filtered }));
+                                }}
+                                placeholder="Contoh: 15 atau 1-61"
                                 className="w-full h-10 px-3 rounded-lg border border-sky-200 focus:outline-none focus:ring-2 focus:ring-sky-500 text-xs font-bold text-slate-700 placeholder:font-medium placeholder:text-slate-400 bg-white"
                               />
                             </div>

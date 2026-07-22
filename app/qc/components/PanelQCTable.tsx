@@ -107,34 +107,65 @@ export default function PanelQCTable({
           ? [operatorStr.match(/\(([^)]+)\)/)?.[1] || "", operatorStr.replace(/^\([^)]+\)\s*/, "")]
           : ["", operatorStr];
 
+        let countPass = 0;
+        let countDefect = 0;
+        let countBS = 0;
+
+        processed.forEach((itemP) => {
+          if (itemP.operatorStr === operatorStr) {
+            const sel = selections[itemP.item.id];
+            if (sel === 1) countPass += 1;
+            else if (sel === 3) countDefect += 1;
+            else if (sel === 4) countBS += 1;
+          }
+        });
+
         items.push({
           id: `total-${operatorStr}-${Math.random()}`,
           isTotalRow: true,
           totalLabel: `Total Produksi (${prevGrp}) ${prevOpr}:`,
-          totalCount: currentOpCount
+          totalCount: currentOpCount,
+          countPass,
+          countDefect,
+          countBS,
         });
         currentOpCount = 0;
       }
     });
 
     return items;
-  }, [detailsToDisplay]);
+  }, [detailsToDisplay, selections]);
+
+  const { totalGradable, totalPass, totalDefect, totalBS } = React.useMemo(() => {
+    let g = 0, p = 0, d = 0, bs = 0;
+    detailsToDisplay.forEach((item) => {
+      g += 1;
+      const sel = selections[item.id];
+      if (sel === 1) p += 1;
+      else if (sel === 3) d += 1;
+      else if (sel === 4) bs += 1;
+    });
+    return { totalGradable: g, totalPass: p, totalDefect: d, totalBS: bs };
+  }, [detailsToDisplay, selections]);
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left border-collapse">
+      <table className="w-full text-left border-collapse text-xs">
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
-            <th className="px-0.5 py-2 w-6 text-center">PNL</th>
-            <th className="px-1 py-2 w-14">Tgl</th>
-            <th className="px-0.5 py-2 w-8 text-center">Group</th>
-            <th className="px-1 py-2 w-16">Operator</th>
-            <th className="px-0.5 py-2 text-center w-8">KET <br /> ✓/X</th>
-            <th className="px-1 py-2 min-w-[150px] w-full">KETERANGAN CACAT</th>
-            <th className="px-1 py-2 text-center w-14">AKSI</th>
-            <th className="px-0.5 py-2 text-center text-emerald-600 font-black w-5">✓</th>
-            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">X</th>
-            <th className="px-0.5 py-2 text-center text-rose-600 font-black w-5">BS</th>
+            <th className="px-0.5 py-2 w-6 text-center border-r border-slate-200" rowSpan={2}>PNL</th>
+            <th className="px-1 py-2 w-14 border-r border-slate-200" rowSpan={2}>Tgl</th>
+            <th className="px-0.5 py-2 w-8 text-center border-r border-slate-200" rowSpan={2}>Group</th>
+            <th className="px-1 py-2 w-16 border-r border-slate-200" rowSpan={2}>Operator</th>
+            <th className="px-0.5 py-2 text-center w-8 border-r border-slate-200" rowSpan={2}>KET <br /> ✓/X</th>
+            <th className="px-1 py-2 min-w-[150px] w-full border-r border-slate-200" rowSpan={2}>KETERANGAN CACAT</th>
+            <th className="px-1 py-2 text-center w-14 border-r border-slate-200" rowSpan={2}>AKSI</th>
+            <th className="px-2 py-1 text-center font-extrabold text-slate-600 border-r border-slate-200" colSpan={3}>INSPEKSI QC</th>
+          </tr>
+          <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
+            <th className="px-0.5 py-1 text-center text-emerald-600 font-black w-5 border-r border-slate-200">✓</th>
+            <th className="px-0.5 py-1 text-center text-rose-600 font-black w-5 border-r border-slate-200">X</th>
+            <th className="px-0.5 py-1 text-center text-rose-600 font-black w-5">BS</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 text-[10px] text-slate-700">
@@ -142,13 +173,22 @@ export default function PanelQCTable({
             if (item.isTotalRow) {
               return (
                 <tr key={item.id} className="bg-slate-100 border-t border-b border-slate-200 font-semibold text-slate-700">
-                  <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap animate-fadeIn">
+                  <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap animate-fadeIn border-r border-slate-100">
                     {item.totalLabel}
                   </td>
-                  <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap animate-fadeIn">
-                    {item.totalCount}
+                  <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap animate-fadeIn border-r border-slate-100">
+                    {item.totalCount} Panel
                   </td>
-                  <td colSpan={6} className="bg-slate-100"></td>
+                  <td colSpan={2} className="bg-slate-100 border-r border-slate-100"></td>
+                  <td className="px-1 py-2 text-center text-emerald-600 bg-emerald-50/20 font-black border-r border-slate-100">
+                    {item.countPass}
+                  </td>
+                  <td className="px-1 py-2 text-center text-rose-600 bg-rose-50/20 font-black border-r border-slate-100">
+                    {item.countDefect}
+                  </td>
+                  <td className="px-1 py-2 text-center text-rose-600 bg-rose-50/20 font-black">
+                    {item.countBS}
+                  </td>
                 </tr>
               );
             }
@@ -159,7 +199,6 @@ export default function PanelQCTable({
             const tglStr = item.production_headers?.tgl || "-";
             const grpStr = item.production_headers?.groups?.nama_grup || "-";
             
-            let oprStr = item.production_headers?.operators?.nama_operator || item.production_headers?.pic || "-";
             let displayKeterangan = item.keterangan_cacat || "";
             let displayDetail = item.detail_masalah || "";
             
@@ -186,7 +225,6 @@ export default function PanelQCTable({
                 }
               });
             } else {
-              // Fallback to legacy string parsing
               const katsRaw = item.kategori_masalah;
               const kats = katsRaw ? (Array.isArray(katsRaw) ? katsRaw : katsRaw.split(",").map((s: string) => s.trim())) : [];
               
@@ -253,41 +291,40 @@ export default function PanelQCTable({
               } else if (displayDetail) {
                 cacatLines.push(displayDetail);
               }
-            }
-            
-            let ketCacat = displayKeterangan;
-            const hasTambahanQC = ketCacat.includes("[TAMBAHAN QC]");
-            ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
-            ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
-            ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
 
-            if (ketCacat) {
-              if (cacatLines.length > 0) {
-                const parts = ketCacat.split(",").map((s: string) => s.trim());
-                
-                cacatLines = cacatLines.map((line: string, i: number) => {
-                  const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
-                  let partIndex = i;
-                  
-                  const katsRaw2 = item.kategori_masalah; const kats2 = katsRaw2 ? (Array.isArray(katsRaw2) ? katsRaw2 : katsRaw2.split(",").map((s: any) => s.trim())) : []; if (lineKat && kats2.includes(lineKat)) {
-                     partIndex = kats2.indexOf(lineKat);
-                  }
-                  
-                  if (parts[partIndex] && parts[partIndex] !== "") {
-                    const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
-                    return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
-                  } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
-                     const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
-                     return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
-                  }
-                  return line;
-                });
-              } else {
-                const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
-                cacatLines.push(`(Blok ${cleanB})`);
+              let ketCacat = item.keterangan_cacat || "";
+              ketCacat = ketCacat.replace(/\[?(SEBELUM|LAPORAN)?\s*ISTIRAHAT\]?/gi, "").trim();
+              ketCacat = ketCacat.replace(/\[TAMBAHAN QC\]/gi, "").trim();
+              ketCacat = ketCacat.replace(/^,\s*|\s*,\s*$/g, "");
+
+              if (ketCacat) {
+                if (cacatLines.length > 0) {
+                  const parts = ketCacat.split(",").map((s: string) => s.trim());
+                  cacatLines = cacatLines.map((line, i) => {
+                    const lineKat = line.includes(" - ") ? line.split(" - ")[0].trim() : "";
+                    let partIndex = i;
+                    
+                    const katsRaw2 = item.kategori_masalah; const kats2 = katsRaw2 ? (Array.isArray(katsRaw2) ? katsRaw2 : katsRaw2.split(",").map((s: any) => s.trim())) : []; if (lineKat && kats2.includes(lineKat)) {
+                       partIndex = kats2.indexOf(lineKat);
+                    }
+                    
+                    if (parts[partIndex] && parts[partIndex] !== "") {
+                      const cleanB = parts[partIndex].replace(/blok\s*/gi, "").trim();
+                      return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
+                    } else if (parts[parts.length - 1] && parts[parts.length - 1] !== "") {
+                       const cleanB = parts[parts.length - 1].replace(/blok\s*/gi, "").trim();
+                       return line.match(/\(Blok/i) ? line : `${line} (Blok ${cleanB})`;
+                    }
+                    return line;
+                  });
+                } else {
+                  const cleanB = ketCacat.replace(/blok\s*/gi, "").trim();
+                  cacatLines.push(`(Blok ${cleanB})`);
+                }
               }
             }
 
+            const hasTambahanQC = (item.keterangan_cacat || "").includes("[TAMBAHAN QC]");
             if (hasTambahanQC) {
               if (cacatLines.length === 0) {
                 cacatLines.push("[TAMBAHAN QC]");
@@ -309,33 +346,39 @@ export default function PanelQCTable({
 
             return (
             <tr key={item.id} className={`${hasIstirahat ? "bg-amber-50/30" : (item.jml_hasil_produksi === 0 ? "bg-rose-50/30" : "hover:bg-slate-50")} transition-colors`}>
-              <td className="px-1 py-1 font-bold text-slate-800 text-center flex flex-col items-center justify-center">
+              <td className="px-1 py-1 font-bold text-slate-800 text-center flex flex-col items-center justify-center border-r border-slate-100">
                 <span>{item.production_headers?.panel_no || "-"}</span>
                 {item.jml_hasil_produksi === 0 && (
                   <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded mt-0.5 leading-none shadow-sm border border-rose-200">BS</span>
                 )}
               </td>
-              <td className="px-1 py-1 text-slate-600 whitespace-nowrap">
+              <td className="px-1 py-1 text-slate-600 whitespace-nowrap border-r border-slate-100">
                 {hasIstirahat ? "" : (showTgl ? tglStr : "")}
               </td>
-              <td className="px-1 py-1 font-medium text-slate-700 text-center">
+              <td className="px-1 py-1 font-medium text-slate-700 text-center border-r border-slate-100">
                 {hasIstirahat ? "" : (showGrp ? grpStr : "")}
               </td>
-              <td className={`px-1 py-1 leading-tight ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
+              <td className={`px-1 py-1 leading-tight border-r border-slate-100 ${hasIstirahat ? "text-slate-500 italic font-bold" : "text-slate-700 font-medium"}`}>
                 {hasIstirahat ? "Istirahat" : (showOpr ? item.oprBase : "")}
               </td>
-              <td className="px-1 py-1 text-center font-bold text-sm">
+              <td className="px-1 py-1 text-center font-bold text-sm border-r border-slate-100">
                 {item.indikator_stop || item.kategori_masalah ? <span className="text-rose-600">X</span> : <span className="text-emerald-600">✓</span>}
               </td>
               
-              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight ${isIstirahatOnly ? 'text-slate-500' : 'text-rose-600'}`}>
+              <td className={`px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100 ${isIstirahatOnly ? 'text-slate-500' : 'text-rose-600'}`}>
                 {extractedBackupOp && hasIstirahat && <div className="font-bold text-slate-700 mb-0.5">{extractedBackupOp}</div>}
                 {!isIstirahatOnly && (cacat || "-")}
               </td>
               
-              <td className="px-1 py-1">
+              <td className="px-1 py-1 border-r border-slate-100">
                 <div className="flex items-center justify-center gap-1">
-
+                  <button
+                    onClick={() => handleOpenDetail(item.production_headers?.id || item.header_id)}
+                    className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-[#0070bc] hover:border-[#0070bc]/30 transition-all shadow-sm"
+                    title="Lihat Detail Sesi"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={() => setDetailToDelete({ id: item.id, name: `${item.kategori_masalah || 'Masalah'} - ${item.detail_masalah || 'Tidak ada detail'}` })}
                     className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 transition-all shadow-sm"
@@ -346,7 +389,7 @@ export default function PanelQCTable({
                 </div>
               </td>
 
-              <td className="px-1 py-1 text-center">
+              <td className="px-1 py-1 text-center border-r border-slate-100">
                 <button
                   onClick={() => handleSelectGrade(item.id, 1)}
                   className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md transition-all border ${selections[item.id] === 1 ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm" : "border-slate-200 bg-white text-slate-300 hover:border-emerald-300 hover:text-emerald-500"}`}
@@ -354,7 +397,7 @@ export default function PanelQCTable({
                   <CheckCircle className="w-3.5 h-3.5" />
                 </button>
               </td>
-              <td className="px-1 py-1 text-center">
+              <td className="px-1 py-1 text-center border-r border-slate-100">
                 <button
                   onClick={() => handleSelectGrade(item.id, 3)}
                   className={`w-6 h-6 mx-auto flex items-center justify-center rounded-md transition-all border ${selections[item.id] === 3 ? "border-rose-500 bg-rose-100 text-rose-700 shadow-sm" : "border-slate-200 bg-white text-slate-300 hover:border-rose-300 hover:text-rose-500"}`}
@@ -373,6 +416,23 @@ export default function PanelQCTable({
             </tr>
             );
           })}
+
+          {totalGradable > 0 && (
+            <tr className="bg-slate-50 font-bold border-t border-slate-200 text-[11px] text-slate-700 uppercase tracking-wider">
+              <td className="px-2 py-3 text-right font-extrabold border-r border-slate-100" colSpan={7}>
+                TOTAL ({totalGradable} PANEL):
+              </td>
+              <td className="px-1 py-3 text-center text-emerald-600 bg-emerald-50/40 font-black border-r border-slate-100">
+                {totalPass}
+              </td>
+              <td className="px-1 py-3 text-center text-rose-600 bg-rose-50/40 font-black border-r border-slate-100">
+                {totalDefect}
+              </td>
+              <td className="px-1 py-3 text-center text-rose-600 bg-rose-50/40 font-black">
+                {totalBS}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

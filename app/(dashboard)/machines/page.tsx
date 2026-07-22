@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { getMachineStatuses, MachineStatus } from "@/actions/dashboard-actions";
 import { getMachineConfigs, upsertMachineConfig, MachineConfig } from "@/actions/machine-config-actions";
-import { Activity, Power, Clock, RefreshCw, HelpCircle, Settings2, Save, X, Lock, User } from "lucide-react";
+import { Activity, Power, Clock, RefreshCw, HelpCircle, Settings2, Save, X, Lock, User, ChevronRight, BarChart3 } from "lucide-react";
 import ProductTour, { ProductTourStep } from "@/components/ProductTour";
 
 const MACHINE_TOUR_STEPS: ProductTourStep[] = [
@@ -27,7 +28,8 @@ const MACHINE_TOUR_STEPS: ProductTourStep[] = [
   },
 ];
 
-export default function MachineMonitoringPage() {
+export default function MachinesPage() {
+  const router = useRouter();
   const [machines, setMachines] = useState<MachineStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +220,8 @@ export default function MachineMonitoringPage() {
           {machines.map((machine) => (
             <div
               key={machine.mesin_id}
-              className={`bg-white rounded-2xl shadow-sm border overflow-hidden hover:shadow-md transition-shadow relative ${
+              onClick={() => router.push(`/machines/${machine.mesin_id}`)}
+              className={`group bg-white rounded-2xl shadow-sm border overflow-hidden hover:shadow-lg transition-all duration-200 cursor-pointer relative hover:-translate-y-1 ${
                 machine.status === "Tidak Aktif"
                   ? "border-slate-200 bg-slate-50/50"
                   : machine.status === "Idle"
@@ -287,7 +290,7 @@ export default function MachineMonitoringPage() {
 
               {/* Card Body */}
               <div className="p-5 relative z-20">
-                <div className="text-center mb-6">
+                <div className="text-center mb-5">
                   <div className="text-sm text-slate-500 mb-1 font-medium">
                     Nomor Mesin
                   </div>
@@ -304,8 +307,8 @@ export default function MachineMonitoringPage() {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs border-b border-slate-100 pb-2.5">
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-center text-xs border-b border-slate-100 pb-2">
                     <span className="text-slate-500 font-medium flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-slate-400" />
                       Operator
@@ -330,13 +333,21 @@ export default function MachineMonitoringPage() {
                       {machine.design}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-xs pt-1">
+                  <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-100">
                     <span className="text-slate-400">Tgl Update</span>
                     <span className="text-slate-500 font-medium">
                       {machine.last_input_date !== "-"
                         ? machine.last_input_date
                         : "-"}
                     </span>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between text-xs font-extrabold text-blue-600 group-hover:text-blue-700">
+                    <span className="flex items-center gap-1">
+                      <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
+                      Analisis Blok
+                    </span>
+                    <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                   </div>
                 </div>
               </div>

@@ -75,18 +75,28 @@ export async function upsertProductionPlan(data: any) {
   }
 }
 
-export async function getAllProductionPlans() {
+export async function getAllProductionPlans(page: number = 1, limit: number = 20, search: string = "") {
   try {
     const supabase = await createClient();
     
-    const { data, error } = await supabase
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    
+    let query = supabase
       .from("production_plans")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*", { count: "exact" });
+      
+    if (search) {
+      query = query.ilike("nomor_mc", `%${search}%`);
+    }
+
+    const { data, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) throw error;
 
-    return { success: true, data };
+    return { success: true, data, total: count || 0 };
   } catch (err: any) {
     console.error("Error fetching all production plans:", err);
     return { success: false, error: err.message };

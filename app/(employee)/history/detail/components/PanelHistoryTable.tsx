@@ -407,19 +407,19 @@ export default function PanelHistoryTable({
 
           return (
             <tr key={item.id || idx} className={`${hasIstirahat ? "bg-amber-50/30" : "hover:bg-slate-50"} transition-colors`}>
-              <td className="px-1 py-1 font-bold text-slate-800 text-center">
+              <td className="px-1 py-1 font-bold text-slate-800 text-center border-r border-slate-100">
                 {item.displayNo}
               </td>
-              <td className="px-1 py-1 text-slate-600 whitespace-nowrap">
+              <td className="px-1 py-1 text-slate-600 whitespace-nowrap border-r border-slate-100">
                 {displayTgl}
               </td>
-              <td className={`px-1 py-1 font-medium text-center text-slate-700`}>
+              <td className={`px-1 py-1 font-medium text-center text-slate-700 border-r border-slate-100`}>
                 {displayGrp}
               </td>
-              <td className={`px-1 py-1 leading-tight text-slate-700 ${hasIstirahat && !item.showOpr ? "italic font-bold text-slate-500" : "font-medium"}`}>
+              <td className={`px-1 py-1 leading-tight text-slate-700 border-r border-slate-100 ${hasIstirahat && !item.showOpr ? "italic font-bold text-slate-500" : "font-medium"}`}>
                 {item.showOpr ? (item.oprStr || "-") : (hasIstirahat ? "Istirahat" : "")}
               </td>
-              <td className="px-1 py-1 text-center">
+              <td className="px-1 py-1 text-center border-r border-slate-100">
                 {isIstirahatOnly ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
                 ) : (
@@ -430,16 +430,16 @@ export default function PanelHistoryTable({
                   )
                 )}
               </td>
-              <td className="px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight">
+              <td className="px-2 py-1 text-[11px] font-medium whitespace-pre leading-tight border-r border-slate-100">
                 {backupOpName && <div className="text-slate-700 font-bold mb-0.5">{backupOpName}</div>}
                 <div className={hasDefect ? 'text-rose-600' : 'text-slate-400'}>
                   {masalahLines.join("\n") || "-"}
                 </div>
               </td>
-              <td className={`px-1 py-1 text-center text-[11px] font-bold border-l border-slate-100 ${downtimeDisplay && downtimeDisplay !== "-" ? "text-rose-600" : "text-slate-400"}`}>
+              <td className={`px-1 py-1 text-center text-[11px] font-bold border-r border-slate-100 ${downtimeDisplay && downtimeDisplay !== "-" ? "text-rose-600" : "text-slate-400"}`}>
                 {downtimeDisplay}
               </td>
-              <td className="px-1 py-1 text-center border-l border-slate-100">
+              <td className="px-1 py-1 text-center">
                 {itemHeader?.id && detail.keterangan_cacat !== "FINISH" && (
                   <Link
                     href={`/edit/${itemHeader.id}`}

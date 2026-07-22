@@ -202,3 +202,211 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
   }
 }
 
+export interface BlockProblemItem {
+  id: string;
+  tgl: string;
+  tanggal_jam: string;
+  nomor_mc: string;
+  potongan_ke: string;
+  panel_no?: string;
+  blok: string;
+  operator: string;
+  kategori: string;
+  detail_masalah: string;
+  durasi_detik: number;
+  sumber: "Downtime" | "Cacat Produksi" | "QC";
+}
+
+export interface BlockSummary {
+  blok: string;
+  total_kejadian: number;
+  total_durasi_detik: number;
+  kategori_utama: string;
+  operator_terbanyak: string;
+  masalah_list: BlockProblemItem[];
+}
+
+export async function getMachineBlockAnalytics(nomorMc: string, daysBack: number = 30): Promise<{
+  success: boolean;
+  summary?: BlockSummary[];
+  allEvents?: BlockProblemItem[];
+  stats?: {
+    totalProblems: number;
+    totalDurationSec: number;
+    topProblematicBlock: string;
+    topCategory: string;
+  };
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    const dateLimit = new Date();
+    dateLimit.setDate(dateLimit.getDate() - daysBack);
+    const dateLimitStr = dateLimit.toISOString().split("T")[0];
+
+    // Query headers for the specific machine
+    const { data: headers, error: headersErr } = await supabase
+      .from("production_headers")
+      .select("id, nomor_mc, potongan_ke, panel_no, downtime_events, total_downtime_detik, tanggal_jam, operators(nama_operator), groups(nama_grup), pic, created_by_name, production_details(kategori_masalah, detail_masalah)")
+      .ilike("nomor_mc", nomorMc)
+      .gte("tgl", dateLimitStr)
+      .order("tanggal_jam", { ascending: false });
+
+    if (headersErr) {
+      console.error("Error fetching headers for block analytics:", headersErr);
+    }
+
+    const allEvents: BlockProblemItem[] = [];
+
+    (headers || []).forEach((p: any) => {
+      const oprName = (p.operators as any)?.nama_operator || p.pic || p.created_by_name || "Operator";
+      const shiftName = (p.groups as any)?.nama_grup ? `Shift ${(p.groups as any).nama_grup}` : "";
+      const fullOperator = shiftName ? `(${shiftName}) ${oprName}` : oprName;
+      const tglStr = p.tanggal_jam ? new Date(p.tanggal_jam).toISOString().split("T")[0] : "-";
+      const timeStr = p.tanggal_jam ? new Date(p.tanggal_jam).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(/:/g, ".") : "-";
+
+      // 1. Parse downtime_events JSON
+      if (p.downtime_events) {
+        let dtArray: any[] = [];
+        try {
+          dtArray = typeof p.downtime_events === "string" ? JSON.parse(p.downtime_events) : p.downtime_events;
+        } catch (e) {}
+
+        if (Array.isArray(dtArray)) {
+          dtArray.forEach((ev: any, idx: number) => {
+            const durationSec = parseInt(ev.durasiDetik || ev.durasi) || 0;
+            const evOperator = ev.dikerjakanOleh || fullOperator;
+
+            if (Array.isArray(ev.problems) && ev.problems.length > 0) {
+              ev.problems.forEach((prob: any, pIdx: number) => {
+                let rawBlok = prob.blok || prob.noBlok || "";
+                
+                // Fallback: try regex match from detail/kategori
+                if (!rawBlok) {
+                  const combinedText = `${prob.kategori || ""} ${Array.isArray(prob.details) ? prob.details.join(" ") : (prob.details || "")}`;
+                  const match = combinedText.match(/(?:blok|block)\s*([0-9\-]+)/i);
+                  if (match) rawBlok = match[1];
+                }
+
+                let formattedBlok = "Umum / Non-Blok";
+                if (rawBlok) {
+                  const cleaned = String(rawBlok).trim();
+                  formattedBlok = /^\d+/.test(cleaned) ? `Blok ${cleaned}` : cleaned;
+                }
+
+                const detailStr = Array.isArray(prob.details) ? prob.details.join(", ") : (prob.details || "-");
+                const katStr = prob.kategori || "Downtime";
+
+                allEvents.push({
+                  id: `${p.id}-dt-${idx}-${pIdx}`,
+                  tgl: tglStr,
+                  tanggal_jam: `${tglStr} ${timeStr}`,
+                  nomor_mc: p.nomor_mc,
+                  potongan_ke: String(p.potongan_ke || "-"),
+                  panel_no: String(p.panel_no || "-"),
+                  blok: formattedBlok,
+                  operator: evOperator,
+                  kategori: katStr,
+                  detail_masalah: detailStr,
+                  durasi_detik: durationSec,
+                  sumber: "Downtime"
+                });
+              });
+            }
+          });
+        }
+      } 
+      
+      // 2. Parse production_details
+      if (Array.isArray(p.production_details)) {
+        p.production_details.forEach((det: any, dIdx: number) => {
+          let rawBlok = "";
+          const combinedText = `${det.kategori_masalah || ""} ${det.detail_masalah || ""}`;
+          const match = combinedText.match(/(?:blok|block)\s*([0-9\-]+)/i);
+          if (match) rawBlok = match[1];
+
+          if (rawBlok || det.kategori_masalah || det.detail_masalah) {
+             let formattedBlok = rawBlok ? (`Blok ${rawBlok.trim()}`) : "Umum / Non-Blok";
+
+             allEvents.push({
+                id: `${p.id}-det-${dIdx}`,
+                tgl: tglStr,
+                tanggal_jam: `${tglStr} ${timeStr}`,
+                nomor_mc: p.nomor_mc,
+                potongan_ke: String(p.potongan_ke || "-"),
+                panel_no: String(p.panel_no || "-"),
+                blok: formattedBlok,
+                operator: fullOperator,
+                kategori: det.kategori_masalah || "Cacat Produksi",
+                detail_masalah: det.detail_masalah || "-",
+                durasi_detik: parseInt(p.total_downtime_detik) || 0,
+                sumber: "Cacat Produksi"
+             });
+          }
+        });
+      }
+    });
+
+    // Group allEvents by blok
+    const blockMap = new Map<string, BlockProblemItem[]>();
+    allEvents.forEach((ev) => {
+      const key = ev.blok;
+      if (!blockMap.has(key)) blockMap.set(key, []);
+      blockMap.get(key)!.push(ev);
+    });
+
+    const summary: BlockSummary[] = Array.from(blockMap.entries()).map(([blok, list]) => {
+      // Find top category
+      const katCount: Record<string, number> = {};
+      const oprCount: Record<string, number> = {};
+      let totalDur = 0;
+
+      list.forEach((item) => {
+        katCount[item.kategori] = (katCount[item.kategori] || 0) + 1;
+        oprCount[item.operator] = (oprCount[item.operator] || 0) + 1;
+        totalDur += item.durasi_detik || 0;
+      });
+
+      const sortedKat = Object.entries(katCount).sort((a, b) => b[1] - a[1]);
+      const sortedOpr = Object.entries(oprCount).sort((a, b) => b[1] - a[1]);
+
+      return {
+        blok,
+        total_kejadian: list.length,
+        total_durasi_detik: totalDur,
+        kategori_utama: sortedKat[0]?.[0] || "-",
+        operator_terbanyak: sortedOpr[0]?.[0] || "-",
+        masalah_list: list
+      };
+    });
+
+    // Sort summary by total_kejadian desc, then total_durasi_detik desc
+    summary.sort((a, b) => b.total_kejadian - a.total_kejadian || b.total_durasi_detik - a.total_durasi_detik);
+
+    const totalProblems = allEvents.length;
+    const totalDurationSec = allEvents.reduce((acc, curr) => acc + curr.durasi_detik, 0);
+
+    // Find top overall category
+    const catMap: Record<string, number> = {};
+    allEvents.forEach((e) => {
+      catMap[e.kategori] = (catMap[e.kategori] || 0) + 1;
+    });
+    const topCat = Object.entries(catMap).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
+
+    return {
+      success: true,
+      summary,
+      allEvents,
+      stats: {
+        totalProblems,
+        totalDurationSec,
+        topProblematicBlock: summary[0]?.blok || "-",
+        topCategory: topCat
+      }
+    };
+  } catch (err: any) {
+    console.error("Error in getMachineBlockAnalytics:", err);
+    return { success: false, error: err.message || "Failed to load block analytics." };
+  }
+}
+

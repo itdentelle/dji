@@ -6,6 +6,7 @@ export interface MonthlyMachineReportData {
   tanggal: number;
   desain: string;
   teamData: Record<string, TeamData>; // Keyed by Group (A, B, C)
+  orderedTeams?: { teamName: string; data: TeamData }[];
 }
 
 export interface TeamData {
@@ -20,6 +21,7 @@ export interface TeamData {
   desain?: string;
   keterangan?: string;
   keterangan_per_kategori?: Record<string, string[]>;
+  earliestTimestamp?: string;
 }
 
 const PROBLEM_DETAILS: Record<string, string[]> = {
@@ -58,6 +60,7 @@ export async function getMonthlyMachineReport(
           id,
           nomor_mc,
           tgl,
+          tanggal_jam,
           panel_no,
           total_produksi_meter,
           pcs,
@@ -130,6 +133,15 @@ export async function getMonthlyMachineReport(
       }
 
       const team = reportDay.teamData[groupName];
+
+      // Track earliest timestamp for shift ordering
+      const timeStamp = header.tanggal_jam || String(header.id);
+      if (timeStamp) {
+        if (!team.earliestTimestamp || timeStamp < team.earliestTimestamp) {
+          team.earliestTimestamp = timeStamp;
+        }
+      }
+
       if (operatorName && !team.operator_name) {
         team.operator_name = operatorName;
       }
@@ -168,7 +180,7 @@ export async function getMonthlyMachineReport(
         if (!kat || kat === "Unknown") return;
         if (!team.keterangan_per_kategori![kat]) team.keterangan_per_kategori![kat] = [];
         const d = detail.trim();
-        if (d && !team.keterangan_per_kategori![kat].includes(d)) {
+        if (d) {
           team.keterangan_per_kategori![kat].push(d);
         }
       };
@@ -322,7 +334,7 @@ export async function getMonthlyMachineReport(
           if (!team.keterangan_per_kategori) team.keterangan_per_kategori = {};
           if (!team.keterangan_per_kategori[row.kategori]) team.keterangan_per_kategori[row.kategori] = [];
           const d = (row.detail || "").trim();
-          if (d && !team.keterangan_per_kategori[row.kategori].includes(d)) {
+          if (d) {
             team.keterangan_per_kategori[row.kategori].push(d);
           }
         }
@@ -354,8 +366,40 @@ export async function getMonthlyMachineReport(
     }
     // --- END FETCH MECHANIC DOWNTIME ---
 
-    const results = Array.from(reportMap.values());
-    
+    const results = Array.from(reportMap.values()).map((dayData) => {
+      const allTeamEntries = Object.entries(dayData.teamData).map(([name, data]) => ({
+        teamName: name,
+        data,
+      }));
+
+      const active = allTeamEntries.filter(({ data }) => {
+        return (
+          data.hasil_produksi > 0 ||
+          data.downtime_detik > 0 ||
+          data.jumlah_cacat > 0 ||
+          !!data.operator_name ||
+          !!data.earliestTimestamp ||
+          (data.keterangan_per_kategori && Object.keys(data.keterangan_per_kategori).length > 0)
+        );
+      });
+
+      active.sort((a, b) => {
+        const tA = a.data.earliestTimestamp || "9999-99-99";
+        const tB = b.data.earliestTimestamp || "9999-99-99";
+        return tA.localeCompare(tB);
+      });
+
+      const usedNames = new Set(active.map((a) => a.teamName));
+      const inactive = allTeamEntries.filter(({ teamName }) => !usedNames.has(teamName));
+
+      const orderedTeams = [...active, ...inactive].slice(0, 3);
+
+      return {
+        ...dayData,
+        orderedTeams,
+      };
+    });
+
     return { success: true, data: results, isMeterMachine };
 
   } catch (err: any) {

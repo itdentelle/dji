@@ -14,6 +14,14 @@ export default function ProductionPlansPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [recentPlans, setRecentPlans] = useState<any[]>([]);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+
   useEffect(() => {
     if (formData.nomor_mc && !formData.id) {
       getRecentPlansByMachine(formData.nomor_mc).then(res => {
@@ -31,9 +39,10 @@ export default function ProductionPlansPage() {
   const fetchPlans = async () => {
     setLoading(true);
     try {
-      const res = await getAllProductionPlans();
+      const res = await getAllProductionPlans(currentPage, perPage, searchQuery);
       if (res.success && res.data) {
         setPlans(res.data);
+        setTotalCount(res.total || 0);
       }
     } catch (e) {
       console.error(e);
@@ -44,7 +53,7 @@ export default function ProductionPlansPage() {
 
   useEffect(() => {
     fetchPlans();
-  }, []);
+  }, [currentPage, perPage, searchQuery]);
 
   const handleOpenModal = (plan?: any) => {
     setErrorMsg(null);
@@ -133,6 +142,16 @@ export default function ProductionPlansPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Cari Mesin..."
+            value={searchQuery}
+            onChange={(e) => {
+               setSearchQuery(e.target.value);
+               setCurrentPage(1);
+            }}
+            className="h-10 px-4 rounded-xl border border-slate-200 focus:border-[#0070bc] outline-none text-sm w-32 sm:w-48"
+          />
           <button 
             onClick={fetchPlans}
             disabled={loading}
@@ -209,6 +228,45 @@ export default function ProductionPlansPage() {
             ))}
           </tbody>
         </table>
+        
+        {plans.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-200 bg-slate-50 sticky bottom-0">
+            <div className="text-xs font-semibold text-slate-600">
+              Menampilkan {totalCount === 0 ? 0 : (currentPage - 1) * perPage + 1} - {Math.min(currentPage * perPage, totalCount)} dari {totalCount} Jadwal
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={perPage}
+                onChange={(e) => {
+                  setPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="h-9 px-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold outline-none"
+              >
+                {[10, 20, 50, 100].map((n) => (
+                  <option key={n} value={n}>{n} / halaman</option>
+                ))}
+              </select>
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs font-bold disabled:opacity-50 hover:bg-slate-100 transition-colors"
+              >
+                Prev
+              </button>
+              <span className="text-xs font-bold text-slate-700">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs font-bold disabled:opacity-50 hover:bg-slate-100 transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {isModalOpen && (
