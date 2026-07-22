@@ -589,7 +589,6 @@ export default function EmployeeHistoryPage() {
                           ) : null}
                         </div>
                       </th>
-                      <th className="px-2 py-2 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-[11px] font-medium text-slate-700">
@@ -608,6 +607,23 @@ export default function EmployeeHistoryPage() {
                       }
 
                       const operatorName = batch.operators_list || "-";
+
+                      const formatDurationNice = (totalSec: number | string) => {
+                        const sec = typeof totalSec === "string" ? parseInt(totalSec) || 0 : totalSec || 0;
+                        if (sec <= 0) return "-";
+                        const hours = Math.floor(sec / 3600);
+                        const minutes = Math.floor((sec % 3600) / 60);
+                        const seconds = sec % 60;
+                        if (hours > 0) {
+                          if (minutes > 0) return `${hours} Jam ${minutes} Mnt`;
+                          return `${hours} Jam`;
+                        }
+                        if (minutes > 0) {
+                          if (seconds > 0) return `${minutes} Mnt ${seconds} Dtk`;
+                          return `${minutes} Mnt`;
+                        }
+                        return `${seconds} Dtk`;
+                      };
 
                       return (
                         <tr
@@ -637,30 +653,24 @@ export default function EmployeeHistoryPage() {
                             Ke-{batch.potongan_ke || "-"}
                           </td>
                           <td className="px-2 py-2 text-center whitespace-nowrap">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
-                              {batch.is_meter ? `${batch.total_meter || 0} Meter` : `${batch.total_panels} Panel`}
-                            </span>
+                            {batch.total_panels === 0 && batch.total_meter === 0 ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-fuchsia-100 text-fuchsia-700">
+                                Laporan Downtime Khusus
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
+                                {batch.is_meter ? `${batch.total_meter || 0} Meter` : `${batch.total_panels} Panel`}
+                              </span>
+                            )}
                           </td>
                           <td className="px-2 py-2 text-center whitespace-nowrap">
                             {batch.total_downtime_detik > 0 ? (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
-                                {batch.total_downtime_detik} dtk
+                                {formatDurationNice(batch.total_downtime_detik)}
                               </span>
                             ) : (
                               <span className="text-slate-400">-</span>
                             )}
-                          </td>
-                          <td className="px-2 py-2 text-center">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRowClick(batch);
-                              }}
-                              className="inline-flex items-center justify-center p-1.5 rounded-md hover:bg-sky-100 text-[#0070bc] transition-colors"
-                              title="Lihat Detail"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
                           </td>
                         </tr>
                       );

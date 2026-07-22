@@ -87,7 +87,7 @@ export default function PanelHistoryTable({
     processed.forEach((p: any, i: number) => {
       const { item, isIstirahatOnly, hasIstirahat, isGradable, opr, grp, tgl, operatorStr } = p;
 
-      if (item.kategori_masalah !== "X" && !isIstirahatOnly) {
+      if (item.kategori_masalah !== "X") {
         currentOpCount += 1;
       }
 
@@ -416,8 +416,8 @@ export default function PanelHistoryTable({
               <td className={`px-1 py-1 font-medium text-center text-slate-700`}>
                 {displayGrp}
               </td>
-              <td className={`px-1 py-1 leading-tight text-slate-700 ${hasIstirahat ? "italic font-bold text-slate-500" : "font-medium"}`}>
-                {hasIstirahat ? "Istirahat" : displayOp}
+              <td className={`px-1 py-1 leading-tight text-slate-700 ${hasIstirahat && !item.showOpr ? "italic font-bold text-slate-500" : "font-medium"}`}>
+                {item.showOpr ? (item.oprStr || "-") : (hasIstirahat ? "Istirahat" : "")}
               </td>
               <td className="px-1 py-1 text-center">
                 {isIstirahatOnly ? (

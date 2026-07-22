@@ -68,7 +68,8 @@ export default function OfflineSyncManager() {
 
   const autoSyncSheets = async () => {
     try {
-      await fetch("/api/sync/auto", { method: "POST" });
+      // Dinihilkan sementara sesuai request untuk mematikan fitur sync
+      // await fetch("/api/sync/auto", { method: "POST" });
     } catch (e) {
       console.error("Auto sync sheets error", e);
     }

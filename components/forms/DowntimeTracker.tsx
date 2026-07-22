@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useFieldArray, Control, UseFormSetValue, UseFormWatch } from "react-hook-form";
-import { Play, Square, Timer, AlertTriangle, Plus, X, Trash2, Box } from "lucide-react";
+import { Play, Square, Timer, AlertTriangle, Plus, X, Trash2, Box, CheckCircle2, RefreshCw, FileText, Lock, User, ClipboardList } from "lucide-react";
 import { ContinuousFormInput } from "@/lib/schemas";
+import { submitMechanicDowntime } from "@/actions/mechanic-actions";
 
 const PROBLEM_CATEGORIES = [
   { id: "A", name: "Kode A: Masalah dan Perbaikan Benang" },
@@ -90,9 +91,11 @@ interface DowntimeTrackerProps {
   showMeterInput?: boolean;
   defaultMeter?: string;
   defaultPcsIndex?: string;
+  operators?: { id: number | string; name: string; shift?: string }[];
+  currentOperatorName?: string;
 }
 
-export default function DowntimeTracker({ control, watch, setValue, showBlockInput, showMeterInput, defaultMeter, defaultPcsIndex }: DowntimeTrackerProps) {
+export default function DowntimeTracker({ control, watch, setValue, showBlockInput, showMeterInput, defaultMeter, defaultPcsIndex, operators = [], currentOperatorName = "" }: DowntimeTrackerProps) {
   const { fields, append, remove } = useFieldArray({
     control,
     name: "downtimeEvents",
@@ -111,7 +114,156 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
   const [inputMeters, setInputMeters] = useState<Record<string, string>>({});
   const [selectedPcsKeList, setSelectedPcsKeList] = useState<string[]>([]);
 
+  const [dikerjakanOleh, setDikerjakanOleh] = useState<string>("Operator");
+  const [namaPenanganan, setNamaPenanganan] = useState<string>("");
   const [unresolvedDowntime, setUnresolvedDowntime] = useState<any>(null);
+  const [isSavingMechanic, setIsSavingMechanic] = useState(false);
+
+  // Machine Blocking (Approach A) State
+  const targetMc = watch("nomorMc") || "";
+  const [activeBlock, setActiveBlock] = useState<any>(null);
+  const [showHandoffModal, setShowHandoffModal] = useState(false);
+  const [handoffNotes, setHandoffNotes] = useState("");
+  const [handoffOperatorName, setHandoffOperatorName] = useState("");
+  const [handoffShift, setHandoffShift] = useState("A");
+  const [blockLiveSeconds, setBlockLiveSeconds] = useState(0);
+  const [isUnblockingBlock, setIsUnblockingBlock] = useState(false);
+  const [showConfirmBlockModal, setShowConfirmBlockModal] = useState(false);
+  const [showConfirmCancelModal, setShowConfirmCancelModal] = useState(false);
+  const [showAddNoteModal, setShowAddNoteModal] = useState(false);
+  const [progressNoteText, setProgressNoteText] = useState("");
+
+  useEffect(() => {
+    if (!targetMc) return;
+    try {
+      const saved = localStorage.getItem(`dji_machine_block_${targetMc}`);
+      if (saved) {
+        setActiveBlock(JSON.parse(saved));
+      } else {
+        setActiveBlock(null);
+      }
+    } catch (e) { }
+  }, [targetMc]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (activeBlock && activeBlock.startTime) {
+      interval = setInterval(() => {
+        setBlockLiveSeconds(Math.floor((Date.now() - activeBlock.startTime) / 1000));
+      }, 1000);
+    } else {
+      setBlockLiveSeconds(0);
+    }
+    return () => clearInterval(interval);
+  }, [activeBlock]);
+
+  const handleInitiateBlock = () => {
+    if (!targetMc) {
+      alert("Silakan pilih nomor mesin terlebih dahulu.");
+      return;
+    }
+    setShowConfirmBlockModal(true);
+  };
+
+  const executeBlockMachine = () => {
+    const now = Date.now();
+    const isoDate = new Date().toISOString().split("T")[0];
+    const initialShift = watch("groupId") || "A";
+    const newBlock = {
+      id: `block-${now}`,
+      nomorMc: targetMc,
+      startTime: now,
+      startTimeStr: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+      startDateStr: new Date().toLocaleDateString("id-ID"),
+      dateIso: isoDate,
+      initialReporter: currentOperatorName || "Operator",
+      handoffLogs: [
+        {
+          id: `log-${now}`,
+          startTime: now,
+          operatorName: currentOperatorName || "Operator Aktif",
+          shift: initialShift,
+          timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          dateStr: new Date().toLocaleDateString("id-ID"),
+          dateIso: isoDate,
+          notes: "Mulai Memblokir Mesin (Perbaikan Berlangsung)"
+        }
+      ]
+    };
+    setActiveBlock(newBlock);
+    localStorage.setItem(`dji_machine_block_${targetMc}`, JSON.stringify(newBlock));
+    setShowConfirmBlockModal(false);
+  };
+
+  const handleCancelBlock = () => {
+    if (!activeBlock) return;
+    setShowConfirmCancelModal(true);
+  };
+
+  const executeCancelBlock = () => {
+    localStorage.removeItem(`dji_machine_block_${targetMc}`);
+    setActiveBlock(null);
+    setBlockLiveSeconds(0);
+    setShowConfirmCancelModal(false);
+  };
+
+  const handleAddHandoffLog = () => {
+    if (!activeBlock) return;
+    const now = Date.now();
+    const isoDate = new Date().toISOString().split("T")[0];
+    const targetOp = handoffOperatorName || currentOperatorName || "Operator Aktif";
+    const newLog = {
+      id: `log-${now}`,
+      startTime: now,
+      operatorName: targetOp,
+      shift: watch("groupId") || "A",
+      timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+      dateStr: new Date().toLocaleDateString("id-ID"),
+      dateIso: isoDate,
+      notes: `Serah terima shift ke ${targetOp}`
+    };
+    const updated = {
+      ...activeBlock,
+      handoffLogs: [...(activeBlock.handoffLogs || []), newLog]
+    };
+    setActiveBlock(updated);
+    localStorage.setItem(`dji_machine_block_${targetMc}`, JSON.stringify(updated));
+    setShowHandoffModal(false);
+  };
+
+  const handleAddProgressNote = () => {
+    if (!activeBlock || !progressNoteText.trim()) return;
+    const now = Date.now();
+    const isoDate = new Date().toISOString().split("T")[0];
+    const currentOp = handoffOperatorName || currentOperatorName || activeBlock.initialReporter || "Operator";
+    const newLog = {
+      id: `log-${now}`,
+      startTime: now,
+      operatorName: currentOp,
+      shift: watch("groupId") || "A",
+      timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+      dateStr: new Date().toLocaleDateString("id-ID"),
+      dateIso: isoDate,
+      notes: progressNoteText.trim()
+    };
+    const updated = {
+      ...activeBlock,
+      handoffLogs: [...(activeBlock.handoffLogs || []), newLog]
+    };
+    setActiveBlock(updated);
+    localStorage.setItem(`dji_machine_block_${targetMc}`, JSON.stringify(updated));
+    setProgressNoteText("");
+    setShowAddNoteModal(false);
+  };
+
+  const handleUnblockMachine = () => {
+    if (!activeBlock) return;
+    const durationSec = Math.floor((Date.now() - activeBlock.startTime) / 1000);
+    setTempDuration(durationSec);
+    setDikerjakanOleh("Perbaikan Khusus");
+    setIsUnblockingBlock(true);
+    setShowModal(true);
+  };
 
   const currentDowntimeEvents = watch("downtimeEvents");
 
@@ -189,6 +341,9 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     setSelectedDetails({});
     setInputBloks({});
     setInputMeters({});
+    setDikerjakanOleh("Operator");
+    setNamaPenanganan("");
+    setIsUnblockingBlock(false);
     
     // Automatically select the default PCS if provided via URL
     if (defaultPcsIndex && pcsKeys.includes(defaultPcsIndex)) {
@@ -209,6 +364,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     setIsTimerRunning(false);
     setTimerStartRef(null);
     localStorage.removeItem("dji_active_downtime_start");
+    setIsUnblockingBlock(false);
 
     // Pre-fill if resuming from previous shift
     if (unresolvedDowntime) {
@@ -252,9 +408,9 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
   };
 
 
-  const handleSaveEvent = () => {
+  const handleSaveEvent = async () => {
     if (selectedCategories.length === 0) return;
-    if (selectedPcsKeList.length === 0) return; // wajib pilih minimal 1 PCS
+    if (dikerjakanOleh === "Operator" && selectedPcsKeList.length === 0) return;
 
     const meterStr = pcsKeys.length === 1
       ? inputMeters[pcsKeys[0]]?.trim()
@@ -267,22 +423,138 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
       kategori: catId,
       details: selectedDetails[catId] || [],
       blok: inputBloks[catId]?.trim() !== "" ? inputBloks[catId]?.trim() : undefined,
-      meter: meterStr || undefined,
+      meter: dikerjakanOleh === "Operator" ? (meterStr || undefined) : undefined,
     }));
 
-    // If all PCS keys are selected, use "Semua"; otherwise list selected pcsIndex values
-    const pcsKeStr = selectedPcsKeList.length === pcsKeys.length && pcsKeys.every(k => selectedPcsKeList.includes(k))
-      ? "Semua"
-      : selectedPcsKeList.map(x => parseInt(x)).sort((a, b) => a - b).join(", ");
+    // If all PCS keys are selected or if Downtime Khusus, use "Semua"
+    const pcsKeStr = dikerjakanOleh === "Operator" 
+      ? (selectedPcsKeList.length === pcsCount ? "Semua" : selectedPcsKeList.join(", "))
+      : "Semua";
+    
+    let dikerjakanGabungan = dikerjakanOleh;
+    if (dikerjakanOleh === "Operator") {
+      dikerjakanGabungan = `Operator (${currentOperatorName || "Operator Aktif"})`;
+    } else {
+      const pj = namaPenanganan || currentOperatorName || "Operator";
+      dikerjakanGabungan = `Perbaikan Khusus (${pj})`;
+    }
 
-    append({
+    let finalEvent: any = {
       id: Date.now().toString(),
       durasiDetik: tempDuration,
       pcsKe: pcsKeStr,
+      dikerjakanOleh: dikerjakanGabungan,
       problems: problems,
-    });
+      handoffLogs: activeBlock?.handoffLogs || undefined,
+    };
+
+    if (dikerjakanOleh !== "Operator") {
+      setIsSavingMechanic(true);
+      try {
+        if (activeBlock && activeBlock.handoffLogs && activeBlock.handoffLogs.length > 0) {
+          const logs = activeBlock.handoffLogs;
+          const unblockTime = Date.now();
+
+          // Loop each shift log and calculate its exact portion of downtime
+          for (let i = 0; i < logs.length; i++) {
+            const currentLog = logs[i];
+            const logStart = currentLog.startTime || activeBlock.startTime || (unblockTime - (tempDuration || 60) * 1000);
+            const nextTime = (i < logs.length - 1 && logs[i + 1]?.startTime) ? logs[i + 1].startTime : unblockTime;
+            const diff = Math.floor((nextTime - logStart) / 1000);
+            const segDurationSec = (isNaN(diff) || diff <= 0) ? (tempDuration || 1) : diff;
+
+            const splitEvent = {
+              id: `split-${Date.now()}-${i}`,
+              durasiDetik: segDurationSec,
+              pcsKe: "Semua",
+              dikerjakanOleh: `Perbaikan Khusus (${currentLog.operatorName || "Operator"})`,
+              problems: problems,
+              shift: currentLog.shift || watch("groupId") || "A",
+              notes: currentLog.notes
+            };
+
+            const res = await submitMechanicDowntime({
+              nomorMc: watch("nomorMc") || "",
+              operatorId: watch("operatorId") || "",
+              groupId: currentLog.shift || watch("groupId") || "A",
+              designId: watch("designId") || "",
+              tanggalProduksi: currentLog.dateIso || new Date().toISOString().split("T")[0],
+              potonganKe: watch("potonganKe") || "",
+              downtimeEvent: splitEvent,
+              createdTime: logStart,
+            });
+
+            if (!res.success) {
+              console.error("Error submitting split downtime segment:", res.error);
+            }
+          }
+
+          setShowModal(false);
+          localStorage.removeItem(`dji_machine_block_${targetMc}`);
+          setActiveBlock(null);
+          if (unresolvedDowntime) {
+            setUnresolvedDowntime(null);
+            localStorage.removeItem("dji_unresolved_downtime");
+          }
+          setIsTimerRunning(false);
+          setTimerStartRef(null);
+          setLiveTimerSeconds(0);
+          localStorage.removeItem("dji_active_downtime_start");
+          setIsSavingMechanic(false);
+          return;
+        }
+
+        const res = await submitMechanicDowntime({
+          nomorMc: watch("nomorMc") || "",
+          operatorId: watch("operatorId") || "",
+          groupId: watch("groupId") || "",
+          designId: watch("designId") || "",
+          tanggalProduksi: watch("tanggalProduksi") || "",
+          potonganKe: watch("potonganKe") || "",
+          downtimeEvent: finalEvent,
+          createdTime: activeBlock?.startTime || undefined,
+        });
+        if (res.success) {
+          setShowModal(false);
+          if (activeBlock) {
+            localStorage.removeItem(`dji_machine_block_${targetMc}`);
+            setActiveBlock(null);
+          }
+          if (unresolvedDowntime) {
+            setUnresolvedDowntime(null);
+            localStorage.removeItem("dji_unresolved_downtime");
+          }
+          setIsTimerRunning(false);
+          setTimerStartRef(null);
+          setLiveTimerSeconds(0);
+          localStorage.removeItem("dji_active_downtime_start");
+          setIsSavingMechanic(false);
+          return;
+        } else {
+          alert("Gagal mengirim downtime khusus: " + res.error);
+        }
+      } catch (err) {
+        alert("Gagal mengirim downtime khusus.");
+      }
+      setIsSavingMechanic(false);
+      return;
+    }
+
+    append(finalEvent);
 
     setShowModal(false);
+
+    // Clear active machine block if active
+    if (activeBlock) {
+      localStorage.removeItem(`dji_machine_block_${targetMc}`);
+      setActiveBlock(null);
+    }
+
+    // Stop and reset live timer after saving Downtime Biasa
+    setIsTimerRunning(false);
+    setTimerStartRef(null);
+    setLiveTimerSeconds(0);
+    localStorage.removeItem("dji_active_downtime_start");
 
     // Hapus status tertunda (unresolved) setelah berhasil disave
     if (unresolvedDowntime) {
@@ -297,79 +569,219 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  return (
-    <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 mb-6 relative overflow-hidden">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
-            <Timer className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-              Downtime
-            </h3>
-          </div>
-        </div>
-        <div className="text-right">
-          <span className="text-xs font-bold text-slate-400">Total:</span>
-          <p className="text-lg font-black text-orange-600">
-            {formatTimer(fields.reduce((acc, curr: any) => acc + (curr.durasiDetik || 0), 0))}
-          </p>
-        </div>
-      </div>
+  const formatShiftLabel = (shiftVal: any) => {
+    if (!shiftVal) return "A";
+    const str = String(shiftVal).trim();
+    if (str === "1" || str.toUpperCase() === "A") return "A";
+    if (str === "2" || str.toUpperCase() === "B") return "B";
+    if (str === "3" || str.toUpperCase() === "C") return "C";
+    return str;
+  };
 
-      {/* Banner Masalah Lanjut Shift */}
-      {unresolvedDowntime && !isTimerRunning && (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-2xl mb-4 flex flex-col gap-3 animate-fadeIn">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h4 className="text-xs font-black text-yellow-800 uppercase">Terdapat Masalah Tertunda</h4>
-              <p className="text-[10px] font-medium text-yellow-700 leading-relaxed mt-0.5">
-                Shift sebelumnya meninggalkan catatan masalah yang belum selesai.
-              </p>
+  return (
+    <div className="space-y-4 mb-6">
+      {/* 1. SEKSI BLOCK MESIN (SEKSUIL TERPISAH DI ATAS CARD DOWNTIME BIASA) */}
+      {/* 1. SEKSI BLOCK MESIN (SEKSUIL TERPISAH DI ATAS CARD DOWNTIME BIASA) */}
+      {!activeBlock ? (
+        <div className="bg-purple-900/5 bg-gradient-to-r from-purple-50/90 via-indigo-50/50 to-purple-50/90 border-2 border-purple-200/80 rounded-3xl p-5 shadow-xs">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-purple-950 uppercase tracking-wide">
+                  Perbaikan Khusus (Block Mesin)
+                </h4>
+                <p className="text-[10px] font-semibold text-purple-700">
+                  Untuk perbaikan berat / mesin mati total lintas shift (tanpa produksi kain)
+                </p>
+              </div>
             </div>
+            <span className="text-[9px] font-extrabold text-purple-800 bg-purple-100/90 px-2.5 py-1 rounded-full border border-purple-200 shrink-0">
+              Mesin Stop Total
+            </span>
           </div>
+
           <button
             type="button"
-            onClick={handleStartTimer}
-            className="flex items-center justify-center gap-2 w-full h-10 bg-yellow-500 hover:bg-yellow-600 text-white font-bold text-xs uppercase tracking-wide rounded-xl transition-all shadow-sm"
+            onClick={handleInitiateBlock}
+            className="flex items-center justify-center gap-2 w-full h-11 mt-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-purple-600/20 active:scale-[0.98] cursor-pointer"
           >
-            <Play className="w-4 h-4 fill-current" />
-            Mulai Lanjutkan Perbaikan
+            <Lock className="w-4 h-4" /> Block Mesin (Perbaikan Lama)
           </button>
+        </div>
+      ) : (
+        /* Banner Active Block Mesin (Multi Shift) - Minimalist & Sleek */
+        <div className="p-4 bg-purple-900/5 bg-gradient-to-r from-purple-50/90 via-indigo-50/40 to-purple-50/90 border border-purple-200 rounded-3xl shadow-xs animate-fadeIn space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <div className="w-9 h-9 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black text-purple-950 uppercase tracking-wide">
+                    Mesin Diblok (Dalam Perbaikan)
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full bg-purple-200/80 text-purple-900 font-extrabold text-[9px] animate-pulse">
+                    LIVE
+                  </span>
+                </div>
+                <p className="text-[10px] font-semibold text-purple-700/90 mt-0.5">
+                  Mulai perbaikan {activeBlock.startDateStr} pkl {activeBlock.startTimeStr} • Pelapor: <strong>{activeBlock.initialReporter}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="text-right shrink-0">
+              <span className="text-[9px] font-bold uppercase text-purple-600 block">Total Stop:</span>
+              <span className="text-sm font-black text-purple-900 font-mono">
+                {formatTimer(blockLiveSeconds)}
+              </span>
+            </div>
+          </div>
+
+          {/* Handoff Logs List (Tampil HANYA jika ada lebih dari 1 log serah terima) */}
+          {activeBlock.handoffLogs && activeBlock.handoffLogs.length > 1 && (
+            <div className="bg-white/80 rounded-2xl p-3 border border-purple-200/80 space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+              <div className="flex items-center gap-1.5 text-[9px] font-extrabold text-purple-800 uppercase tracking-wider block">
+                <ClipboardList className="w-3.5 h-3.5 text-purple-700" />
+                <span>Riwayat Serah Terima ({activeBlock.handoffLogs.length}):</span>
+              </div>
+              {activeBlock.handoffLogs.map((log: any, lIdx: number) => (
+                <div key={log.id || lIdx} className="text-[10px] text-slate-700 bg-purple-50/50 p-2 rounded-xl border border-purple-100/60 leading-relaxed">
+                  <div className="flex justify-between items-center text-[9px] font-extrabold text-purple-900 mb-0.5">
+                    <span className="flex items-center gap-1">
+                      <User className="w-3 h-3 text-purple-600" />
+                      {log.operatorName} ({formatShiftLabel(log.shift)})
+                    </span>
+                    <span className="text-purple-600/80">{log.dateStr} • {log.timestamp}</span>
+                  </div>
+                  <p className="text-slate-650 font-medium pl-4">{log.notes}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Action Buttons: 1 Sleek Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <button
+              type="button"
+              onClick={handleCancelBlock}
+              className="px-3 py-2 rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 font-bold text-xs transition-all border border-transparent hover:border-red-200 flex items-center gap-1.5 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Batalkan Block</span>
+            </button>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddNoteModal(true)}
+                className="px-3 py-2 rounded-xl bg-purple-100/80 hover:bg-purple-200/80 text-purple-900 font-bold text-xs transition-all border border-purple-200 flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Catat Progres</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowHandoffModal(true)}
+                className="px-3 py-2 rounded-xl bg-indigo-100/80 hover:bg-indigo-200/80 text-indigo-900 font-bold text-xs transition-all border border-indigo-200 flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Serah Terima</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleUnblockMachine}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>UNBLOCK</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      <div className={`flex flex-col ${fields.length > 0 && showMeterInput ? "md:flex-row" : ""} gap-4 items-start`}>
-        <div className={`p-4 bg-orange-50 border border-orange-200 rounded-2xl w-full ${fields.length > 0 && showMeterInput ? "md:w-1/3" : ""}`}>
-          {!isTimerRunning ? (
+      {/* 2. CARD DOWNTIME BIASA (KEMBALI 100% PERSIS KAYA DULU) */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 relative overflow-hidden">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
+              <Timer className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                Downtime
+              </h3>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-xs font-bold text-slate-400">Total:</span>
+            <p className="text-lg font-black text-orange-600">
+              {formatTimer(fields.reduce((acc, curr: any) => acc + (curr.durasiDetik || 0), 0))}
+            </p>
+          </div>
+        </div>
+
+        {/* Banner Masalah Lanjut Shift (jika ada) */}
+        {unresolvedDowntime && !isTimerRunning && (
+          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-2xl mb-4 flex flex-col gap-3 animate-fadeIn">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-xs font-black text-yellow-800 uppercase">Terdapat Masalah Tertunda</h4>
+                <p className="text-[10px] font-medium text-yellow-700 leading-relaxed mt-0.5">
+                  Shift sebelumnya meninggalkan catatan masalah yang belum selesai.
+                </p>
+              </div>
+            </div>
             <button
               type="button"
               onClick={handleStartTimer}
-              className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
+              className="flex items-center justify-center gap-2 w-full h-10 bg-yellow-500 hover:bg-yellow-600 text-white font-bold text-xs uppercase tracking-wide rounded-xl transition-all shadow-sm"
             >
-              <AlertTriangle className="w-5 h-5 fill-current" />
-              Mulai
+              <Play className="w-4 h-4 fill-current" />
+              Mulai Lanjutkan Perbaikan
             </button>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="w-full bg-white border-2 border-orange-200 rounded-2xl h-14 flex items-center justify-center">
-                <span className="text-2xl font-black text-orange-600 font-mono tracking-wider animate-pulse">
-                  {formatTimer(liveTimerSeconds)}
-                </span>
+          </div>
+        )}
+
+        <div className={`flex flex-col ${fields.length > 0 && showMeterInput ? "md:flex-row" : ""} gap-4 items-start`}>
+          <div className={`p-4 bg-orange-50 border border-orange-200 rounded-2xl w-full ${fields.length > 0 && showMeterInput ? "md:w-1/3" : ""}`}>
+            {!isTimerRunning ? (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleStartTimer}
+                  className="flex items-center justify-center gap-2 w-full h-12 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wide rounded-xl transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
+                >
+                  <AlertTriangle className="w-4 h-4 fill-current" />
+                  Mulai Downtime Singkat
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleStopTimer}
-                className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-emerald-500/20 active:scale-[0.98]"
-              >
-                <Play className="w-5 h-5 fill-current" />
-                Stop
-              </button>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="w-full bg-white border-2 border-orange-200 rounded-2xl h-14 flex items-center justify-center">
+                  <span className="text-2xl font-black text-orange-600 font-mono tracking-wider animate-pulse">
+                    {formatTimer(liveTimerSeconds)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleStopTimer}
+                  className="flex items-center justify-center gap-2 w-full h-14 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-sm uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-emerald-500/20 active:scale-[0.98]"
+                >
+                  <Play className="w-5 h-5 fill-current" />
+                  Stop
+                </button>
+              </div>
+            )}
+          </div>
 
         {fields.length > 0 && (
           <div className={`space-y-1.5 w-full ${showMeterInput ? "md:w-2/3" : ""}`}>
@@ -424,6 +836,24 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                         ));
                       })()}
                     </div>
+                    
+                    {event.dikerjakanOleh && (
+                      <div className="mb-1 flex items-center">
+                        <span className={`inline-flex text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-sm border ${
+                          event.dikerjakanOleh === 'Operator' ? 'bg-indigo-500 text-white border-indigo-600' :
+                          (event.dikerjakanOleh === 'Mekanik/Teknisi' || event.dikerjakanOleh === 'Perbaikan Khusus') ? 'bg-fuchsia-500 text-white border-fuchsia-600' :
+                          'bg-slate-500 text-white border-slate-600'
+                        }`}>
+                          {event.dikerjakanOleh}
+                        </span>
+                        {event.isSubmitted && (
+                          <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 ml-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Terkirim
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {/* Handle backward compatibility for old data struct (kategori/detail as strings) */}
                     {event.kategori && typeof event.kategori === "string" && (
@@ -464,6 +894,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
           </div>
         )}
       </div>
+    </div>
 
       {/* Modal Input Masalah */}
       {showModal && (
@@ -505,13 +936,13 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                   </div>
                 </div>
               </div>
-              <button onClick={() => setShowModal(false)} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-xl transition-colors">
+              <button onClick={() => { setShowModal(false); setIsUnblockingBlock(false); }} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-xl transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4 sm:space-y-5">
-              {pcsCount > 1 && (
+              {dikerjakanOleh === "Operator" && !isUnblockingBlock && pcsCount > 1 && (
                 <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-inner mt-4">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1 block">
                     Masalah terjadi pada PCS ke-berapa?
@@ -574,7 +1005,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                 </div>
               )}
 
-              {showMeterInput && pcsKeys.length === 1 && (
+              {dikerjakanOleh === "Operator" && !isUnblockingBlock && showMeterInput && pcsKeys.length === 1 && (
                 <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200/60 shadow-sm animate-fadeIn">
                   <label className="text-[10px] font-black text-emerald-800 uppercase tracking-wider mb-2 block flex items-center gap-1.5">
                     <Box className="w-4 h-4" />
@@ -700,17 +1131,193 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                 disabled={
                   selectedCategories.length === 0 ||
                   selectedCategories.some(cat => !selectedDetails[cat] || selectedDetails[cat].length === 0) ||
-                  (pcsKeys.length > 1 && selectedPcsKeList.length === 0) ||
-                  (showMeterInput === true && (
-                    pcsKeys.length === 1
-                      ? (!inputMeters[pcsKeys[0]] || inputMeters[pcsKeys[0]].trim() === "")
-                      : selectedPcsKeList.some(pcs => !inputMeters[pcs] || inputMeters[pcs].trim() === "")
-                  ))
+                  (dikerjakanOleh === "Operator" && pcsKeys.length > 1 && selectedPcsKeList.length === 0)
                 }
-                className="flex-[2] h-12 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-[2] h-12 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                {unresolvedDowntime ? "Selesaikan Perbaikan" : "Simpan Masalah"}
+                {isSavingMechanic ? "Mengirim..." : (unresolvedDowntime ? "Selesaikan Perbaikan" : "Simpan Masalah")}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Serah Terima Shift (Pengantian Operator) */}
+      {showHandoffModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-indigo-100 flex items-center justify-between bg-indigo-50">
+              <div className="flex items-center gap-2.5">
+                <RefreshCw className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <h3 className="font-black text-indigo-950 text-sm sm:text-base">Serah Terima Shift</h3>
+                  <p className="text-[10px] text-indigo-700 font-semibold">Ganti petugas operator untuk shift berikutnya</p>
+                </div>
+              </div>
+              <button onClick={() => setShowHandoffModal(false)} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-4">
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-600 uppercase mb-1 block">Petugas Shift Baru *</label>
+                <select
+                  value={handoffOperatorName || currentOperatorName}
+                  onChange={(e) => setHandoffOperatorName(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  {currentOperatorName && <option value={currentOperatorName}>{currentOperatorName} (Operator Aktif)</option>}
+                  {operators
+                    .filter(op => op.name !== currentOperatorName)
+                    .map(op => (
+                      <option key={op.id} value={op.name}>{op.name}</option>
+                    ))
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowHandoffModal(false)}
+                className="flex-1 h-11 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-100"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleAddHandoffLog}
+                className="flex-[2] h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition-all shadow-md shadow-indigo-600/20 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Simpan Ganti Shift</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Catat Progres Perbaikan */}
+      {showAddNoteModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-purple-100 flex items-center justify-between bg-purple-50">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-purple-600" />
+                <div>
+                  <h3 className="font-black text-purple-950 text-sm sm:text-base">Catat Progres Perbaikan</h3>
+                  <p className="text-[10px] text-purple-700 font-semibold">Tambah catatan perkembang penanganan mesin</p>
+                </div>
+              </div>
+              <button onClick={() => setShowAddNoteModal(false)} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-4">
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-600 uppercase mb-1 block">Catatan Progres Perbaikan *</label>
+                <textarea
+                  rows={3}
+                  value={progressNoteText}
+                  onChange={(e) => setProgressNoteText(e.target.value)}
+                  placeholder="Contoh: Pembongkaran dinamo selesai. Lanjut ganti bearing..."
+                  className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-xs font-semibold text-slate-700 placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddNoteModal(false)}
+                className="flex-1 h-11 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-100"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleAddProgressNote}
+                disabled={!progressNoteText.trim()}
+                className="flex-[2] h-11 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-purple-600/20 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Simpan Catatan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Block Mesin */}
+      {showConfirmBlockModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-purple-100 overflow-hidden">
+            <div className="p-6 text-center space-y-4">
+              <Lock className="w-8 h-8 text-purple-600 mx-auto" />
+              <div>
+                <h3 className="text-base font-black text-slate-800 uppercase tracking-wide">
+                  Konfirmasi Block Mesin
+                </h3>
+                <p className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">
+                  Apakah Anda yakin ingin memblokir <strong className="text-purple-700">Mesin {targetMc}</strong>? Mesin akan ditandai dalam status perbaikan lama (mati total lintas shift).
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmBlockModal(false)}
+                  className="h-11 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={executeBlockMachine}
+                  className="h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs transition-all shadow-md shadow-purple-600/20 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Ya, Block Mesin</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Batalkan Block */}
+      {showConfirmCancelModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-red-100 overflow-hidden">
+            <div className="p-6 text-center space-y-4">
+              <AlertTriangle className="w-8 h-8 text-red-600 mx-auto" />
+              <div>
+                <h3 className="text-base font-black text-slate-800 uppercase tracking-wide">
+                  Batalkan Block Mesin?
+                </h3>
+                <p className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">
+                  Apakah Anda yakin ingin membatalkan status Block <strong className="text-red-600">Mesin {targetMc}</strong>? Status block akan dibersihkan tanpa disimpan ke database.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmCancelModal(false)}
+                  className="h-11 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Kembali
+                </button>
+                <button
+                  type="button"
+                  onClick={executeCancelBlock}
+                  className="h-11 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition-all shadow-md shadow-red-600/20 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Ya, Batalkan</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

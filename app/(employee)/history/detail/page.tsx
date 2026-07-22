@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { searchEmployeeHistory } from "@/actions/employee-actions";
 import CompactHeaderCard from "@/components/forms/CompactHeaderCard";
-import { Loader2, ArrowLeft, Clock, Edit, AlertCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Edit, AlertCircle, Timer, Wrench } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import PanelHistoryTable from "./components/PanelHistoryTable";
 import MeterHistoryTable from "./components/MeterHistoryTable";
@@ -38,16 +38,13 @@ function HistoryDetailContent() {
           nomor_mc: nomor_mc,
           design_id: design_id || undefined,
           potongan_ke: potongan_ke,
-          date: tgl || undefined,
         });
 
         if (res.success && res.data && res.data.length > 0) {
           const batch = res.data.find(
             (b: any) =>
-              b.nomor_mc === nomor_mc &&
-              b.potongan_ke == potongan_ke &&
-              (design_id ? b.design_id === design_id : true) &&
-              (tgl ? b.tgl === tgl : true)
+              String(b.nomor_mc || "").trim().toUpperCase() === String(nomor_mc || "").trim().toUpperCase() &&
+              b.potongan_ke == potongan_ke
           );
 
           if (batch) {
@@ -67,6 +64,23 @@ function HistoryDetailContent() {
 
     fetchDetail();
   }, [nomor_mc, design_id, potongan_ke, tgl]);
+
+  const formatDurationNice = (totalSec: number | string) => {
+    const sec = typeof totalSec === "string" ? parseInt(totalSec) || 0 : totalSec || 0;
+    if (sec <= 0) return "0 dtk";
+    const hours = Math.floor(sec / 3600);
+    const minutes = Math.floor((sec % 3600) / 60);
+    const seconds = sec % 60;
+    if (hours > 0) {
+      if (minutes > 0) return `${hours} Jam ${minutes} Mnt`;
+      return `${hours} Jam`;
+    }
+    if (minutes > 0) {
+      if (seconds > 0) return `${minutes} Mnt ${seconds} Dtk`;
+      return `${minutes} Mnt`;
+    }
+    return `${seconds} Dtk`;
+  };
 
   if (isLoading) {
     return (
@@ -146,7 +160,7 @@ function HistoryDetailContent() {
           <Clock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div>
             <h4 className="text-sm font-bold text-amber-800">
-              Total Downtime: {detailData.total_downtime_detik} Detik
+              Total Downtime: {formatDurationNice(detailData.total_downtime_detik)}
             </h4>
             <p className="text-xs text-amber-700 mt-1">
               Terdapat waktu tunggu (downtime) selama produksi batch ini berjalan.
@@ -157,15 +171,6 @@ function HistoryDetailContent() {
 
       {/* Laporan Produksi Table */}
       <div className="pb-4">
-        {(() => {
-          const isMeterReport = detailData.panels?.some((p: any) => p.panel_no === "METERAN");
-          if (isMeterReport) return null;
-          return (
-            <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-              Rincian per Panel
-            </h4>
-          );
-        })()}
           {(() => {
             // Group panels by pcs
             const pcsGroups: { [key: string]: any[] } = {};
@@ -225,7 +230,10 @@ function HistoryDetailContent() {
              });
 
              finalPanels.forEach((panel: any) => {
-               const totalPcs = parseInt(panel.pcs || "1");
+               if (panel.panel_no === "Downtime Mekanik (Direct)" || panel.pcs === 0 || panel.pcs === "0") {
+                 return;
+               }
+               const totalPcs = parseInt(panel.pcs ?? "1");
                for (let i = 1; i <= totalPcs; i++) {
                  const pcsKey = i.toString();
                  if (!pcsGroups[pcsKey]) pcsGroups[pcsKey] = [];
@@ -291,50 +299,197 @@ function HistoryDetailContent() {
 
             // Sort keys numerically
             const sortedPcsKeys = Object.keys(pcsGroups).sort((a, b) => parseInt(a) - parseInt(b));
+            if (sortedPcsKeys.length === 0) return null;
+
+            const isMeterReport = detailData.panels?.some((p: any) => p.panel_no === "METERAN");
 
             return (
-              <div className="w-full overflow-x-auto pb-4 custom-scrollbar bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex w-max min-w-full gap-8">
-                  {sortedPcsKeys.map((pcsKey) => {
-                    const pcsLabel = `PCS ${pcsKey}`;
-                    const panels = pcsGroups[pcsKey].sort((a, b) => {
-                        if (a.panel_no === "METERAN" && b.panel_no === "METERAN") {
-                          return String(a.tanggal_jam || "").localeCompare(String(b.tanggal_jam || ""));
-                        }
-                        if (a.panel_no === "METERAN") return 1;
-                        if (b.panel_no === "METERAN") return -1;
-                        
-                        const pA = parseInt(a.panel_no || "0");
-                        const pB = parseInt(b.panel_no || "0");
-                        if (pA === pB) {
-                          const isABs = String(a.panel_no || "").includes("(BS)") || String(a.panel_no || "").includes("(GAGAL)");
-                          const isBBs = String(b.panel_no || "").includes("(BS)") || String(b.panel_no || "").includes("(GAGAL)");
-                          if (isABs && !isBBs) return -1;
-                          if (!isABs && isBBs) return 1;
-                          return String(a.tanggal_jam || "").localeCompare(String(b.tanggal_jam || ""));
-                        }
-                        return pA - pB;
-                      });
+              <div className="mb-6">
+                {!isMeterReport && (
+                  <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    Rincian per Panel
+                  </h4>
+                )}
+                <div className="w-full overflow-x-auto pb-4 custom-scrollbar bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                  <div className="flex w-max min-w-full gap-8">
+                    {sortedPcsKeys.map((pcsKey) => {
+                      const pcsLabel = `PCS ${pcsKey}`;
+                      const panels = pcsGroups[pcsKey].sort((a, b) => {
+                          if (a.panel_no === "METERAN" && b.panel_no === "METERAN") {
+                            return String(a.tanggal_jam || "").localeCompare(String(b.tanggal_jam || ""));
+                          }
+                          if (a.panel_no === "METERAN") return 1;
+                          if (b.panel_no === "METERAN") return -1;
+                          
+                          const pA = parseInt(a.panel_no || "0");
+                          const pB = parseInt(b.panel_no || "0");
+                          if (pA === pB) {
+                            const isABs = String(a.panel_no || "").includes("(BS)") || String(a.panel_no || "").includes("(GAGAL)");
+                            const isBBs = String(b.panel_no || "").includes("(BS)") || String(b.panel_no || "").includes("(GAGAL)");
+                            if (isABs && !isBBs) return -1;
+                            if (!isABs && isBBs) return 1;
+                            return String(a.tanggal_jam || "").localeCompare(String(b.tanggal_jam || ""));
+                          }
+                          return pA - pB;
+                        });
 
-                    const isMeter = detailData.is_meter || panels.some((p: any) => p.panel_no === "METERAN");
+                      const isMeter = detailData.is_meter || panels.some((p: any) => p.panel_no === "METERAN");
 
-                    return (
-                      <div key={pcsKey} className="w-min flex-none bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                        <div className="bg-slate-100/80 px-4 py-3 border-b border-slate-200 text-center">
-                          <span className="font-black text-slate-800 text-sm tracking-wider uppercase">{pcsLabel}</span>
-                        </div>
-                        {isMeter ? (
-                          <MeterHistoryTable panels={panels} pcsKey={pcsKey} />
-                        ) : (
-                          <PanelHistoryTable panels={panels} pcsKey={pcsKey} />
-                        )}
-                    </div>
-                  );
-                })}
+                      return (
+                        <div key={pcsKey} className="w-min flex-none bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                          <div className="bg-slate-100/80 px-4 py-3 border-b border-slate-200 text-center">
+                            <span className="font-black text-slate-800 text-sm tracking-wider uppercase">{pcsLabel}</span>
+                          </div>
+                          {isMeter ? (
+                            <MeterHistoryTable panels={panels} pcsKey={pcsKey} />
+                          ) : (
+                            <PanelHistoryTable panels={panels} pcsKey={pcsKey} />
+                          )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           );
         })()}
+
+        {/* Render Mechanic / Special Downtimes explicitly in Table format */}
+        {(() => {
+           const mechanicPanels = detailData.panels?.filter((p: any) => {
+             if (p.panel_no === "Downtime Mekanik (Direct)" || p.panel_no === "BERHENTI") return true;
+             if (!p.pcs || parseInt(p.pcs) === 0) return true;
+             let dtEvents: any[] = [];
+             try { dtEvents = typeof p.downtime_events === 'string' ? JSON.parse(p.downtime_events) : (p.downtime_events || []); } catch(e){}
+             if (dtEvents && dtEvents.length > 0) return true;
+             if (p.downtime_records && p.downtime_records.length > 0) return true;
+             if (p.total_downtime_detik && p.total_downtime_detik > 0) return true;
+             return false;
+           });
+
+           if (!mechanicPanels || mechanicPanels.length === 0) return null;
+
+           const cleanPenanggungJawab = (raw: string) => {
+             if (!raw) return "-";
+             const match = raw.match(/^Perbaikan Khusus\s*\((.*)\)$/i);
+             if (match && match[1]) return match[1].trim();
+             return raw.replace(/^Perbaikan Khusus\s*/i, "").trim() || raw;
+           };
+           
+           const rows: any[] = [];
+           mechanicPanels.forEach((mp: any) => {
+             let dtEvents: any[] = [];
+             try { dtEvents = typeof mp.downtime_events === 'string' ? JSON.parse(mp.downtime_events) : (mp.downtime_events || []); } catch(e){}
+
+             if (dtEvents && dtEvents.length > 0) {
+               dtEvents.forEach((ev: any, idx: number) => {
+                 const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
+                 
+                 if (ev.problems && ev.problems.length > 0) {
+                   ev.problems.forEach((p: any, pIdx: number) => {
+                     rows.push({
+                       id: `${mp.id}-${idx}-${pIdx}`,
+                       timeStr,
+                       penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
+                       shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
+                       durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
+                       kategori: p.kategori || ev.kategori || "-",
+                       detailMasalah: (p.details && Array.isArray(p.details)) ? p.details.join(", ") : (p.details || ev.detail || "-"),
+                     });
+                   });
+                 } else {
+                   rows.push({
+                     id: `${mp.id}-${idx}`,
+                     timeStr,
+                     penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
+                     shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
+                     durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
+                     kategori: ev.kategori || "-",
+                     detailMasalah: ev.detail || "-",
+                   });
+                 }
+               });
+             } else if (mp.downtime_records && mp.downtime_records.length > 0) {
+               mp.downtime_records.forEach((dr: any, dIdx: number) => {
+                 const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
+                 rows.push({
+                   id: `${mp.id}-dr-${dIdx}`,
+                   timeStr,
+                   penanggungJawab: cleanPenanggungJawab(dr.dikerjakan_oleh || mp.pic || mp.operators?.nama_operator),
+                   shift: mp.grup || mp.groups?.nama_grup || "-",
+                   durasiDisplay: formatDurationNice(dr.durasi_detik || mp.total_downtime_detik || 0),
+                   kategori: dr.kategori || "-",
+                   detailMasalah: dr.detail || "-",
+                 });
+               });
+             } else if (mp.total_downtime_detik > 0) {
+               const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
+               rows.push({
+                 id: `${mp.id}-fallback`,
+                 timeStr,
+                 penanggungJawab: cleanPenanggungJawab(mp.pic || mp.operators?.nama_operator),
+                 shift: mp.grup || mp.groups?.nama_grup || "-",
+                 durasiDisplay: formatDurationNice(mp.total_downtime_detik || 0),
+                 kategori: mp.kategori_masalah || "-",
+                 detailMasalah: mp.detail_masalah || "-",
+               });
+             }
+           });
+
+           if (rows.length === 0) return null;
+
+           return (
+             <div className="mt-8 bg-purple-50/50 border border-purple-200 rounded-2xl overflow-hidden shadow-sm">
+               <div className="bg-purple-100/50 px-6 py-4 border-b border-purple-200 flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                   <div className="bg-purple-600 text-white w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm">
+                     <Wrench className="w-4 h-4 text-white" />
+                   </div>
+                   <div>
+                     <h3 className="text-sm font-bold text-purple-900">
+                       Laporan Downtime Khusus (Tanpa Produksi)
+                     </h3>
+                     <p className="text-xs font-medium text-purple-600/80">
+                       Data downtime (Mesin berhenti total)
+                     </p>
+                   </div>
+                 </div>
+               </div>
+               
+               <div className="p-0 overflow-x-auto">
+                 <table className="w-full text-left text-sm whitespace-nowrap">
+                   <thead className="bg-purple-50 text-purple-900/70 text-xs uppercase tracking-wider font-bold">
+                     <tr>
+                       <th className="px-6 py-4">Waktu Laporan</th>
+                       <th className="px-6 py-4">Penanggung Jawab</th>
+                       <th className="px-6 py-4">Shift</th>
+                       <th className="px-6 py-4">Durasi</th>
+                       <th className="px-6 py-4">Kategori</th>
+                       <th className="px-6 py-4">Detail Masalah</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-purple-100 bg-white/50">
+                     {rows.map((row) => (
+                       <tr key={row.id} className="hover:bg-purple-50/40 transition-colors">
+                         <td className="px-6 py-4 font-semibold text-purple-900">{row.timeStr}</td>
+                         <td className="px-6 py-4 text-purple-800 font-medium">{row.penanggungJawab}</td>
+                         <td className="px-6 py-4 text-purple-800">{row.shift}</td>
+                         <td className="px-6 py-4 font-bold text-purple-900">{row.durasiDisplay}</td>
+                         <td className="px-6 py-4">
+                           <span className="bg-white border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                             {row.kategori}
+                           </span>
+                         </td>
+                         <td className="px-6 py-4 text-purple-800">{row.detailMasalah}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             </div>
+           );
+        })()}
+
       </div>
     </div>
   );

@@ -36,7 +36,7 @@ export async function POST() {
     const sheetUrl = process.env.GOOGLE_SHEET_URL || process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL;
 
     if (!sheetUrl) {
-      return NextResponse.json({ error: "Google Sheet URL tidak disetting" }, { status: 500 });
+      return NextResponse.json({ success: true, message: "Sync Google Sheet dimatikan (URL tidak disetting)" }, { status: 200 });
     }
 
     // OPTIMISTIC LOCK: Tandai langsung sebagai tersinkron untuk menghindari race condition

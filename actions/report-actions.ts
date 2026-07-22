@@ -278,6 +278,82 @@ export async function getMonthlyMachineReport(
       }
     });
 
+    // --- FETCH MECHANIC DOWNTIME ---
+    // Mechanic dummy headers do not have production_details, so they were missed by the inner join above.
+    // We fetch them directly from downtime_records joined with production_headers.
+    const { data: dtData, error: dtError } = await supabase
+      .from("downtime_records")
+      .select(`
+        kategori,
+        detail,
+        durasi_detik,
+        header_id,
+        production_headers!inner (
+          id,
+          tgl,
+          panel_no,
+          groups ( nama_grup )
+        )
+      `)
+      .eq("production_headers.nomor_mc", machineId)
+      .eq("production_headers.panel_no", "Downtime Mekanik (Direct)")
+      .gte("production_headers.tgl", startDate)
+      .lte("production_headers.tgl", endDate);
+
+    if (!dtError && dtData) {
+      dtData.forEach((row: any) => {
+        const header = row.production_headers;
+        if (!header || !header.tgl) return;
+
+        const dateObj = new Date(header.tgl);
+        const day = dateObj.getDate();
+        const groupName = header.groups?.nama_grup || "A";
+
+        const reportDay = reportMap.get(day);
+        if (!reportDay) return;
+
+        if (!reportDay.teamData[groupName]) {
+          reportDay.teamData[groupName] = createEmptyTeamData();
+        }
+        const team = reportDay.teamData[groupName];
+
+        // Add Keterangan for Mechanic
+        if (row.kategori && row.kategori !== "Unknown") {
+          if (!team.keterangan_per_kategori) team.keterangan_per_kategori = {};
+          if (!team.keterangan_per_kategori[row.kategori]) team.keterangan_per_kategori[row.kategori] = [];
+          const d = (row.detail || "").trim();
+          if (d && !team.keterangan_per_kategori[row.kategori].includes(d)) {
+            team.keterangan_per_kategori[row.kategori].push(d);
+          }
+        }
+      });
+      
+      // Fetch the headers directly to get total_downtime_detik safely.
+      const { data: mechHeaders } = await supabase
+        .from("production_headers")
+        .select("id, tgl, total_downtime_detik, groups(nama_grup)")
+        .eq("nomor_mc", machineId)
+        .eq("panel_no", "Downtime Mekanik (Direct)")
+        .gte("tgl", startDate)
+        .lte("tgl", endDate);
+        
+      if (mechHeaders) {
+        mechHeaders.forEach((h: any) => {
+          if (!h.tgl) return;
+          const day = new Date(h.tgl).getDate();
+          const groupName = h.groups?.nama_grup || "A";
+          const reportDay = reportMap.get(day);
+          if (reportDay && reportDay.teamData[groupName]) {
+             if (!processedHeaders.has(h.id)) {
+               processedHeaders.add(h.id);
+               reportDay.teamData[groupName].downtime_detik += (h.total_downtime_detik || 0);
+             }
+          }
+        });
+      }
+    }
+    // --- END FETCH MECHANIC DOWNTIME ---
+
     const results = Array.from(reportMap.values());
     
     return { success: true, data: results, isMeterMachine };

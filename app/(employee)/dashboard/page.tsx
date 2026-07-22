@@ -13,6 +13,7 @@ import {
   Users,
   AlertTriangle,
   Layers,
+  Cpu,
   Search,
   ArrowRight,
   LogOut,
@@ -353,7 +354,7 @@ export default function DashboardPage() {
 
   // Chart Dimension State
   const [chartGroupBy, setChartGroupBy] = useState<
-    "HARI" | "DESIGN" | "PEGAWAI" | "GROUP"
+    "HARI" | "DESIGN" | "PEGAWAI" | "GROUP" | "MESIN"
   >("HARI");
 
   // Chart Type State
@@ -683,6 +684,15 @@ export default function DashboardPage() {
         new Set(filteredData.map((item) => item.group || "Tanpa Group")),
       );
       groups = g.sort();
+    } else if (chartGroupBy === "MESIN") {
+      const m = Array.from(
+        new Set(filteredData.map((item) => item.mesin_id || "Tanpa Mesin")),
+      );
+      groups = m.sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, "")) || 0;
+        const numB = parseInt(b.replace(/\D/g, "")) || 0;
+        return numA !== numB ? numA - numB : a.localeCompare(b);
+      });
     }
 
     return groups.map((groupName) => {
@@ -698,6 +708,10 @@ export default function DashboardPage() {
       } else if (chartGroupBy === "GROUP") {
         items = filteredData.filter(
           (item) => (item.group || "Tanpa Group") === groupName,
+        );
+      } else if (chartGroupBy === "MESIN") {
+        items = filteredData.filter(
+          (item) => (item.mesin_id || "Tanpa Mesin") === groupName,
         );
       }
 
@@ -1407,6 +1421,59 @@ export default function DashboardPage() {
 
             {/* Chart Control Toggles */}
             <div className="flex flex-wrap items-center gap-3">
+              {/* Chart View Toggles */}
+              <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200">
+                <button
+                  onClick={() => setChartGroupBy("HARI")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
+                    chartGroupBy === "HARI"
+                      ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <BarChart2 className="w-3 h-3" /> Tanggal
+                </button>
+                <button
+                  onClick={() => setChartGroupBy("DESIGN")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
+                    chartGroupBy === "DESIGN"
+                      ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Palette className="w-3 h-3" /> Design
+                </button>
+                <button
+                  onClick={() => setChartGroupBy("PEGAWAI")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
+                    chartGroupBy === "PEGAWAI"
+                      ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Users className="w-3 h-3" /> Pegawai
+                </button>
+                <button
+                  onClick={() => setChartGroupBy("GROUP")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
+                    chartGroupBy === "GROUP"
+                      ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Layers className="w-3 h-3" /> Group
+                </button>
+                <button
+                  onClick={() => setChartGroupBy("MESIN")}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
+                    chartGroupBy === "MESIN"
+                      ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Cpu className="w-3 h-3" /> Mesin
+                </button>
+              </div>
               {/* Chart Type Toggles */}
               <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200">
                 <button

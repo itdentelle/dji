@@ -754,3 +754,46 @@ export async function getAllDetailsForPcs(nomor_mc: string, design_id: string, p
     return { success: false, error: err.message };
   }
 }
+
+export async function getMechanicDowntimesForReport(tanggal?: string, nomor_mc?: string) {
+  try {
+    const supabase = await createClient();
+    
+    let query = supabase
+      .from("downtime_records")
+      .select(`
+        id,
+        kategori,
+        detail,
+        durasi_detik,
+        dikerjakan_oleh,
+        blok,
+        header_id,
+        production_headers!inner (
+          id,
+          tanggal_jam,
+          panel_no,
+          nomor_mc,
+          potongan_ke,
+          design_id,
+          tgl,
+          groups ( nama_grup )
+        )
+      `)
+      .eq("production_headers.panel_no", "Downtime Mekanik (Direct)");
+
+    if (nomor_mc) {
+      query = query.eq("production_headers.nomor_mc", nomor_mc);
+    }
+    if (tanggal) {
+      query = query.eq("production_headers.tgl", tanggal);
+    }
+    
+    const { data, error } = await query;
+    if (error) return { success: false, error: error.message };
+    
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}

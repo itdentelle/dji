@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { 
   getMendingReportOptions, 
   getMendingReportData,
-  getAllDetailsForPcs
+  getAllDetailsForPcs,
+  getMechanicDowntimesForReport
 } from "@/actions/mending-actions";
 import { 
   FileSpreadsheet, 
@@ -14,7 +15,8 @@ import {
   Download, 
   Filter, 
   Package,
-  ArrowLeft
+  ArrowLeft,
+  Wrench
 } from "lucide-react";
 import * as xlsx from "xlsx";
 import { PROBLEM_DETAILS } from "../../../qc/page";
@@ -69,6 +71,7 @@ export default function MendingProductionReportPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const [data, setData] = useState<any[]>([]);
+  const [mechanicDowntimes, setMechanicDowntimes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -514,10 +517,23 @@ export default function MendingProductionReportPage() {
     setSelectedPotonganKey(null);
     
     try {
-      const res = await getMendingReportData(
-        filters.nomor_mc || undefined, 
-        filters.potongan_ke || undefined
-      );
+      const [res, mechRes] = await Promise.all([
+        getMendingReportData(
+          filters.nomor_mc || undefined, 
+          filters.potongan_ke || undefined
+        ),
+        getMechanicDowntimesForReport(
+          filters.tanggal || undefined,
+          filters.nomor_mc || undefined
+        )
+      ]);
+
+      if (mechRes.success && mechRes.data) {
+        setMechanicDowntimes(mechRes.data);
+      } else {
+        setMechanicDowntimes([]);
+      }
+
       if (res.success && res.data) {
         const sortedData = [...res.data].sort((a, b) => {
           return Number(a.detail.pcs_index) - Number(b.detail.pcs_index);
@@ -1834,6 +1850,107 @@ export default function MendingProductionReportPage() {
                   );
                 })}
               </div>
+
+              {/* Mechanic Downtimes Section for this Machine and Potongan */}
+              {(() => {
+                const headerInfoTarget = selectedPcsData[0]?.header || {};
+                const mechForThisBatch = mechanicDowntimes.filter(
+                  (m) => String(m.production_headers?.nomor_mc) === String(headerInfoTarget.nomor_mc) &&
+                         (!m.production_headers?.potongan_ke || String(m.production_headers?.potongan_ke) === String(headerInfoTarget.potongan_ke))
+                );
+                
+                if (mechForThisBatch.length > 0) {
+                  const cleanPenanggungJawab = (raw: string) => {
+                    if (!raw) return "-";
+                    const match = raw.match(/^Perbaikan Khusus\s*\((.*)\)$/i);
+                    if (match && match[1]) return match[1].trim();
+                    return raw.replace(/^Perbaikan Khusus\s*/i, "").trim() || raw;
+                  };
+
+                  const formatDurationNice = (totalSec: number | string) => {
+                    const sec = typeof totalSec === "string" ? parseInt(totalSec) || 0 : totalSec || 0;
+                    if (sec <= 0) return "0 dtk";
+                    const hours = Math.floor(sec / 3600);
+                    const minutes = Math.floor((sec % 3600) / 60);
+                    const seconds = sec % 60;
+                    if (hours > 0) {
+                      if (minutes > 0) return `${hours} Jam ${minutes} Mnt`;
+                      return `${hours} Jam`;
+                    }
+                    if (minutes > 0) {
+                      if (seconds > 0) return `${minutes} Mnt ${seconds} Dtk`;
+                      return `${minutes} Mnt`;
+                    }
+                    return `${seconds} Dtk`;
+                  };
+
+                  return (
+                    <div className="mt-8 bg-purple-50/50 border border-purple-200 rounded-2xl overflow-hidden">
+                      <div className="bg-purple-100/50 px-6 py-4 border-b border-purple-200 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-purple-600 text-white w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm">
+                            <Wrench className="w-4 h-4 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-purple-900">
+                              Laporan Downtime Khusus (Tanpa Produksi)
+                            </h3>
+                            <p className="text-xs font-medium text-purple-600/80">
+                              Data downtime (Mesin berhenti total)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-0 overflow-x-auto">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-purple-50 text-purple-900/70 text-xs uppercase tracking-wider font-bold">
+                            <tr>
+                              <th className="px-6 py-4">Waktu Laporan</th>
+                              <th className="px-6 py-4">Penanggung Jawab</th>
+                              <th className="px-6 py-4">Shift</th>
+                              <th className="px-6 py-4">Durasi</th>
+                              <th className="px-6 py-4">Kategori</th>
+                              <th className="px-6 py-4">Detail Masalah</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-purple-100">
+                            {mechForThisBatch.map((mech, idx) => {
+                              const dt = new Date(mech.production_headers?.tanggal_jam);
+                              const timeStr = isNaN(dt.getTime()) ? "-" : dt.toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
+                              return (
+                                <tr key={mech.id || idx} className="hover:bg-purple-50/30 transition-colors">
+                                  <td className="px-6 py-4 font-semibold text-purple-900">{timeStr}</td>
+                                  <td className="px-6 py-4 text-purple-800 font-medium">{cleanPenanggungJawab(mech.dikerjakan_oleh)}</td>
+                                   <td className="px-6 py-4 text-purple-800">
+                                     {(() => {
+                                       if (mech.production_headers?.groups?.nama_grup) return mech.production_headers.groups.nama_grup;
+                                       try {
+                                         const evs = typeof mech.production_headers?.downtime_events === "string" ? JSON.parse(mech.production_headers.downtime_events) : mech.production_headers?.downtime_events;
+                                         if (evs && evs[0]?.shift) return evs[0].shift;
+                                       } catch(e){}
+                                       return "-";
+                                     })()}
+                                   </td>
+                                  <td className="px-6 py-4 font-bold text-purple-900">{formatDurationNice(mech.durasi_detik || 0)}</td>
+                                  <td className="px-6 py-4">
+                                    <span className="bg-white border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                                      {mech.kategori || "-"}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-purple-800">{mech.detail || "-"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
             </div>
           </div>
         </div>

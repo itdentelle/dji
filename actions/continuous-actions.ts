@@ -292,6 +292,8 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
     const downtimeRecordsData: any[] = [];
     if (validated.downtimeEvents && validated.downtimeEvents.length > 0) {
       validated.downtimeEvents.forEach((dt: any) => {
+        if (dt.isSubmitted) return; // Abaikan karena sudah dikirim langsung via auto-submit mekanik
+        
         if (dt.problems && Array.isArray(dt.problems)) {
           dt.problems.forEach((p: any) => {
             downtimeRecordsData.push({
@@ -299,7 +301,8 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
               kategori: p.kategori || dt.kategori,
               detail: p.details ? (Array.isArray(p.details) ? p.details.join(", ") : p.details) : dt.detail,
               durasi_detik: dt.durasiDetik || 0,
-              blok: p.blok || dt.blok || null
+              blok: p.blok || dt.blok || null,
+              dikerjakan_oleh: dt.dikerjakanOleh || null
             });
           });
         } else if (dt.kategori) {
@@ -308,7 +311,8 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
             kategori: dt.kategori,
             detail: dt.detail,
             durasi_detik: dt.durasiDetik || 0,
-            blok: dt.blok || null
+            blok: dt.blok || null,
+            dikerjakan_oleh: dt.dikerjakanOleh || null
           });
         }
       });
@@ -321,7 +325,7 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
     const idxWithProblem = pcsDataToProcess.findIndex((pcsItem, idx) => {
       const pcsKey = pcsItem.pcsIndex ? pcsItem.pcsIndex.toString() : (idx + 1).toString();
       const matchedEvents = validated.downtimeEvents 
-        ? validated.downtimeEvents.filter(e => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes(pcsKey))
+        ? validated.downtimeEvents.filter(e => (!e.dikerjakanOleh || !e.dikerjakanOleh.startsWith("Mekanik")) && (!e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes(pcsKey)))
         : [];
       return matchedEvents.length > 0 || pcsDataToProcess[idx].isBs;
     });
@@ -333,10 +337,10 @@ export async function submitContinuousReport(inputData: ContinuousFormInput) {
     const detailData = pcsDataToProcess.map((pcsItem, idx) => {
       const detailId = generateExcelStyleId() + "-" + idx;
       
-      // Filter event khusus untuk PCS ini berdasarkan pcsIndex aktual (bukan posisi array)
+      // Filter event khusus untuk PCS ini berdasarkan pcsIndex aktual (bukan posisi array), DAN abaikan downtime Mekanik agar tidak masuk ke cacat Panel
       const actualPcsKey = pcsItem.pcsIndex ? pcsItem.pcsIndex.toString() : (idx + 1).toString();
       const matchedEvents = validated.downtimeEvents 
-        ? validated.downtimeEvents.filter(e => !e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes(actualPcsKey))
+        ? validated.downtimeEvents.filter(e => (!e.dikerjakanOleh || !e.dikerjakanOleh.startsWith("Mekanik")) && (!e.pcsKe || e.pcsKe === "Semua" || e.pcsKe.split(",").map(x => x.trim()).includes(actualPcsKey)))
         : [];
 
       let kategoriStr = null;

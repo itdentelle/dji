@@ -186,7 +186,7 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
       return {
         mesin_id,
         status,
-        nama_operator: row.created_by_name || row.pic || (row.operators as any)?.nama_operator || "-",
+        nama_operator: (row.operators as any)?.nama_operator || row.pic || row.created_by_name || "-",
         design: row.design_id || "-",
         last_input_date: row.tgl,
         last_input_time: lastTime

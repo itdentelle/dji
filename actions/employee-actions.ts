@@ -126,6 +126,8 @@ export async function createProductionReport(
     const downtimeRecordsData: any[] = [];
     if (validated.downtimeEvents && validated.downtimeEvents.length > 0) {
       validated.downtimeEvents.forEach((dt: any) => {
+        if (dt.isSubmitted) return; // Abaikan karena sudah dikirim langsung via auto-submit mekanik
+        
         if (dt.problems && Array.isArray(dt.problems)) {
           dt.problems.forEach((p: any) => {
             downtimeRecordsData.push({
@@ -133,7 +135,8 @@ export async function createProductionReport(
               kategori: p.kategori || dt.kategori,
               detail: p.details ? (Array.isArray(p.details) ? p.details.join(", ") : p.details) : dt.detail,
               durasi_detik: dt.durasiDetik || 0,
-              blok: p.blok || dt.blok || null
+              blok: p.blok || dt.blok || null,
+              dikerjakan_oleh: dt.dikerjakanOleh || null
             });
           });
         } else if (dt.kategori) {
@@ -142,7 +145,8 @@ export async function createProductionReport(
             kategori: dt.kategori,
             detail: dt.detail,
             durasi_detik: dt.durasiDetik || 0,
-            blok: dt.blok || null
+            blok: dt.blok || null,
+            dikerjakan_oleh: dt.dikerjakanOleh || null
           });
         }
       });
@@ -159,17 +163,18 @@ export async function createProductionReport(
       const pcsIndexStr = pcsItem.pcsIndex || (idx + 1).toString();
       const pcsIndexNum = parseInt(pcsIndexStr);
 
-      // Filter event khusus untuk PCS ini atau "Semua"
+      // Filter event khusus untuk PCS ini atau "Semua", DAN abaikan downtime Mekanik agar tidak masuk ke cacat Panel
       const matchedEvents = validated.downtimeEvents
         ? validated.downtimeEvents.filter(
-            (e) =>
-              !e.pcsKe ||
+          (e) =>
+            (!e.dikerjakanOleh || !e.dikerjakanOleh.startsWith("Mekanik")) &&
+            (!e.pcsKe ||
               e.pcsKe === "Semua" ||
               e.pcsKe
                 .split(",")
                 .map((x) => x.trim())
-                .includes(pcsIndexStr),
-          )
+                .includes(pcsIndexStr)),
+        )
         : [];
 
       let kategoriStr = null;
@@ -199,20 +204,20 @@ export async function createProductionReport(
                   });
                 });
               } else if (p.kategori) {
-                  productionDefectsData.push({
-                    production_detail_id: detailId,
-                    kategori: p.kategori,
-                    detail: null,
-                    meter: null,
-                    blok: p.blok || null
-                  });
+                productionDefectsData.push({
+                  production_detail_id: detailId,
+                  kategori: p.kategori,
+                  detail: null,
+                  meter: null,
+                  blok: p.blok || null
+                });
               }
             });
           } else if (e.kategori) {
             allCats.add(e.kategori);
             if (e.detail) allDetails.add(e.detail);
             if (e.blok) allBloks.add(`Blok ${e.blok}`);
-            
+
             productionDefectsData.push({
               production_detail_id: detailId,
               kategori: e.kategori,
@@ -314,7 +319,7 @@ export async function createProductionReport(
           if (previousHeadersError) {
             throw new Error(
               "Gagal mencari data panel untuk potong kain: " +
-                previousHeadersError.message,
+              previousHeadersError.message,
             );
           }
 
@@ -673,7 +678,7 @@ export async function getLastPanelNoByPotongan(
           }
         }
       }
-      
+
       if (maxPanelNo > 0) {
         return { success: true, nextPanelNo: maxPanelNo + 1 };
       }
@@ -791,11 +796,14 @@ export async function searchEmployeeHistory(filters: {
       return { success: false, error: error.message };
     }
 
-    // Grouping by Batch (nomor_mc + design_id + potongan_ke + tgl)
+    // Grouping by Batch (nomor_mc + potongan_ke)
     const batchesMap = new Map<string, any>();
 
     (data || []).forEach((row: any) => {
-      const key = `${row.nomor_mc}_${row.design_id}_${row.potongan_ke}_${row.tgl}`;
+      const mcNorm = (row.nomor_mc || "").trim().toUpperCase();
+      const potNorm = row.potongan_ke || "";
+      const key = `${mcNorm}_${potNorm}`;
+
       if (!batchesMap.has(key)) {
         batchesMap.set(key, {
           batch_id: key,
@@ -827,6 +835,27 @@ export async function searchEmployeeHistory(filters: {
       }
 
       const batch = batchesMap.get(key);
+      
+      const updateIfMissing = (field: string) => {
+        if (row[field] && (!batch[field] || batch[field] === "-")) {
+          batch[field] = row[field];
+        }
+      };
+
+      updateIfMissing("design_id");
+      updateIfMissing("no_order_barang");
+      updateIfMissing("no_customer");
+      updateIfMissing("tanggal_potong");
+      updateIfMissing("pick");
+      updateIfMissing("course");
+      updateIfMissing("rpm");
+      updateIfMissing("status_matching");
+      updateIfMissing("jenis_benang_dasar");
+      updateIfMissing("liner");
+      updateIfMissing("heavy");
+      updateIfMissing("shadow");
+      updateIfMissing("pinggiran");
+
       let currentMaxPanel = 0;
       if (row.panel_no && !isNaN(parseInt(row.panel_no))) {
         currentMaxPanel = Math.max(currentMaxPanel, parseInt(row.panel_no));
@@ -850,19 +879,16 @@ export async function searchEmployeeHistory(filters: {
           batch.total_meter = Math.max(batch.total_meter, meterAkhir);
         }
       }
-      
+
       const opName = row.created_by_name || row.pic || (row.operators ? row.operators.nama_operator : null);
       if (opName) batch.operators.add(opName);
 
-      // update latest input time
-      if (row.tanggal_jam > batch.waktu_input_terakhir) {
+      // update latest input time and date
+      if (row.tanggal_jam >= batch.waktu_input_terakhir) {
         batch.waktu_input_terakhir = row.tanggal_jam;
+        if (row.tgl) batch.tgl = row.tgl;
       }
-      
-      // Since we just need the batch info for the main table, we don't strictly need to return all panels.
-      // But keeping them can be useful if we want to show a preview or just pass them along.
-      // However, fetching all panels for the modal is better done via another call or we can pass it here.
-      // We will pass it here to save an API call.
+
       batch.panels.push(row);
     });
 
@@ -895,7 +921,7 @@ export async function searchEmployeeHistory(filters: {
     let perPage = filters.perPage || 20;
     const start = (page - 1) * perPage;
     const end = start + perPage;
-    
+
     const pagedBatches = batches.slice(start, end);
 
     return {
@@ -1029,7 +1055,7 @@ export async function updateProductionReport(
       .update({
         operator_id:
           data.operatorId &&
-          !isNaN(parseInt(data.operatorId))
+            !isNaN(parseInt(data.operatorId))
             ? parseInt(data.operatorId)
             : null,
         group_id: data.groupId,
@@ -1122,14 +1148,14 @@ export async function updateProductionReport(
         // Filter event khusus untuk PCS ini atau "Semua"
         const matchedEvents = data.downtimeEvents
           ? data.downtimeEvents.filter(
-              (e: any) =>
-                !e.pcsKe ||
-                e.pcsKe === "Semua" ||
-                e.pcsKe
-                  .split(",")
-                  .map((x: string) => x.trim())
-                  .includes((idx + 1).toString()),
-            )
+            (e: any) =>
+              !e.pcsKe ||
+              e.pcsKe === "Semua" ||
+              e.pcsKe
+                .split(",")
+                .map((x: string) => x.trim())
+                .includes((idx + 1).toString()),
+          )
           : [];
 
         let kategoriStr = null;
@@ -1164,7 +1190,7 @@ export async function updateProductionReport(
                       detailText += ` (Titik: ${meterForThisPcs}m)`;
                     }
                     allDetails.add(detailText);
-                    
+
                     productionDefectsData.push({
                       production_detail_id: oldDetail.id || detailId,
                       kategori: p.kategori,
@@ -1174,20 +1200,20 @@ export async function updateProductionReport(
                     });
                   });
                 } else if (p.kategori) {
-                    productionDefectsData.push({
-                      production_detail_id: oldDetail.id || detailId,
-                      kategori: p.kategori,
-                      detail: null,
-                      meter: meterForThisPcs || null,
-                      blok: p.blok || null
-                    });
+                  productionDefectsData.push({
+                    production_detail_id: oldDetail.id || detailId,
+                    kategori: p.kategori,
+                    detail: null,
+                    meter: meterForThisPcs || null,
+                    blok: p.blok || null
+                  });
                 }
               });
             } else if (e.kategori) {
               allCats.add(e.kategori);
               if (e.detail) allDetails.add(e.detail);
               if (e.blok) allBloks.add(`Blok ${e.blok}`);
-              
+
               productionDefectsData.push({
                 production_detail_id: oldDetail.id || detailId,
                 kategori: e.kategori,
@@ -1221,9 +1247,9 @@ export async function updateProductionReport(
           } else if (data.jenisLaporan === "Selesai Istirahat" || data.jenisLaporan?.startsWith("Istirahat")) {
             keteranganStr = keteranganStr ? keteranganStr + " [LAPORAN ISTIRAHAT]" : "[LAPORAN ISTIRAHAT]";
           }
-          
+
           if (keteranganStr === null && fallbackKeterangan === null) {
-              keteranganStr = ""; // Force clear if there's no defect and no fallback (like START/FINISH)
+            keteranganStr = ""; // Force clear if there's no defect and no fallback (like START/FINISH)
           }
         } else {
           // Pertahankan [LAPORAN ISTIRAHAT] atau [SEBELUM ISTIRAHAT] jika sebelumnya ada

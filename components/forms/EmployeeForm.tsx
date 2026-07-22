@@ -11,6 +11,8 @@ import {
   getLastPanelNoByPotongan,
   updateProductionReport,
 } from "@/actions/employee-actions";
+import { getProductionPlan } from "@/actions/plan-actions";
+import { getMachineConfigs } from "@/actions/machine-config-actions";
 import { createClient } from "@/lib/supabase/client";
 import {
   AlertCircle,
@@ -724,6 +726,52 @@ export default function EmployeeForm({
         if (res.success && res.nextPanelNo) {
           setValue("panelNo", res.nextPanelNo.toString());
         }
+
+        // Fetch Production Plan (Admin)
+        let pcsTargetSet = false;
+        const planRes = await getProductionPlan(watchNomorMc, parseInt(watchPotonganKe));
+        if (planRes.success && planRes.data) {
+          const plan = planRes.data;
+          if (plan.design_id) setValue("designId", plan.design_id);
+          if (plan.pick) setValue("pick", plan.pick);
+          if (plan.course) setValue("course", plan.course);
+          if (plan.no_order_barang) setValue("noOrderBarang", plan.no_order_barang);
+          if (plan.no_customer) setValue("noCustomer", plan.no_customer);
+          if (plan.jenis_benang_dasar) setValue("jenisBenangDasar", plan.jenis_benang_dasar);
+          if (plan.liner) setValue("liner", plan.liner);
+          if (plan.heavy) setValue("heavy", plan.heavy);
+          if (plan.shadow) setValue("shadow", plan.shadow);
+          if (plan.pinggiran) setValue("pinggiran", plan.pinggiran);
+          if (plan.rpm) setValue("rpm", plan.rpm);
+          if (plan.pcs_count && typeof plan.pcs_count === "number") {
+            handleChangePcsCount(plan.pcs_count);
+            pcsTargetSet = true;
+          }
+        }
+
+        if (!pcsTargetSet && watchNomorMc) {
+          let localPcs: number | null = null;
+          try {
+            const saved = localStorage.getItem("dji_machine_configs");
+            if (saved) {
+              const map = JSON.parse(saved);
+              const mcUpper = watchNomorMc.toUpperCase();
+              if (map[mcUpper] !== undefined) localPcs = parseInt(map[mcUpper]);
+            }
+          } catch (e) {}
+
+          if (localPcs) {
+            handleChangePcsCount(localPcs);
+          } else {
+            const cfgRes = await getMachineConfigs();
+            if (cfgRes.success && cfgRes.data) {
+              const match = cfgRes.data.find(c => c.nomor_mc.toUpperCase() === watchNomorMc.toUpperCase());
+              if (match && match.default_pcs) {
+                handleChangePcsCount(match.default_pcs);
+              }
+            }
+          }
+        }
       } catch (e) { }
     }, 600);
     return () => clearTimeout(timeoutId);
@@ -742,8 +790,12 @@ export default function EmployeeForm({
       }
       if (typeof obj === "object") {
         for (const key of Object.keys(obj)) {
+          if (key === "ref" || key === "type") continue;
           const msg = extractMessage(obj[key]);
-          if (msg) return msg;
+          if (msg) {
+            // Jika pesan tidak mengandung bracket, tambahkan nama field agar jelas
+            return msg.startsWith("[") ? msg : `[${key}] ${msg}`;
+          }
         }
       }
       return null;
@@ -756,9 +808,12 @@ export default function EmployeeForm({
   const onSubmit = async (data: ProductionFormInput) => {
     setIsSubmitting(true);
     setErrorMsg(null);
-
-
-
+    const uppercaseFields: (keyof ProductionFormInput)[] = ["designId", "pick", "course", "noOrderBarang", "noCustomer", "jenisBenangDasar", "liner", "heavy", "shadow", "pinggiran", "rpm"];
+    uppercaseFields.forEach(field => {
+      if (typeof data[field] === "string") {
+        (data as any)[field] = (data[field] as string).toUpperCase();
+      }
+    });
     // Gunakan idempotency key dari ref yang stabil
     data.idempotencyKey = idempotencyKeyRef.current;
 
@@ -847,7 +902,7 @@ export default function EmployeeForm({
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("employee", submitData);
         if (!isEdit) {
-          localStorage.removeItem("dji_form_draft_panel"); localStorage.removeItem("dji_backup_operator_name");
+          localStorage.removeItem("dji_form_draft_panel");
         }
         setSuccessData({
           ...data,
@@ -867,7 +922,7 @@ export default function EmployeeForm({
 
       if (result.success) {
         if (!isEdit) {
-          localStorage.removeItem("dji_form_draft_panel"); localStorage.removeItem("dji_backup_operator_name");
+          localStorage.removeItem("dji_form_draft_panel");
         }
         setSuccessData({
           ...data,
@@ -886,7 +941,7 @@ export default function EmployeeForm({
         const { addPendingPayload } = await import("@/lib/offline-store");
         await addPendingPayload("employee", submitData);
         if (!isEdit) {
-          localStorage.removeItem("dji_form_draft_panel"); localStorage.removeItem("dji_backup_operator_name");
+          localStorage.removeItem("dji_form_draft_panel");
         }
         setSuccessData({
           ...data,
@@ -1195,6 +1250,8 @@ export default function EmployeeForm({
                     setValue={setValue}
                     watch={watch}
                     showBlockInput={true}
+                    operators={activeOperators}
+                    currentOperatorName={getOperatorName(watch("operatorId"))}
                   />
                 </div>
               </div>

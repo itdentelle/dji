@@ -180,6 +180,12 @@ export default function Sidebar() {
           roles: ["admin", "manager"],
         },
         {
+          name: "Jadwal Produksi",
+          href: "/production-plans",
+          icon: FileSpreadsheet,
+          roles: ["admin", "manager"],
+        },
+        {
           name: "Sync Status",
           href: "/sync",
           icon: RefreshCw,

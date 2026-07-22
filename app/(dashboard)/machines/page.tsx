@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { getMachineStatuses, MachineStatus } from "@/actions/dashboard-actions";
-import { Activity, Power, Clock, RefreshCw, HelpCircle } from "lucide-react";
+import { getMachineConfigs, upsertMachineConfig, MachineConfig } from "@/actions/machine-config-actions";
+import { Activity, Power, Clock, RefreshCw, HelpCircle, Settings2, Save, X, Lock, User } from "lucide-react";
 import ProductTour, { ProductTourStep } from "@/components/ProductTour";
 
 const MACHINE_TOUR_STEPS: ProductTourStep[] = [
@@ -33,6 +34,10 @@ export default function MachineMonitoringPage() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [isTourOpen, setIsTourOpen] = useState(false);
 
+  const [configs, setConfigs] = useState<MachineConfig[]>([]);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+
   const fetchStatuses = async () => {
     try {
       setLoading(true);
@@ -50,6 +55,27 @@ export default function MachineMonitoringPage() {
       setLoading(false);
     }
   };
+
+  const fetchConfigs = async () => {
+    let localData: Record<string, number> = {};
+    try {
+      const saved = localStorage.getItem("dji_machine_configs");
+      if (saved) localData = JSON.parse(saved);
+    } catch(e){}
+
+    const res = await getMachineConfigs();
+    if (res.success && res.data) {
+      const merged = res.data.map((c) => ({
+        ...c,
+        default_pcs: localData[c.nomor_mc] !== undefined ? localData[c.nomor_mc] : c.default_pcs,
+      }));
+      setConfigs(merged);
+    }
+  };
+
+  useEffect(() => {
+    fetchConfigs();
+  }, []);
 
   useEffect(() => {
     fetchStatuses();
@@ -86,32 +112,40 @@ export default function MachineMonitoringPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsConfigModalOpen(true)}
+            className="h-10 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300"
+          >
+            <Settings2 className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>Pengaturan Default Mesin</span>
+          </button>
           <button
             type="button"
             onClick={() => setIsTourOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-4 py-2 text-sm font-bold text-[#0070bc] shadow-sm transition-all hover:bg-sky-100"
+            className="h-10 inline-flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-4 text-xs font-bold text-[#0070bc] shadow-sm transition-all hover:bg-sky-100"
           >
-            <HelpCircle className="w-4 h-4" />
-            Tutorial
+            <HelpCircle className="w-4 h-4 shrink-0" />
+            <span>Tutorial</span>
           </button>
-          <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
-            <div className="text-sm text-slate-500">
-              Terakhir update:{" "}
-              <span className="font-semibold text-slate-700">
+          <div className="h-10 inline-flex items-center gap-3 bg-white px-3.5 rounded-xl border border-slate-200 shadow-sm text-xs">
+            <span className="text-slate-500 font-medium">
+              Update:{" "}
+              <strong className="text-slate-800 font-extrabold">
                 {lastRefresh
                   ? lastRefresh.toLocaleTimeString("id-ID")
                   : "Memuat..."}
-              </span>
-            </div>
+              </strong>
+            </span>
             <button
               onClick={fetchStatuses}
               disabled={loading}
-              className={`p-2 bg-slate-100 hover:bg-slate-200 rounded-md text-slate-600 transition-colors ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+              className={`p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 transition-colors ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
               title="Refresh Data"
             >
               <RefreshCw
-                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+                className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
               />
             </button>
           </div>
@@ -271,24 +305,25 @@ export default function MachineMonitoringPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
-                    <span className="text-slate-500 flex items-center gap-1.5">
+                  <div className="flex justify-between items-center text-xs border-b border-slate-100 pb-2.5">
+                    <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
                       Operator
                     </span>
                     <span
-                      className={`font-semibold ${machine.status === "Tidak Aktif" ? "text-slate-500" : "text-slate-800"}`}
+                      className={`font-extrabold uppercase text-xs ${machine.status === "Tidak Aktif" ? "text-slate-400" : "text-slate-800"}`}
                     >
                       {machine.nama_operator}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-sm pb-1 border-b border-slate-100">
-                    <span className="text-slate-500">Desain Aktif</span>
+                  <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Desain Aktif</span>
                     <span
-                      className={`font-semibold px-2 py-0.5 rounded ${
+                      className={`font-bold text-xs px-2.5 py-1 rounded-md tracking-tight ${
                         machine.status === "Beroperasi"
-                          ? "bg-blue-50 text-blue-700"
+                          ? "bg-blue-50 text-blue-700 border border-blue-100"
                           : machine.status === "Idle"
-                            ? "bg-amber-50 text-amber-700"
+                            ? "bg-amber-50 text-amber-700 border border-amber-100"
                             : "bg-slate-100 text-slate-500"
                       }`}
                     >
@@ -309,6 +344,91 @@ export default function MachineMonitoringPage() {
           ))}
         </div>
       )}
+      {/* Modal Pengaturan Default Mesin */}
+      {isConfigModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in">
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                  <Settings2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">Pengaturan Default Parameter Mesin</h2>
+                  <p className="text-xs text-slate-500 font-medium">Tentukan target PCS default untuk setiap mesin rajut.</p>
+                </div>
+              </div>
+              <button onClick={() => setIsConfigModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <p className="text-xs text-slate-600 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                💡 <strong>Catatan:</strong> Nilai ini akan otomatis terisi saat Admin menambah Jadwal Produksi baru atau saat Operator menginput laporan jika belum ada jadwal khusus untuk potongan tersebut.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {configs.map((cfg, idx) => (
+                  <div key={cfg.nomor_mc} className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-slate-800 text-white font-bold px-2.5 py-1 rounded text-xs">
+                        {cfg.nomor_mc}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500">Default PCS:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={cfg.default_pcs}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          const newConfigs = [...configs];
+                          newConfigs[idx].default_pcs = val;
+                          setConfigs(newConfigs);
+                        }}
+                        className="w-16 h-9 px-2 text-center rounded-lg border border-slate-300 font-black text-blue-700 bg-white focus:border-blue-500 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setSavingConfig(true);
+                          try {
+                            const saved = localStorage.getItem("dji_machine_configs");
+                            const map = saved ? JSON.parse(saved) : {};
+                            map[cfg.nomor_mc] = cfg.default_pcs;
+                            localStorage.setItem("dji_machine_configs", JSON.stringify(map));
+                          } catch (e) {}
+                          await upsertMachineConfig(cfg.nomor_mc, cfg.default_pcs);
+                          setSavingConfig(false);
+                          alert(`Default PCS untuk ${cfg.nomor_mc} berhasil disimpan menjadi ${cfg.default_pcs} PCS!`);
+                        }}
+                        className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all"
+                        title="Simpan Mesin Ini"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsConfigModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-900 shadow-sm"
+              >
+                Selesai
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ProductTour
         steps={MACHINE_TOUR_STEPS}
         isOpen={isTourOpen}

@@ -66,8 +66,8 @@ export const productionFormSchemaBase = z.object({
 
   fotoBefore: z.string().optional().nullable(),
   fotoAfter: z.string().optional().nullable(),
-  jenisLaporan: z.string().optional(),
-  operatorBackup: z.string().optional(),
+  jenisLaporan: z.string().optional().nullable(),
+  operatorBackup: z.string().optional().nullable(),
 
   // Waktu Berhenti (Global)
   totalDowntime: z.string().optional().nullable(),
@@ -79,6 +79,7 @@ export const productionFormSchemaBase = z.object({
       detail: z.string().optional(),
       blok: z.string().optional(),
       pcsKe: z.string().optional(),
+      dikerjakanOleh: z.string().optional(),
       problems: z.array(
         z.object({
           kategori: z.string(),
@@ -125,8 +126,8 @@ export const continuousFormSchema = productionFormSchemaBase.omit({ panelNo: tru
   meterAkhir: z.string().optional().nullable(),
   hasilProduksiMeter: z.string().optional().nullable(),
   targetMeter: z.string().optional().nullable(),
-  jenisLaporan: z.string().optional(),
-  backupOperator: z.string().optional(),
+  jenisLaporan: z.string().optional().nullable(),
+  backupOperator: z.string().optional().nullable(),
   pcsData: z.array(
     z.object({
       pcsIndex: z.string(),
