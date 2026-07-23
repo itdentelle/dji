@@ -124,6 +124,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [supabase, router]);
 
+  useEffect(() => {
+    if (!isLoading) {
+      const isPublic = pathname === "/login" || pathname === "/change-password" || pathname.includes("/print");
+      if (!isLoggedIn && !isPublic) {
+        router.push("/login");
+      }
+    }
+  }, [isLoading, isLoggedIn, pathname, router]);
+
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     
