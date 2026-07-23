@@ -40,8 +40,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# scratch directory
+# scratch & temp files
 /scratch/
+/supabase/.temp/
+db_out.json
+*.log
+*.tmp
+*.temp
 
 # Excel files
 *.xlsx
