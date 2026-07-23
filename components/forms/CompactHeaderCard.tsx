@@ -49,12 +49,35 @@ function InfoField({ label, value, highlight }: { label: string; value: string; 
   );
 }
 
+function formatFullDateTime(dateVal?: string): string {
+  if (!dateVal || dateVal === "-" || dateVal === "—") return "—";
+
+  const raw = dateVal.trim();
+
+  if (raw.includes("T")) {
+    const [dPart, tPart] = raw.split("T");
+    const cleanTime = tPart.split(".")[0];
+    const formattedTime = cleanTime.length === 5 ? `${cleanTime}:00` : cleanTime.substring(0, 8);
+    return `${dPart} ${formattedTime}`;
+  }
+
+  if (raw.includes(" ")) {
+    const [dPart, tPart] = raw.split(" ");
+    if (tPart && tPart.includes(":")) {
+      const formattedTime = tPart.length === 5 ? `${tPart}:00` : tPart.substring(0, 8);
+      return `${dPart} ${formattedTime}`;
+    }
+  }
+
+  return raw;
+}
+
 export default function CompactHeaderCard(props: CompactHeaderCardProps) {
   const potKe = props.potonganKe || (props.panelPotongan ? props.panelPotongan.split(" / ")[1] : "-");
-  const rNo = props.rollNo || "-";
   const crs = props.course || (props.courseRpm ? props.courseRpm.split(" / ")[0] : "-");
   const rpm = props.rpm || (props.courseRpm ? props.courseRpm.split(" / ")[1] : "-");
-  const tglProd = props.tanggalProduksi || "-";
+  const tglProd = formatFullDateTime(props.tanggalProduksi);
+  const tglPotong = formatFullDateTime(props.tanggalPotong);
 
   return (
     <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200 mb-6">
@@ -120,11 +143,10 @@ export default function CompactHeaderCard(props: CompactHeaderCardProps) {
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
               <InfoField label="Tanggal Produksi" value={tglProd} />
-              <InfoField label="Tanggal Potong" value={props.tanggalPotong} />
+              <InfoField label="Tanggal Potong" value={tglPotong} />
               <InfoField label="Pick" value={props.pick} />
               <InfoField label="Course" value={crs} />
               <InfoField label="RPM" value={rpm} />
-              <InfoField label="Roll No" value={rNo} />
               <InfoField label="No. Order Barang" value={props.noOrder} />
               <InfoField label="No. Customer" value={props.noCustomer} />
             </div>

@@ -137,7 +137,7 @@ function HistoryDetailContent() {
             courseRpm={`${detailData.course || "-"} / ${detailData.rpm || "-"}`}
             noCustomer={detailData.no_customer || "-"}
             noOrder={detailData.no_order_barang || "-"}
-            tanggalPotong={detailData.tanggal_potong || "-"}
+            tanggalPotong={detailData.tanggal_potong ? (detailData.tanggal_potong.includes(":") ? detailData.tanggal_potong : ((detailData.tanggal_jam || detailData.panels?.[0]?.tanggal_jam) ? `${detailData.tanggal_potong} ${(detailData.tanggal_jam || detailData.panels?.[0]?.tanggal_jam).includes("T") ? (detailData.tanggal_jam || detailData.panels?.[0]?.tanggal_jam).split("T")[1].split(".")[0] : ((detailData.tanggal_jam || detailData.panels?.[0]?.tanggal_jam).split(" ")[1] || "00:00:00")}` : detailData.tanggal_potong)) : "-"}
             statusMatching={detailData.status_matching || "-"}
             pick={detailData.pick || "-"}
             benangDasar={detailData.jenis_benang_dasar || "-"}
@@ -145,7 +145,7 @@ function HistoryDetailContent() {
             heavy={detailData.heavy || "-"}
             shadow={detailData.shadow || "-"}
             pinggiran={detailData.pinggiran || "-"}
-            tanggalProduksi={detailData.tgl}
+            tanggalProduksi={detailData.tanggal_jam || detailData.panels?.[0]?.tanggal_jam || detailData.created_at || detailData.tgl}
             course={detailData.course}
             rpm={detailData.rpm}
             potonganKe={detailData.potongan_ke}
@@ -355,166 +355,179 @@ function HistoryDetailContent() {
         {/* Render Mechanic / Special Downtimes explicitly in Table format */}
         {(() => {
            const mechanicPanels = detailData.panels?.filter((p: any) => {
-             if (p.panel_no === "Downtime Mekanik (Direct)" || p.panel_no === "BERHENTI") return true;
-             if (!p.pcs || parseInt(p.pcs) === 0) return true;
-             let dtEvents: any[] = [];
-             try { dtEvents = typeof p.downtime_events === 'string' ? JSON.parse(p.downtime_events) : (p.downtime_events || []); } catch(e){}
-             if (dtEvents && dtEvents.length > 0) return true;
-             if (p.downtime_records && p.downtime_records.length > 0) return true;
-             if (p.total_downtime_detik && p.total_downtime_detik > 0) return true;
+             return p.panel_no === "Downtime Mekanik (Direct)" || p.panel_no === "BERHENTI";
+           });
+
+           const generalPanels = detailData.panels?.filter((p: any) => {
+             if (p.panel_no === "Downtime Mekanik (Direct)" || p.panel_no === "BERHENTI") return false;
+             if (!p.pcs || parseInt(p.pcs) === 0) {
+               let dtEvents: any[] = [];
+               try { dtEvents = typeof p.downtime_events === 'string' ? JSON.parse(p.downtime_events) : (p.downtime_events || []); } catch(e){}
+               if (dtEvents && dtEvents.length > 0) return true;
+               if (p.downtime_records && p.downtime_records.length > 0) return true;
+               if (p.total_downtime_detik && p.total_downtime_detik > 0) return true;
+             }
              return false;
            });
 
-           if (!mechanicPanels || mechanicPanels.length === 0) return null;
-
            const cleanPenanggungJawab = (raw: string) => {
               if (!raw) return "-";
-              
-              // Handle "Perbaikan Khusus (Name)"
               const pkMatch = raw.match(/^Perbaikan Khusus\s*\((.*)\)$/i);
               if (pkMatch && pkMatch[1]) return pkMatch[1].trim();
-
-              // Handle "Operator (Name)"
               const opMatch = raw.match(/^Operator\s*\((.*)\)$/i);
               if (opMatch && opMatch[1]) return opMatch[1].trim();
+              return raw.replace(/^Perbaikan Khusus\s*/i, "").replace(/^Operator\s*/i, "").trim() || raw;
+           };
 
-              return raw
-                .replace(/^Perbaikan Khusus\s*/i, "")
-                .replace(/^Operator\s*/i, "")
-                .trim() || raw;
-            };
-           
-           const rows: any[] = [];
-           mechanicPanels.forEach((mp: any) => {
-             let dtEvents: any[] = [];
-             try { dtEvents = typeof mp.downtime_events === 'string' ? JSON.parse(mp.downtime_events) : (mp.downtime_events || []); } catch(e){}
-
-             if (dtEvents && dtEvents.length > 0) {
-               dtEvents.forEach((ev: any, idx: number) => {
-                 const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
-                 
-                 if (ev.problems && ev.problems.length > 0) {
-                   ev.problems.forEach((p: any, pIdx: number) => {
+           const renderSection = (sourcePanels: any[], title: string, subtitle: string, variant: "blue" | "amber") => {
+             if (!sourcePanels || sourcePanels.length === 0) return null;
+             const rows: any[] = [];
+             sourcePanels.forEach((mp: any) => {
+               let dtEvents: any[] = [];
+               try { dtEvents = typeof mp.downtime_events === 'string' ? JSON.parse(mp.downtime_events) : (mp.downtime_events || []); } catch(e){}
+               if (dtEvents && dtEvents.length > 0) {
+                 dtEvents.forEach((ev: any, idx: number) => {
+                   const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
+                   if (ev.problems && ev.problems.length > 0) {
+                     ev.problems.forEach((p: any, pIdx: number) => {
+                       rows.push({
+                         id: `${mp.id}-${idx}-${pIdx}`,
+                         timeStr,
+                         penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
+                         shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
+                         durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
+                         kategori: p.kategori || ev.kategori || "-",
+                         detailMasalah: (p.details && Array.isArray(p.details)) ? p.details.join(", ") : (p.details || ev.detail || "-"),
+                       });
+                     });
+                   } else {
                      rows.push({
-                       id: `${mp.id}-${idx}-${pIdx}`,
+                       id: `${mp.id}-${idx}`,
                        timeStr,
                        penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
                        shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
                        durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
-                       kategori: p.kategori || ev.kategori || "-",
-                       detailMasalah: (p.details && Array.isArray(p.details)) ? p.details.join(", ") : (p.details || ev.detail || "-"),
+                       kategori: ev.kategori || "-",
+                       detailMasalah: ev.detail || "-",
                      });
-                   });
-                 } else {
+                   }
+                 });
+               } else if (mp.downtime_records && mp.downtime_records.length > 0) {
+                 mp.downtime_records.forEach((dr: any, dIdx: number) => {
+                   const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
                    rows.push({
-                     id: `${mp.id}-${idx}`,
+                     id: `${mp.id}-dr-${dIdx}`,
                      timeStr,
-                     penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
-                     shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
-                     durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
-                     kategori: ev.kategori || "-",
-                     detailMasalah: ev.detail || "-",
+                     penanggungJawab: cleanPenanggungJawab(dr.dikerjakan_oleh || mp.pic || mp.operators?.nama_operator),
+                     shift: mp.grup || mp.groups?.nama_grup || "-",
+                     durasiDisplay: formatDurationNice(dr.durasi_detik || mp.total_downtime_detik || 0),
+                     kategori: dr.kategori || "-",
+                     detailMasalah: dr.detail || "-",
                    });
-                 }
-               });
-             } else if (mp.downtime_records && mp.downtime_records.length > 0) {
-               mp.downtime_records.forEach((dr: any, dIdx: number) => {
+                 });
+               } else if (mp.total_downtime_detik > 0) {
                  const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
                  rows.push({
-                   id: `${mp.id}-dr-${dIdx}`,
+                   id: `${mp.id}-fallback`,
                    timeStr,
-                   penanggungJawab: cleanPenanggungJawab(dr.dikerjakan_oleh || mp.pic || mp.operators?.nama_operator),
+                   penanggungJawab: cleanPenanggungJawab(mp.pic || mp.operators?.nama_operator),
                    shift: mp.grup || mp.groups?.nama_grup || "-",
-                   durasiDisplay: formatDurationNice(dr.durasi_detik || mp.total_downtime_detik || 0),
-                   kategori: dr.kategori || "-",
-                   detailMasalah: dr.detail || "-",
+                   durasiDisplay: formatDurationNice(mp.total_downtime_detik || 0),
+                   kategori: mp.kategori_masalah || "-",
+                   detailMasalah: mp.detail_masalah || "-",
                  });
-               });
-             } else if (mp.total_downtime_detik > 0) {
-               const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
-               rows.push({
-                 id: `${mp.id}-fallback`,
-                 timeStr,
-                 penanggungJawab: cleanPenanggungJawab(mp.pic || mp.operators?.nama_operator),
-                 shift: mp.grup || mp.groups?.nama_grup || "-",
-                 durasiDisplay: formatDurationNice(mp.total_downtime_detik || 0),
-                 kategori: mp.kategori_masalah || "-",
-                 detailMasalah: mp.detail_masalah || "-",
-               });
-             }
-           });
+               }
+             });
 
-           if (rows.length === 0) return null;
+             if (rows.length === 0) return null;
+
+             const bgHeader = variant === "blue" 
+                ? "linear-gradient(135deg, #0a1628 0%, #0b3068 60%, #0070bc 100%)"
+                : "linear-gradient(135deg, #451a03 0%, #9a3412 60%, #f59e0b 100%)";
+             const iconBg = variant === "blue" ? "bg-white/15 border-white/20" : "bg-white/15 border-white/20";
+             const titleColor = "text-white";
+             const subtitleColor = variant === "blue" ? "text-sky-200" : "text-amber-100";
+             const dotColor = variant === "blue" ? "bg-[#0070bc]" : "bg-amber-500";
+
+             return (
+               <div className="mt-8 rounded-2xl overflow-hidden shadow-md border border-slate-200">
+                 {/* Section Header */}
+                 <div className="px-6 py-4 flex items-center gap-3" style={{ background: bgHeader }}>
+                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${iconBg}`}>
+                     <Wrench className="w-4.5 h-4.5 text-white" />
+                   </div>
+                   <div>
+                     <h3 className={`text-sm font-black tracking-tight ${titleColor}`}>
+                       {title}
+                     </h3>
+                     <p className={`text-[10px] font-semibold ${subtitleColor}`}>
+                       {subtitle}
+                     </p>
+                   </div>
+                   <div className="ml-auto bg-white/20 border border-white/30 rounded-full px-3 py-1 text-[10px] font-black text-white">
+                     {rows.length} laporan
+                   </div>
+                 </div>
+
+                 {/* Cards */}
+                 <div className="bg-slate-50/60 divide-y divide-slate-100">
+                   {rows.map((row) => (
+                     <div key={row.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-slate-50 transition-colors">
+                       {/* Time */}
+                       <div className="flex items-center gap-2 shrink-0 w-20">
+                         <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                         <span className="text-sm font-black text-slate-800">{row.timeStr}</span>
+                       </div>
+
+                       {/* Penanggung Jawab */}
+                       <div className="flex items-center gap-2 sm:w-48 shrink-0">
+                         <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
+                           {row.penanggungJawab.charAt(0).toUpperCase()}
+                         </div>
+                         <div className="flex flex-col">
+                           <span className="text-xs font-bold text-slate-700 leading-tight">{row.penanggungJawab}</span>
+                           <span className="text-[10px] text-slate-400">Penanggung Jawab</span>
+                         </div>
+                       </div>
+
+                       {/* Shift */}
+                       <div className="shrink-0">
+                         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-[#0070bc] text-white tracking-wide">
+                           {row.shift}
+                         </span>
+                       </div>
+
+                       {/* Durasi & Kategori - Pushed to Right on Desktop */}
+                       <div className="flex flex-col sm:flex-row sm:items-center sm:ml-auto gap-3 sm:gap-6 mt-2 sm:mt-0">
+                         <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-600 rounded-md border border-red-100 shrink-0 self-start sm:self-auto">
+                           <Clock className="w-3.5 h-3.5" />
+                           <span className="text-xs font-black">{row.durasiDisplay}</span>
+                         </div>
+                          <div className="flex flex-col sm:items-end">
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-700 text-xs font-extrabold">
+                                {row.kategori === "-" ? "Problem" : `Kategori ${row.kategori}`}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-700 font-medium mt-1 max-w-[200px] sm:text-right truncate">
+                              {row.detailMasalah}
+                            </span>
+                          </div>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             );
+           };
 
            return (
-             <div className="mt-8 rounded-2xl overflow-hidden shadow-md border border-slate-200">
-               {/* Section Header */}
-               <div
-                 className="px-6 py-4 flex items-center gap-3"
-                 style={{ background: "linear-gradient(135deg, #0a1628 0%, #0b3068 60%, #0070bc 100%)" }}
-               >
-                 <div className="w-9 h-9 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
-                   <Wrench className="w-4.5 h-4.5 text-white" />
-                 </div>
-                 <div>
-                   <h3 className="text-sm font-black text-white tracking-tight">
-                     Laporan Downtime Khusus
-                   </h3>
-                   <p className="text-[10px] text-sky-200 font-semibold">
-                     Mesin berhenti total — tanpa produksi
-                   </p>
-                 </div>
-                 <div className="ml-auto bg-white/20 border border-white/30 rounded-full px-3 py-1 text-[10px] font-black text-white">
-                   {rows.length} laporan
-                 </div>
-               </div>
-
-               {/* Cards */}
-               <div className="bg-slate-50/60 divide-y divide-slate-100">
-                 {rows.map((row) => (
-                   <div key={row.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-slate-50 transition-colors">
-                     {/* Time */}
-                     <div className="flex items-center gap-2 shrink-0 w-20">
-                       <div className="w-2 h-2 rounded-full bg-[#0070bc] shrink-0" />
-                       <span className="text-sm font-black text-slate-800">{row.timeStr}</span>
-                     </div>
-
-                     {/* Operator + Shift */}
-                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                       <div className="w-7 h-7 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0 text-[10px] font-black text-[#0070bc]">
-                         {row.penanggungJawab?.charAt(0)?.toUpperCase() || "?"}
-                       </div>
-                       <div className="min-w-0">
-                         <div className="text-xs font-extrabold text-slate-800 truncate">{row.penanggungJawab}</div>
-                         <div className="text-[10px] text-slate-500 font-semibold">Penanggung Jawab</div>
-                       </div>
-                       <span className="ml-2 shrink-0 bg-[#0070bc] text-white text-[10px] font-black px-2.5 py-1 rounded-full">
-                         Shift {row.shift}
-                       </span>
-                     </div>
-
-                     {/* Duration */}
-                     <div className="shrink-0">
-                       <span className="bg-rose-50 border border-rose-200 text-rose-700 font-black text-xs px-3 py-1.5 rounded-lg inline-block">
-                         ⏱ {row.durasiDisplay}
-                       </span>
-                     </div>
-
-                     {/* Kategori + Detail */}
-                     <div className="flex flex-col items-start sm:items-end gap-1 shrink-0 sm:min-w-[160px]">
-                       <span className="bg-blue-50 border border-blue-200 text-[#0070bc] text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide">
-                         {row.kategori}
-                       </span>
-                       {row.detailMasalah !== "-" && (
-                         <span className="text-[11px] text-slate-600 font-medium">{row.detailMasalah}</span>
-                       )}
-                     </div>
-                   </div>
-                 ))}
-               </div>
-             </div>
+             <>
+               {renderSection(generalPanels, "Laporan Downtime Umum", "Downtime singkat tanpa spesifik PCS", "amber")}
+               {renderSection(mechanicPanels, "Laporan Downtime Khusus", "Mesin berhenti total — tanpa produksi", "blue")}
+             </>
            );
-        })()}
+         })()}
 
       </div>
     </div>

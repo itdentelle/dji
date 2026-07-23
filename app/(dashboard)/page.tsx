@@ -615,11 +615,10 @@ export default function DashboardPage() {
         : 0;
     const fpyMeteran = Math.max(0, 100 - persentaseCacatMeteran);
 
-    // Availability / Ketersediaan Waktu (using unique header_id for downtime)
-    const shiftSessions = new Set(
-      gradeScoped.map((item) => item.tanggal + "_" + item.nama_operator),
-    ).size;
-    const totalDetikTersedia = shiftSessions * 480 * 60;
+    // Availability / Ketersediaan Waktu (menggunakan jumlah hari unik: 24 jam per hari, atau 8 jam per shift jika filter 1 pegawai)
+    const uniqueDatesCount = new Set(gradeScoped.map((item) => item.tanggal)).size || 1;
+    const hoursPerDay = selectedOperators.length > 0 ? 8 : 24;
+    const totalDetikTersedia = uniqueDatesCount * hoursPerDay * 3600;
 
     const uniqueGradeScopedHeadersMap = new Map<
       string,
@@ -1035,38 +1034,94 @@ export default function DashboardPage() {
     return { topOperators, topMachines, criticalMachines };
   }, [dateFilteredTransactions, metricMode]);
 
-  // Pareto Chart State and Hook for Quality Problems
+  // Pareto Chart State and Hook for Quality Problems & Machines
   const [paretoMode, setParetoMode] = useState<"COUNT" | "DURATION">("COUNT");
+  const [paretoGroupBy, setParetoGroupBy] = useState<"KATEGORI" | "MESIN">("KATEGORI");
+  const [selectedParetoMachine, setSelectedParetoMachine] = useState<string>("ALL");
+
+  const getMachineKey = (item: any) => {
+    const m = item.mesin_id || item.no_mesin || item.mesin || item.nama_mesin;
+    return m && String(m).trim() !== "" ? String(m).trim() : "";
+  };
+
+  const availableParetoMachines = useMemo(() => {
+    const machines = new Set<string>();
+    dateFilteredTransactions.forEach((item) => {
+      const m = getMachineKey(item);
+      if (m) machines.add(m);
+    });
+    return Array.from(machines).sort();
+  }, [dateFilteredTransactions]);
 
   const paretoProblemData = useMemo(() => {
-    const problemData = dateFilteredTransactions.filter(
-      (item) =>
-        item.status_qc === "Recheck" &&
-        item.is_production &&
-        item.kategori_masalah,
-    );
-    const catMap = new Map<string, { count: number; downtime: number }>();
+    const CATEGORY_NAMES: Record<string, string> = {
+      A: "Benang Timbul/Lolos",
+      B: "Jarum/Jacquard",
+      C: "Design/Proofing",
+      D: "Benang Dasar/Rewind",
+      E: "Servo/Elektrik",
+      F: "Cylinder/Mekanik",
+      G: "Lain-lain/Libur",
+      H: "Mekanik Direct",
+    };
 
-    problemData.forEach((item) => {
-      const cats = item
-        .kategori_masalah!.split(",")
-        .map((c) => c.trim())
-        .filter((c) => c !== "");
-      const downtime = item.total_downtime_detik || 0;
-      cats.forEach((c) => {
-        const existing = catMap.get(c) || { count: 0, downtime: 0 };
-        catMap.set(c, {
+    const transactionsToAnalyze = selectedParetoMachine === "ALL"
+      ? dateFilteredTransactions
+      : dateFilteredTransactions.filter((item) => getMachineKey(item) === selectedParetoMachine);
+
+    const itemMap = new Map<string, { count: number; downtime: number }>();
+
+    if (paretoGroupBy === "KATEGORI") {
+      const problemData = transactionsToAnalyze.filter(
+        (item) => item.kategori_masalah && item.kategori_masalah.trim() !== ""
+      );
+      problemData.forEach((item) => {
+        const cats = item
+          .kategori_masalah!.split(",")
+          .map((c) => c.trim())
+          .filter((c) => c !== "");
+        const downtime = item.total_downtime_detik || 0;
+        cats.forEach((c) => {
+          const key = c.toUpperCase();
+          const existing = itemMap.get(key) || { count: 0, downtime: 0 };
+          itemMap.set(key, {
+            count: existing.count + 1,
+            downtime: existing.downtime + downtime,
+          });
+        });
+      });
+    } else {
+      // Group by MESIN
+      transactionsToAnalyze.forEach((item) => {
+        const hasProblem = (item.kategori_masalah && item.kategori_masalah.trim() !== "") || (item.total_downtime_detik && item.total_downtime_detik > 0) || item.status_qc === "Recheck" || item.grade === "BS";
+        if (!hasProblem) return;
+
+        const key = getMachineKey(item) || "Mesin -";
+        const downtime = item.total_downtime_detik || 0;
+        const existing = itemMap.get(key) || { count: 0, downtime: 0 };
+        itemMap.set(key, {
           count: existing.count + 1,
           downtime: existing.downtime + downtime,
         });
       });
-    });
+    }
 
-    const list = Array.from(catMap.entries()).map(([name, data]) => ({
-      name,
-      count: data.count,
-      downtime: data.downtime,
-    }));
+    const list = Array.from(itemMap.entries()).map(([code, data]) => {
+      let friendlyName = code;
+      if (paretoGroupBy === "KATEGORI") {
+        const desc = CATEGORY_NAMES[code] || "Masalah Lain";
+        friendlyName = `[${code}] ${desc}`;
+      } else {
+        friendlyName = code.startsWith("Mesin") ? code : `Mesin ${code}`;
+      }
+      return {
+        name: code,
+        friendlyName,
+        code,
+        count: data.count,
+        downtime: data.downtime,
+      };
+    });
 
     if (paretoMode === "COUNT") {
       list.sort((a, b) => b.count - a.count);
@@ -1078,20 +1133,29 @@ export default function DashboardPage() {
     const totalDowntime = list.reduce((sum, item) => sum + item.downtime, 0);
 
     let cumulativeSum = 0;
+    let crossed80 = false;
     const itemsWithCumulative = list.map((item) => {
       const value = paretoMode === "COUNT" ? item.count : item.downtime;
       const total = paretoMode === "COUNT" ? totalCount : totalDowntime;
       cumulativeSum += value;
       const cumulativePct = total > 0 ? (cumulativeSum / total) * 100 : 0;
+      const roundedCumPct = parseFloat(cumulativePct.toFixed(1));
+      
+      const isVital80 = !crossed80;
+      if (roundedCumPct >= 80) {
+        crossed80 = true;
+      }
+
       return {
         ...item,
         value,
-        cumulativePct: parseFloat(cumulativePct.toFixed(1)),
+        cumulativePct: roundedCumPct,
+        isVital80,
       };
     });
 
     return { list: itemsWithCumulative, totalCount, totalDowntime };
-  }, [dateFilteredTransactions, paretoMode]);
+  }, [dateFilteredTransactions, paretoMode, paretoGroupBy, selectedParetoMachine]);
 
   // Human-readable grade label for KPI card subtitles
   const gradeLabel = useMemo(() => {
@@ -3768,724 +3832,182 @@ export default function DashboardPage() {
               const pctUngraded =
                 totalQuality > 0 ? (totalUngraded / totalQuality) * 100 : 0;
 
-              if (chartGroupBy === "KATEGORI" || activeFilter === "PROBLEMS") {
-                const COLORS = [
-                  "#ef4444",
-                  "#f59e0b",
-                  "#3b82f6",
-                  "#8b5cf6",
-                  "#ec4899",
-                  "#10b981",
-                  "#64748b",
-                ];
-
-                if (dashboardViewType === "CLASSIC") {
-                  let cumulativePct = 0;
-                  return (
-                    <div className="space-y-6 flex flex-col flex-1">
-                      <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between flex-1">
-                        <div>
-                          <div className="border-b border-slate-100 pb-4 mb-6 flex justify-between items-start">
-                            <div>
-                              <h3 className="text-base font-extrabold text-slate-800">
-                                Komposisi Masalah
-                              </h3>
-                              <p className="text-[11px] text-slate-400 font-semibold">
-                                Persentase berdasarkan kategori
-                              </p>
-                            </div>
-                            <span className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 flex items-center gap-1 shrink-0">
-                              {categoryBreakdown.total} Laporan
-                            </span>
+                return (
+                  <div className="space-y-6 flex flex-col flex-1">
+                    <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between flex-1">
+                      <div>
+                        <div className="border-b border-slate-100 pb-4 mb-6 flex justify-between items-start">
+                          <div>
+                            <h3 className="text-base font-extrabold text-slate-800">
+                              Ringkasan Kualitas
+                            </h3>
+                            <p className="text-[11px] text-slate-400 font-semibold">
+                              Persentase barang berdasarkan Grade
+                            </p>
                           </div>
+                          <span className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-sky-50 text-sky-600 flex items-center gap-1 shrink-0">
+                            {totalQuality} {metricMode === "PCS" ? "Panel" : "Meter"}
+                          </span>
+                        </div>
 
-                          {/* Donut Chart Visual */}
-                          <div className="relative w-48 h-48 mx-auto flex items-center justify-center">
-                            <svg
-                              viewBox="0 0 100 100"
-                              className="w-full h-full transform -rotate-90"
-                            >
-                              {/* Background Track */}
+                        {/* Donut Chart Visual */}
+                        <div className="relative w-48 h-48 mx-auto flex items-center justify-center">
+                          <svg
+                            viewBox="0 0 100 100"
+                            className="w-full h-full transform -rotate-90"
+                          >
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="transparent"
+                              stroke="#f1f5f9"
+                              strokeWidth="12"
+                            />
+                            {pctA > 0 && (
                               <circle
                                 cx="50"
                                 cy="50"
                                 r="40"
                                 fill="transparent"
-                                stroke="#f1f5f9"
+                                stroke="#0070bc"
                                 strokeWidth="12"
+                                strokeDasharray={`${(pctA / 100) * 251.2} 251.2`}
+                                strokeDashoffset="0"
+                                className="transition-all duration-1000 ease-out"
                               />
+                            )}
+                            {pctB > 0 && (
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                fill="transparent"
+                                stroke="#f59e0b"
+                                strokeWidth="12"
+                                strokeDasharray={`${(pctB / 100) * 251.2} 251.2`}
+                                strokeDashoffset={`-${(pctA / 100) * 251.2}`}
+                                className="transition-all duration-1000 ease-out"
+                              />
+                            )}
+                            {pctBS > 0 && (
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                fill="transparent"
+                                stroke="#ef4444"
+                                strokeWidth="12"
+                                strokeDasharray={`${(pctBS / 100) * 251.2} 251.2`}
+                                strokeDashoffset={`-${((pctA + pctB) / 100) * 251.2}`}
+                                className="transition-all duration-1000 ease-out"
+                              />
+                            )}
+                            {pctUngraded > 0 && (
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                fill="transparent"
+                                stroke="#94a3b8"
+                                strokeWidth="12"
+                                strokeDasharray={`${(pctUngraded / 100) * 251.2} 251.2`}
+                                strokeDashoffset={`-${((pctA + pctB + pctBS) / 100) * 251.2}`}
+                                className="transition-all duration-1000 ease-out"
+                              />
+                            )}
+                          </svg>
 
-                              {categoryBreakdown.list.map(
-                                ([cat, count], idx) => {
-                                  const pct =
-                                    categoryBreakdown.total > 0
-                                      ? (count / categoryBreakdown.total) * 100
-                                      : 0;
-                                  if (pct === 0) return null;
-                                  const strokeDasharray = `${(pct / 100) * 251.2} 251.2`;
-                                  const strokeDashoffset = -(
-                                    (cumulativePct / 100) *
-                                    251.2
-                                  );
-                                  cumulativePct += pct;
-                                  return (
-                                    <circle
-                                      key={cat}
-                                      cx="50"
-                                      cy="50"
-                                      r="40"
-                                      fill="transparent"
-                                      stroke={COLORS[idx % COLORS.length]}
-                                      strokeWidth="12"
-                                      strokeDasharray={strokeDasharray}
-                                      strokeDashoffset={strokeDashoffset}
-                                      className="transition-all duration-1000 ease-out"
-                                    />
-                                  );
-                                },
-                              )}
-                            </svg>
-                            {/* Center Content */}
-                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                              <span className="text-3xl font-black text-slate-800 tracking-tight">
-                                {categoryBreakdown.list.length > 0
-                                  ? Math.round(
-                                      (categoryBreakdown.list[0][1] /
-                                        categoryBreakdown.total) *
-                                        100,
-                                    ) + "%"
-                                  : "0%"}
-                              </span>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1 px-4 truncate w-full text-center">
-                                {categoryBreakdown.list.length > 0
-                                  ? categoryBreakdown.list[0][0]
-                                  : "Tidak ada"}
-                              </span>
-                            </div>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-3xl font-black text-slate-800 tracking-tight">
+                              {Math.round(pctA)}%
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                              GRADE A
+                            </span>
                           </div>
-
-                          {/* Breakdown List */}
-                          <div className="mt-8 space-y-2">
-                            {categoryBreakdown.list
-                              .slice(0, showAllCategories ? undefined : 3)
-                              .map(([cat, count], idx) => (
-                                <div
-                                  key={cat}
-                                  className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className="w-3.5 h-3.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.15)]"
-                                      style={{
-                                        backgroundColor:
-                                          COLORS[idx % COLORS.length],
-                                      }}
-                                    />
-                                    <span
-                                      className="text-xs font-extrabold text-slate-700 truncate max-w-[110px]"
-                                      title={cat}
-                                    >
-                                      {cat}
-                                    </span>
-                                  </div>
-                                  <div className="text-right flex items-baseline gap-1.5">
-                                    <span className="text-sm font-black text-slate-800">
-                                      {count}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 font-bold">
-                                      Laporan
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
-
-                            {!showAllCategories &&
-                              categoryBreakdown.list.length > 3 && (
-                                <button
-                                  onClick={() => setShowAllCategories(true)}
-                                  className="w-full mt-2 text-[11px] font-bold text-[#0070bc] hover:text-[#004777] py-2 bg-sky-50 rounded-xl transition-colors text-center"
-                                >
-                                  Lihat Selengkapnya (
-                                  {categoryBreakdown.list.length - 3} lainnya)
-                                </button>
-                              )}
-
-                            {showAllCategories &&
-                              categoryBreakdown.list.length > 3 && (
-                                <button
-                                  onClick={() => setShowAllCategories(false)}
-                                  className="w-full mt-2 text-[11px] font-bold text-slate-500 hover:text-slate-700 py-2 bg-slate-50 rounded-xl transition-colors text-center"
-                                >
-                                  Sembunyikan
-                                </button>
-                              )}
-                          </div>
-                        </div>
-
-                        <div className="border-t border-slate-100 pt-4 mt-6 text-center">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                            Problem Overview
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // Otherwise, render OEE Pareto Chart
-                return (
-                  <div className="space-y-6 flex flex-col flex-1">
-                    <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between flex-1">
-                      <div>
-                        <div className="border-b border-slate-100 pb-4 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                          <div>
-                            <h3 className="text-base font-extrabold text-slate-800">
-                              Analisis Pareto Masalah
-                            </h3>
-                            <p className="text-[11px] text-slate-400 font-semibold">
-                              Distribusi kontribusi defect / downtime
-                            </p>
-                          </div>
-
-                          {/* Toggle Pareto Mode */}
-                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
-                            <button
-                              onClick={() => setParetoMode("COUNT")}
-                              className={`px-2 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                                paretoMode === "COUNT"
-                                  ? "bg-white text-slate-800 shadow-xs border border-slate-200"
-                                  : "text-slate-500 hover:text-slate-800"
-                              }`}
-                            >
-                              Frekuensi
-                            </button>
-                            <button
-                              onClick={() => setParetoMode("DURATION")}
-                              className={`px-2 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                                paretoMode === "DURATION"
-                                  ? "bg-white text-slate-800 shadow-xs border border-slate-200"
-                                  : "text-slate-500 hover:text-slate-800"
-                              }`}
-                            >
-                              Downtime
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Pareto Chart Visual */}
-                        <div className="relative w-full h-48 mx-auto flex items-center justify-center my-4">
-                          {paretoProblemData.list.length > 0 ? (
-                            (() => {
-                              const list = paretoProblemData.list;
-                              const maxValue = Math.max(
-                                ...list.map((item) => item.value),
-                                1,
-                              );
-                              const svgWidth = 320;
-                              const svgHeight = 160;
-                              const paddingLeft = 35;
-                              const paddingRight = 35;
-                              const paddingTop = 20;
-                              const paddingBottom = 20;
-
-                              const chartWidth =
-                                svgWidth - paddingLeft - paddingRight;
-                              const chartHeight =
-                                svgHeight - paddingTop - paddingBottom;
-                              const barSpacing = chartWidth / list.length;
-                              const barWidth = Math.max(8, barSpacing * 0.6);
-
-                              // Build cumulative points
-                              const pointsStr = list
-                                .map((item, idx) => {
-                                  const x =
-                                    paddingLeft +
-                                    barSpacing * idx +
-                                    barSpacing / 2;
-                                  const y =
-                                    paddingTop +
-                                    chartHeight -
-                                    (item.cumulativePct / 100) * chartHeight;
-                                  return `${x},${y}`;
-                                })
-                                .join(" ");
-
-                              return (
-                                <svg
-                                  viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-                                  className="w-full h-full overflow-visible"
-                                >
-                                  <line
-                                    x1={paddingLeft}
-                                    y1={paddingTop}
-                                    x2={svgWidth - paddingRight}
-                                    y2={paddingTop}
-                                    stroke="#f1f5f9"
-                                    strokeWidth="1"
-                                  />
-                                  <line
-                                    x1={paddingLeft}
-                                    y1={paddingTop + chartHeight / 2}
-                                    x2={svgWidth - paddingRight}
-                                    y2={paddingTop + chartHeight / 2}
-                                    stroke="#f1f5f9"
-                                    strokeWidth="1"
-                                  />
-                                  <line
-                                    x1={paddingLeft}
-                                    y1={paddingTop + chartHeight}
-                                    x2={svgWidth - paddingRight}
-                                    y2={paddingTop + chartHeight}
-                                    stroke="#cbd5e1"
-                                    strokeWidth="1.5"
-                                  />
-
-                                  {/* Left Y Axis (Values) */}
-                                  <text
-                                    x={paddingLeft - 6}
-                                    y={paddingTop + 3}
-                                    textAnchor="end"
-                                    fontSize="7"
-                                    fontWeight="bold"
-                                    fill="#94a3b8"
-                                  >
-                                    {paretoMode === "COUNT"
-                                      ? maxValue
-                                      : `${Math.round(maxValue / 60)}m`}
-                                  </text>
-                                  <text
-                                    x={paddingLeft - 6}
-                                    y={paddingTop + chartHeight / 2 + 3}
-                                    textAnchor="end"
-                                    fontSize="7"
-                                    fontWeight="bold"
-                                    fill="#94a3b8"
-                                  >
-                                    {paretoMode === "COUNT"
-                                      ? Math.round(maxValue / 2)
-                                      : `${Math.round(maxValue / 120)}m`}
-                                  </text>
-                                  <text
-                                    x={paddingLeft - 6}
-                                    y={paddingTop + chartHeight + 3}
-                                    textAnchor="end"
-                                    fontSize="7"
-                                    fontWeight="bold"
-                                    fill="#94a3b8"
-                                  >
-                                    0
-                                  </text>
-
-                                  {/* Right Y Axis (Cumulative %) */}
-                                  <text
-                                    x={svgWidth - paddingRight + 6}
-                                    y={paddingTop + 3}
-                                    textAnchor="start"
-                                    fontSize="7"
-                                    fontWeight="bold"
-                                    fill="#ef4444"
-                                  >
-                                    100%
-                                  </text>
-                                  <text
-                                    x={svgWidth - paddingRight + 6}
-                                    y={paddingTop + chartHeight / 2 + 3}
-                                    textAnchor="start"
-                                    fontSize="7"
-                                    fontWeight="bold"
-                                    fill="#ef4444"
-                                  >
-                                    50%
-                                  </text>
-                                  <text
-                                    x={svgWidth - paddingRight + 6}
-                                    y={paddingTop + chartHeight + 3}
-                                    textAnchor="start"
-                                    fontSize="7"
-                                    fontWeight="bold"
-                                    fill="#ef4444"
-                                  >
-                                    0%
-                                  </text>
-
-                                  {list.map((item, idx) => {
-                                    const barHeight =
-                                      (item.value / maxValue) * chartHeight;
-                                    const x =
-                                      paddingLeft +
-                                      barSpacing * idx +
-                                      (barSpacing - barWidth) / 2;
-                                    const y =
-                                      paddingTop + chartHeight - barHeight;
-                                    const colors = [
-                                      "#ef4444",
-                                      "#f59e0b",
-                                      "#3b82f6",
-                                      "#8b5cf6",
-                                      "#ec4899",
-                                      "#10b981",
-                                      "#64748b",
-                                    ];
-                                    return (
-                                      <g
-                                        key={item.name}
-                                        className="group/pareto-bar cursor-pointer"
-                                      >
-                                        <rect
-                                          x={x}
-                                          y={y}
-                                          width={barWidth}
-                                          height={barHeight}
-                                          rx="2"
-                                          fill={colors[idx % colors.length]}
-                                          opacity="0.8"
-                                          className="transition-all hover:opacity-100"
-                                        />
-                                        <text
-                                          x={x + barWidth / 2}
-                                          y={y - 3}
-                                          textAnchor="middle"
-                                          fontSize="6"
-                                          fontWeight="bold"
-                                          fill="#475569"
-                                          className="opacity-0 group-hover/pareto-bar:opacity-100 transition-opacity"
-                                        >
-                                          {paretoMode === "COUNT"
-                                            ? item.value
-                                            : `${Math.round(item.value / 60)}m`}
-                                        </text>
-                                      </g>
-                                    );
-                                  })}
-
-                                  {list.length > 0 && (
-                                    <>
-                                      <polyline
-                                        points={pointsStr}
-                                        fill="none"
-                                        stroke="#ef4444"
-                                        strokeWidth="1.5"
-                                        strokeDasharray="1"
-                                      />
-                                      {list.map((item, idx) => {
-                                        const x =
-                                          paddingLeft +
-                                          barSpacing * idx +
-                                          barSpacing / 2;
-                                        const y =
-                                          paddingTop +
-                                          chartHeight -
-                                          (item.cumulativePct / 100) *
-                                            chartHeight;
-                                        return (
-                                          <g
-                                            key={`dot-${item.name}`}
-                                            className="group/dot cursor-pointer"
-                                          >
-                                            <circle
-                                              cx={x}
-                                              cy={y}
-                                              r="2.5"
-                                              fill="#ffffff"
-                                              stroke="#ef4444"
-                                              strokeWidth="1.5"
-                                            />
-                                            <text
-                                              x={x}
-                                              y={y - 6}
-                                              textAnchor="middle"
-                                              fontSize="6"
-                                              fontWeight="black"
-                                              fill="#ef4444"
-                                              className="opacity-0 group-hover/dot:opacity-100 transition-opacity bg-white"
-                                            >
-                                              {item.cumulativePct}%
-                                            </text>
-                                          </g>
-                                        );
-                                      })}
-                                    </>
-                                  )}
-                                </svg>
-                              );
-                            })()
-                          ) : (
-                            <div className="text-center py-8 text-xs text-slate-400 font-bold">
-                              Tidak ada data masalah
-                            </div>
-                          )}
                         </div>
 
                         {/* Breakdown List */}
-                        <div className="mt-6 space-y-2">
-                          {paretoProblemData.list
-                            .slice(0, showAllCategories ? undefined : 3)
-                            .map((item, idx) => (
-                              <div
-                                key={item.name}
-                                className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    className="w-3.5 h-3.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.15)]"
-                                    style={{
-                                      backgroundColor:
-                                        COLORS[idx % COLORS.length],
-                                    }}
-                                  />
-                                  <div className="flex flex-col">
-                                    <span
-                                      className="text-xs font-extrabold text-slate-700 truncate max-w-[110px]"
-                                      title={item.name}
-                                    >
-                                      {item.name}
-                                    </span>
-                                    <span className="text-[8px] text-slate-400 font-semibold">
-                                      Kumulatif: {item.cumulativePct}%
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="text-right flex items-baseline gap-1.5">
-                                  {paretoMode === "COUNT" ? (
-                                    <>
-                                      <span className="text-sm font-black text-slate-800">
-                                        {item.count}
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 font-bold">
-                                        Laporan
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="text-sm font-black text-slate-800">
-                                        {Math.round(item.downtime / 60)}
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 font-bold">
-                                        menit
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
+                        <div className="mt-8 space-y-3">
+                          <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <span className="w-3 h-3 rounded-full bg-[#0070bc]" />
+                              <span className="text-xs font-extrabold text-slate-700">
+                                Grade A (Lolos)
+                              </span>
+                            </div>
+                            <div className="text-right flex items-baseline gap-1.5">
+                              <span className="text-sm font-black text-slate-800">
+                                {totalA}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                {metricMode === "PCS" ? "Panel" : "Meter"}
+                              </span>
+                            </div>
+                          </div>
 
-                          {!showAllCategories &&
-                            paretoProblemData.list.length > 3 && (
-                              <button
-                                onClick={() => setShowAllCategories(true)}
-                                className="w-full mt-2 text-[11px] font-bold text-[#0070bc] hover:text-[#004777] py-2 bg-sky-50 rounded-xl transition-colors text-center"
-                              >
-                                Lihat Selengkapnya (
-                                {paretoProblemData.list.length - 3} lainnya)
-                              </button>
-                            )}
+                          <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <span className="w-3 h-3 rounded-full bg-[#f59e0b]" />
+                              <span className="text-xs font-extrabold text-slate-700">
+                                Grade B (Lolos)
+                              </span>
+                            </div>
+                            <div className="text-right flex items-baseline gap-1.5">
+                              <span className="text-sm font-black text-slate-800">
+                                {totalB}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                {metricMode === "PCS" ? "Panel" : "Meter"}
+                              </span>
+                            </div>
+                          </div>
 
-                          {showAllCategories &&
-                            paretoProblemData.list.length > 3 && (
-                              <button
-                                onClick={() => setShowAllCategories(false)}
-                                className="w-full mt-2 text-[11px] font-bold text-slate-500 hover:text-slate-700 py-2 bg-slate-50 rounded-xl transition-colors text-center"
-                              >
-                                Sembunyikan
-                              </button>
-                            )}
+                          <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <span className="w-3 h-3 rounded-full bg-[#ef4444]" />
+                              <span className="text-xs font-extrabold text-slate-700">
+                                BS (Recheck)
+                              </span>
+                            </div>
+                            <div className="text-right flex items-baseline gap-1.5">
+                              <span className="text-sm font-black text-slate-800">
+                                {totalBS}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                {metricMode === "PCS" ? "Panel" : "Meter"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <span className="w-3 h-3 rounded-full bg-[#94a3b8]" />
+                              <span className="text-xs font-extrabold text-slate-700">
+                                Belum Diinspeksi (Ungraded)
+                              </span>
+                            </div>
+                            <div className="text-right flex items-baseline gap-1.5">
+                              <span className="text-sm font-black text-slate-800">
+                                {totalUngraded}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                {metricMode === "PCS" ? "Panel" : "Meter"}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
                       <div className="border-t border-slate-100 pt-4 mt-6 text-center">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                          Problem Overview
+                          Ringkasan Kualifikasi
                         </span>
                       </div>
                     </div>
                   </div>
                 );
-              }
-
-              return (
-                <div className="space-y-6 flex flex-col flex-1">
-                  <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between flex-1">
-                    <div>
-                      <div className="border-b border-slate-100 pb-4 mb-6 flex justify-between items-start">
-                        <div>
-                          <h3 className="text-base font-extrabold text-slate-800">
-                            Ringkasan Kualitas
-                          </h3>
-                          <p className="text-[11px] text-slate-400 font-semibold">
-                            Persentase barang berdasarkan Grade
-                          </p>
-                        </div>
-                        <span className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 flex items-center gap-1 shrink-0">
-                          {totalQuality.toLocaleString()}{" "}
-                          {metricMode === "PCS" ? "Panel" : "Baris"}
-                        </span>
-                      </div>
-
-                      {/* Donut Chart Visual */}
-                      <div className="relative w-48 h-48 mx-auto flex items-center justify-center">
-                        <svg
-                          viewBox="0 0 100 100"
-                          className="w-full h-full transform -rotate-90"
-                        >
-                          {/* Background Track */}
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r="40"
-                            fill="transparent"
-                            stroke="#f1f5f9"
-                            strokeWidth="12"
-                          />
-
-                          {/* Grade A */}
-                          {pctA > 0 && (
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="40"
-                              fill="transparent"
-                              stroke="#0070bc"
-                              strokeWidth="12"
-                              strokeDasharray={`${(pctA / 100) * 251.2} 251.2`}
-                              strokeDashoffset="0"
-                              className="transition-all duration-1000 ease-out"
-                            />
-                          )}
-                          {/* Grade B */}
-                          {pctB > 0 && (
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="40"
-                              fill="transparent"
-                              stroke="#f59e0b"
-                              strokeWidth="12"
-                              strokeDasharray={`${(pctB / 100) * 251.2} 251.2`}
-                              strokeDashoffset={-((pctA / 100) * 251.2)}
-                              className="transition-all duration-1000 ease-out"
-                            />
-                          )}
-                          {/* BS */}
-                          {pctBS > 0 && (
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="40"
-                              fill="transparent"
-                              stroke="#ef4444"
-                              strokeWidth="12"
-                              strokeDasharray={`${(pctBS / 100) * 251.2} 251.2`}
-                              strokeDashoffset={
-                                -(((pctA + pctB) / 100) * 251.2)
-                              }
-                              className="transition-all duration-1000 ease-out"
-                            />
-                          )}
-                          {/* Ungraded */}
-                          {pctUngraded > 0 && (
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="40"
-                              fill="transparent"
-                              stroke="#94a3b8"
-                              strokeWidth="12"
-                              strokeDasharray={`${(pctUngraded / 100) * 251.2} 251.2`}
-                              strokeDashoffset={
-                                -(((pctA + pctB + pctBS) / 100) * 251.2)
-                              }
-                              className="transition-all duration-1000 ease-out"
-                            />
-                          )}
-                        </svg>
-                        {/* Center Content */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-3xl font-black text-slate-800 tracking-tight">
-                            {pctA.toFixed(0)}%
-                          </span>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                            Grade A
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Breakdown List */}
-                      <div className="mt-8 space-y-2">
-                        <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-sky-50/50 transition-colors border border-transparent hover:border-sky-100/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-3.5 h-3.5 rounded-full bg-[#0070bc] shadow-[0_0_8px_rgba(0,112,188,0.4)]" />
-                            <span className="text-xs font-extrabold text-slate-700">
-                              Grade A (Lolos)
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black text-slate-800">
-                              {totalA.toLocaleString()}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold ml-1.5">
-                              {metricMode === "PCS" ? "Panel" : "Baris"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-amber-50/50 transition-colors border border-transparent hover:border-amber-100/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-3.5 h-3.5 rounded-full bg-[#f59e0b] shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
-                            <span className="text-xs font-extrabold text-slate-700">
-                              Grade B (Lolos)
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black text-slate-800">
-                              {totalB.toLocaleString()}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold ml-1.5">
-                              {metricMode === "PCS" ? "Panel" : "Baris"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-red-50/50 transition-colors border border-transparent hover:border-red-100/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-3.5 h-3.5 rounded-full bg-[#ef4444] shadow-[0_0_8px_rgba(239,68,68,0.4)] animate-pulse" />
-                            <span className="text-xs font-extrabold text-slate-700">
-                              BS (Recheck)
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black text-slate-800">
-                              {totalBS.toLocaleString()}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold ml-1.5">
-                              {metricMode === "PCS" ? "Panel" : "Baris"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50/50 transition-colors border border-transparent hover:border-slate-100/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-3.5 h-3.5 rounded-full bg-[#94a3b8] shadow-[0_0_8px_rgba(148,163,184,0.4)]" />
-                            <span className="text-xs font-extrabold text-slate-700">
-                              Belum Diinspeksi (Ungraded)
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black text-slate-800">
-                              {totalUngraded.toLocaleString()}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold ml-1.5">
-                              {metricMode === "PCS" ? "Panel" : "Baris"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-4 mt-6 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                        Quality Overview
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
             })()}
           </div>
 
@@ -4669,6 +4191,291 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Full-Width Dedicated Pareto Analysis Section at Bottom */}
+          {(() => {
+            const vitalFewItems = paretoProblemData.list.filter((item) => item.isVital80);
+            const list = paretoProblemData.list;
+
+            return (
+              <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] mt-6">
+                {/* Header */}
+                <div className="border-b border-slate-100 pb-4 mb-5 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-amber-50 text-amber-600 rounded-2xl border border-amber-100/60 shadow-xs">
+                      <BarChart2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-extrabold text-slate-800">
+                          Analisis Pareto (Aturan 80/20)
+                        </h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 uppercase tracking-wide">
+                          Prinsip 80/20
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                        Identifikasi 20% faktor utama ({paretoGroupBy === "KATEGORI" ? "Kategori Masalah" : "Mesin Produksi"}) yang menyumbang 80% total masalah & downtime
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Filter Controls Group */}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {/* Group By Selector */}
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                      <button
+                        onClick={() => setParetoGroupBy("KATEGORI")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                          paretoGroupBy === "KATEGORI"
+                            ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Kategori Masalah
+                      </button>
+                      <button
+                        onClick={() => setParetoGroupBy("MESIN")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                          paretoGroupBy === "MESIN"
+                            ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Per Mesin Produksi
+                      </button>
+                    </div>
+
+                    {/* Machine Filter Dropdown */}
+                    {availableParetoMachines.length > 0 && (
+                      <select
+                        value={selectedParetoMachine}
+                        onChange={(e) => setSelectedParetoMachine(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-extrabold py-1.5 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+                      >
+                        <option value="ALL">Semua Mesin</option>
+                        {availableParetoMachines.map((m) => (
+                          <option key={m} value={m}>
+                            {m.startsWith("Mesin") ? m : `Mesin ${m}`}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {/* Metric Mode Selector */}
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                      <button
+                        onClick={() => setParetoMode("COUNT")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                          paretoMode === "COUNT"
+                            ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Frekuensi Cacat
+                      </button>
+                      <button
+                        onClick={() => setParetoMode("DURATION")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                          paretoMode === "DURATION"
+                            ? "bg-white text-slate-800 shadow-xs border border-slate-200"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Durasi Downtime
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vital Few Banner */}
+                {vitalFewItems.length > 0 && (
+                  <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-orange-50/50 to-amber-50 border border-amber-200/80 flex items-start gap-3 text-xs shadow-xs">
+                    <div className="p-2 bg-amber-500 text-white rounded-xl shrink-0 font-black text-xs shadow-sm">
+                      80%
+                    </div>
+                    <div className="flex-1">
+                      <span className="font-extrabold text-amber-950 text-sm block mb-1">
+                        Vital Few (Penyebab Dominan Utama):
+                      </span>
+                      <p className="text-amber-900/90 text-xs leading-relaxed">
+                        {paretoGroupBy === "KATEGORI" ? "Kategori " : "Mesin "}
+                        <span className="font-black text-amber-950 underline decoration-amber-400 decoration-2">
+                          {vitalFewItems.map((i) => i.friendlyName).join(", ")}
+                        </span>{" "}
+                        bertanggung jawab atas <strong className="font-black">80% dari total masalah/downtime</strong>. Fokus perbaikan pada {paretoGroupBy === "KATEGORI" ? "kategori" : "mesin"} ini akan memberikan hasil perbaikan terbesar!
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Full-Width SVG Pareto Chart */}
+                <div className="relative w-full h-72 mx-auto flex items-center justify-center my-4 overflow-x-auto custom-scrollbar">
+                  {list.length > 0 ? (
+                    (() => {
+                      const maxValue = Math.max(...list.map((item) => item.value), 1);
+                      const svgWidth = Math.max(750, list.length * 90);
+                      const svgHeight = 240;
+                      const paddingLeft = 50;
+                      const paddingRight = 50;
+                      const paddingTop = 30;
+                      const paddingBottom = 40;
+
+                      const chartWidth = svgWidth - paddingLeft - paddingRight;
+                      const chartHeight = svgHeight - paddingTop - paddingBottom;
+                      const barSpacing = chartWidth / list.length;
+                      const barWidth = Math.max(16, Math.min(48, barSpacing * 0.5));
+
+                      const y80 = paddingTop + chartHeight - 0.8 * chartHeight;
+
+                      const pointsStr = list
+                        .map((item, idx) => {
+                          const x = paddingLeft + barSpacing * idx + barSpacing / 2;
+                          const y = paddingTop + chartHeight - (item.cumulativePct / 100) * chartHeight;
+                          return `${x},${y}`;
+                        })
+                        .join(" ");
+
+                      return (
+                        <div style={{ minWidth: `${svgWidth}px` }} className="w-full h-full">
+                          <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full">
+                            {/* Horizontal Grid */}
+                            <line x1={paddingLeft} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f1f5f9" strokeWidth="1" />
+                            <line x1={paddingLeft} y1={paddingTop + chartHeight * 0.25} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight * 0.25} stroke="#f8fafc" strokeWidth="1" />
+                            <line x1={paddingLeft} y1={paddingTop + chartHeight * 0.5} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight * 0.5} stroke="#f1f5f9" strokeWidth="1" />
+                            <line x1={paddingLeft} y1={paddingTop + chartHeight * 0.75} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight * 0.75} stroke="#f8fafc" strokeWidth="1" />
+                            <line x1={paddingLeft} y1={paddingTop + chartHeight} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight} stroke="#cbd5e1" strokeWidth="1.5" />
+
+                            {/* 80% Cutoff Line */}
+                            <line x1={paddingLeft} y1={y80} x2={svgWidth - paddingRight} y2={y80} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5 4" />
+                            <text x={paddingLeft + 8} y={y80 - 6} fontSize="9" fontWeight="black" fill="#ef4444">
+                              Batas Pareto 80% (Vital Few)
+                            </text>
+
+                            {/* Left Y Axis */}
+                            <text x={paddingLeft - 8} y={paddingTop + 4} textAnchor="end" fontSize="9" fontWeight="bold" fill="#64748b">
+                              {paretoMode === "COUNT" ? maxValue : `${Math.round(maxValue / 60)}m`}
+                            </text>
+                            <text x={paddingLeft - 8} y={paddingTop + chartHeight / 2 + 4} textAnchor="end" fontSize="9" fontWeight="bold" fill="#64748b">
+                              {paretoMode === "COUNT" ? Math.round(maxValue / 2) : `${Math.round(maxValue / 120)}m`}
+                            </text>
+                            <text x={paddingLeft - 8} y={paddingTop + chartHeight + 4} textAnchor="end" fontSize="9" fontWeight="bold" fill="#64748b">
+                              0
+                            </text>
+
+                            {/* Right Y Axis */}
+                            <text x={svgWidth - paddingRight + 8} y={paddingTop + 4} textAnchor="start" fontSize="9" fontWeight="bold" fill="#ef4444">
+                              100%
+                            </text>
+                            <text x={svgWidth - paddingRight + 8} y={y80 + 4} textAnchor="start" fontSize="9" fontWeight="black" fill="#ef4444">
+                              80%
+                            </text>
+                            <text x={svgWidth - paddingRight + 8} y={paddingTop + chartHeight + 4} textAnchor="start" fontSize="9" fontWeight="bold" fill="#ef4444">
+                              0%
+                            </text>
+
+                            {/* Bars */}
+                            {list.map((item, idx) => {
+                              const barHeight = (item.value / maxValue) * chartHeight;
+                              const x = paddingLeft + barSpacing * idx + (barSpacing - barWidth) / 2;
+                              const y = paddingTop + chartHeight - barHeight;
+                              const barColor = item.isVital80 ? (idx === 0 ? "#f59e0b" : "#fbbf24") : "#94a3b8";
+
+                              return (
+                                <g key={item.code} className="group/pareto-bar cursor-pointer">
+                                  <rect x={x} y={y} width={barWidth} height={barHeight} rx="4" fill={barColor} opacity="0.9" className="transition-all hover:opacity-100 hover:brightness-105" />
+                                  <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" fontSize="9" fontWeight="black" fill="#334155">
+                                    {paretoMode === "COUNT" ? item.value : `${Math.round(item.value / 60)}m`}
+                                  </text>
+                                  <text x={x + barWidth / 2} y={paddingTop + chartHeight + 16} textAnchor="middle" fontSize="9" fontWeight="extrabold" fill={item.isVital80 ? "#b45309" : "#64748b"}>
+                                    {paretoGroupBy === "KATEGORI" ? `Kat ${item.code}` : (item.code.startsWith("Mesin") ? item.code : `M-${item.code}`)}
+                                  </text>
+                                </g>
+                              );
+                            })}
+
+                            {/* Line & Dots */}
+                            {list.length > 0 && (
+                              <>
+                                <polyline points={pointsStr} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                {list.map((item, idx) => {
+                                  const x = paddingLeft + barSpacing * idx + barSpacing / 2;
+                                  const y = paddingTop + chartHeight - (item.cumulativePct / 100) * chartHeight;
+                                  return (
+                                    <g key={`dot-${item.code}`} className="group/dot cursor-pointer">
+                                      <circle cx={x} cy={y} r="4" fill="#ffffff" stroke="#ef4444" strokeWidth="2.5" />
+                                      <text x={x} y={y - 10} textAnchor="middle" fontSize="9" fontWeight="black" fill="#ef4444" className="opacity-90 group-hover/dot:opacity-100 transition-opacity bg-white">
+                                        {item.cumulativePct}%
+                                      </text>
+                                    </g>
+                                  );
+                                })}
+                              </>
+                            )}
+                          </svg>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div className="text-center py-12 text-sm text-slate-400 font-bold">
+                      Tidak ada data cacat/downtime pada periode terpilih
+                    </div>
+                  )}
+                </div>
+
+                {/* Category Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-6">
+                  {list.map((item, idx) => (
+                    <div
+                      key={item.code}
+                      className={`p-3.5 rounded-2xl transition-all border ${
+                        item.isVital80
+                          ? "bg-amber-50/50 border-amber-200/80 shadow-xs hover:border-amber-300"
+                          : "bg-slate-50/40 border-slate-200/60 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] ${
+                              item.isVital80 ? "bg-amber-500 text-white shadow-xs" : "bg-slate-300 text-slate-700"
+                            }`}
+                          >
+                            {idx + 1}
+                          </span>
+                          <span className="text-xs font-black text-slate-800">
+                            {item.friendlyName}
+                          </span>
+                        </div>
+                        {item.isVital80 && (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300/80">
+                            Vital 80%
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-baseline justify-between pt-1 border-t border-slate-200/40 mt-2">
+                        <span className="text-[10px] text-slate-400 font-semibold">
+                          Kumulatif: <strong className="text-slate-700 font-extrabold">{item.cumulativePct}%</strong>
+                        </span>
+                        <div className="text-right">
+                          {paretoMode === "COUNT" ? (
+                            <span className="text-sm font-black text-slate-800">
+                              {item.count} <span className="text-[10px] text-slate-400 font-bold">kejadian</span>
+                            </span>
+                          ) : (
+                            <span className="text-sm font-black text-slate-800">
+                              {Math.round(item.downtime / 60)} <span className="text-[10px] text-slate-400 font-bold">menit</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Rekap Data Section */}
         </>

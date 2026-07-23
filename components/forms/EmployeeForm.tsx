@@ -38,6 +38,8 @@ import {
   ArrowRight,
   Scissors,
   Info,
+  Lock,
+  AlertTriangle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
@@ -245,7 +247,7 @@ const compressImage = (
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
-      const img = new window.Image();
+      const img = document.createElement("img");
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement("canvas");
@@ -349,8 +351,32 @@ export default function EmployeeForm({
   // Accordion UI State
   const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
   const [highlightPotonganKe, setHighlightPotonganKe] = useState(false);
+  const [highlightOperator, setHighlightOperator] = useState(false);
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
   const [activeInfo, setActiveInfo] = useState<string | null>(null);
+  const [machineInputTypes, setMachineInputTypes] = useState<Record<string, "PANEL" | "METER">>({});
+
+  useEffect(() => {
+    async function loadMachineTypes() {
+      let localTypes: Record<string, "PANEL" | "METER"> = {};
+      try {
+        const saved = localStorage.getItem("dji_machine_input_types");
+        if (saved) localTypes = JSON.parse(saved);
+      } catch (e) {}
+
+      const cfgRes = await getMachineConfigs();
+      if (cfgRes.success && cfgRes.data) {
+        const typeMap: Record<string, "PANEL" | "METER"> = { ...localTypes };
+        cfgRes.data.forEach((c) => {
+          typeMap[c.nomor_mc.toUpperCase()] = localTypes[c.nomor_mc] || c.input_type || "PANEL";
+        });
+        setMachineInputTypes(typeMap);
+      } else {
+        setMachineInputTypes(localTypes);
+      }
+    }
+    loadMachineTypes();
+  }, []);
 
   // States untuk upload foto
   const [isUploading, setIsUploading] = useState<{
@@ -806,6 +832,13 @@ export default function EmployeeForm({
   };
 
   const onSubmit = async (data: ProductionFormInput) => {
+    const currentMc = data.nomorMc || watch("nomorMc") || "";
+    if (currentMc && machineInputTypes[currentMc.toUpperCase()] === "METER") {
+      setIsSubmitting(false);
+      setErrorMsg(`Mesin ${currentMc} telah dikunci oleh Admin khusus untuk input METER. Anda tidak dapat mengisi form Panel untuk mesin ini.`);
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
     const uppercaseFields: (keyof ProductionFormInput)[] = ["designId", "pick", "course", "noOrderBarang", "noCustomer", "jenisBenangDasar", "liner", "heavy", "shadow", "pinggiran", "rpm"];
@@ -1062,9 +1095,13 @@ export default function EmployeeForm({
 
     setPreviews({ before: null, after: null });
 
-    if (wasLastPanel) {
+    const submittedJenis = successData?.jenisLaporan;
+    const wasAkhirShift = submittedJenis === "Akhir Shift";
+
+    if (wasLastPanel || wasAkhirShift) {
       setIsHeaderModalOpen(true);
-      setHighlightPotonganKe(true);
+      if (wasLastPanel) setHighlightPotonganKe(true);
+      if (wasAkhirShift) setHighlightOperator(true);
     }
   };
 
@@ -1195,6 +1232,31 @@ export default function EmployeeForm({
               Data Header akan otomatis tersimpan untuk panel berikutnya.
             </p>
           </div>
+
+          {watch("nomorMc") && machineInputTypes[watch("nomorMc").toUpperCase()] === "METER" && (
+            <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between gap-3 animate-fadeIn shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-100/80 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-amber-900 uppercase tracking-wide leading-none">
+                    Mesin {watch("nomorMc")} Di-set Input METER
+                  </h4>
+                  <p className="text-[11px] font-medium text-amber-700 leading-snug mt-1">
+                    Admin mengatur mesin ini khusus untuk pelaporan <strong>Meteran / Roll</strong>.
+                  </p>
+                </div>
+              </div>
+              <a
+                href={`/input-meter?mc=${encodeURIComponent(watch("nomorMc"))}`}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap"
+              >
+                <span>Pindah Form Meter</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
@@ -1261,6 +1323,7 @@ export default function EmployeeForm({
                 onClose={() => {
                   setIsHeaderModalOpen(false);
                   setHighlightPotonganKe(false);
+                  setHighlightOperator(false);
                 }}
                 register={register}
                 errors={errors}
@@ -1270,6 +1333,7 @@ export default function EmployeeForm({
                 activeShiftName={activeShiftName}
                 onClearHeader={handleClearHeader}
                 highlightPotonganKe={highlightPotonganKe}
+                highlightOperator={highlightOperator}
                 pcsCount={fields.length}
                 onChangePcsCount={handleChangePcsCount}
               />
@@ -1295,7 +1359,7 @@ export default function EmployeeForm({
             {showAdvancedActions ? (
               <>Tutup Opsi Lanjutan</>
             ) : (
-              <>Buka Opsi Lanjutan (Potong / Lanjut Shift)</>
+              <>Buka Opsi Lanjutan (Potong / Tandai BS)</>
             )}
           </button>
 
@@ -1321,7 +1385,7 @@ export default function EmployeeForm({
                 </div>
                 
                 <div 
-                  className="p-5 sm:p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/30 custom-scrollbar"
+                  className="p-5 sm:p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/30 custom-scrollbar"
                   onClick={() => setActiveInfo(null)}
                 >
                   {/* Potong Kain Toggle */}
@@ -1430,54 +1494,27 @@ export default function EmployeeForm({
                       )}
                     </div>
                   )}
-
-                  {/* Lanjut Shift Checkbox */}
-                  {!isEdit && (
-                    <div className="flex flex-col gap-2 relative h-32">
-                      <input
-                        type="checkbox"
-                        id="masalahLanjutShift"
-                        {...register("mesinMasihStop")}
-                        className="peer hidden"
-                      />
-                      <label htmlFor="masalahLanjutShift" className="absolute inset-0 flex flex-col items-center justify-center p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 text-slate-600 hover:border-orange-300 hover:bg-orange-50 peer-checked:bg-gradient-to-br peer-checked:from-orange-500 peer-checked:to-amber-500 peer-checked:border-transparent peer-checked:shadow-lg peer-checked:shadow-orange-500/30 peer-checked:text-white group z-10">
-                        <Timer className="w-8 h-8 mb-2 transition-transform duration-300 peer-checked:-rotate-12 peer-checked:scale-110 text-slate-400 group-hover:text-orange-400 peer-checked:text-white" />
-                        <span className="font-black uppercase text-xs tracking-wide">Lanjut Shift</span>
-                        
-                        <div className="absolute top-2 right-2 bg-white/20 rounded-full p-1 opacity-0 peer-checked:opacity-100 transition-opacity">
-                          <CheckCircle2 className="w-4 h-4 text-white" />
-                        </div>
-                      </label>
-                      
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setActiveInfo(activeInfo === "shift" ? null : "shift");
-                        }}
-                        className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${
-                          activeInfo === "shift" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                        }`}
-                      >
-                        <Info className="w-4 h-4" />
-                      </button>
-                      {activeInfo === "shift" && (
-                        <div className="absolute top-12 left-0 w-full p-3 bg-slate-800 text-white text-[11px] leading-relaxed rounded-xl z-50 shadow-xl animate-fadeIn">
-                          Centang jika mesin stop dan masalah belum beres untuk diwariskan ke shift depan.
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
 
-                <div className="p-5 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+                <div className="p-4 sm:p-5 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] flex gap-3">
                   <button
                     type="button"
                     onClick={() => setShowAdvancedActions(false)}
-                    className="w-full h-12 sm:h-14 bg-slate-900 hover:bg-slate-800 text-white font-black text-sm rounded-xl shadow-lg shadow-slate-900/20 transition-all active:scale-[0.98] uppercase tracking-wider"
+                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-all uppercase tracking-wider cursor-pointer"
                   >
-                    Selesai & Tutup
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      setShowAdvancedActions(false);
+                      handleSubmit(onSubmit, onInvalid)();
+                    }}
+                    className="flex-1 h-12 sm:h-14 bg-[#0070bc] hover:bg-[#004777] active:scale-[0.98] text-white font-black text-sm rounded-xl shadow-lg shadow-sky-900/20 transition-all uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-5 h-5" />
+                    <span>{isSubmitting ? "Menyimpan..." : "Kirim Laporan Sekarang"}</span>
                   </button>
                 </div>
               </div>
@@ -1546,23 +1583,34 @@ export default function EmployeeForm({
           </div>
 
           {/* Kirim Button */}
-          <button
-            data-tour="submit-panel"
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full h-12 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md"
-          >
-            {isSubmitting ? (
-              <>
-                <RefreshCw className="w-5 h-5 animate-spin" /> Menyimpan...
-              </>
-            ) : (
-              <>
-                <Save className="w-5 h-5" />{" "}
-                {isEdit ? "Simpan Perubahan" : "Kirim Laporan Panel"}
-              </>
-            )}
-          </button>
+          {watch("nomorMc") && machineInputTypes[watch("nomorMc").toUpperCase()] === "METER" ? (
+            <button
+              type="button"
+              disabled
+              className="w-full h-12 rounded-xl bg-slate-200 text-slate-500 font-extrabold text-xs uppercase tracking-wide cursor-not-allowed flex items-center justify-center gap-2 border border-slate-300"
+            >
+              <Lock className="w-4 h-4 text-slate-500" />
+              <span>Ditolak: Mesin {watch("nomorMc")} Khusus Input METER</span>
+            </button>
+          ) : (
+            <button
+              data-tour="submit-panel"
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-12 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md"
+            >
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" /> Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Save className="w-5 h-5" />{" "}
+                  {isEdit ? "Simpan Perubahan" : "Kirim Laporan Panel"}
+                </>
+              )}
+            </button>
+          )}
         </form>
 
         {isTourOpen && currentTourStep && (
@@ -1590,13 +1638,13 @@ export default function EmployeeForm({
                   : "Laporan Berhasil Disimpan"}
               </h4>
               <p className="text-xs text-slate-500 mt-1 mb-5">
-                {(successData as any).isCutSubmit
-                  ? (successData as any).isOfflineSaved
-                    ? `Data potong kain Potongan ${successData.potonganKe} antre dikirim otomatis saat sinyal pulih.`
-                    : `Potong kain untuk Potongan ${successData.potonganKe} berhasil diupdate tanpa membuat baris panel baru.`
-                  : (successData as any).isOfflineSaved
-                    ? `Data Panel #${successData.panelNo} antre dikirim otomatis saat sinyal pulih.`
-                    : `Data laporan untuk Panel #${successData.panelNo} (Potongan ${successData.potonganKe}) telah terekam.`}
+                {(successData as any)?.isCutSubmit
+                  ? (successData as any)?.isOfflineSaved
+                    ? `Data potong kain Potongan ${successData?.potonganKe} antre dikirim otomatis saat sinyal pulih.`
+                    : `Potong kain untuk Potongan ${successData?.potonganKe} berhasil diupdate tanpa membuat baris panel baru.`
+                  : (successData as any)?.isOfflineSaved
+                    ? `Data Panel #${successData?.panelNo} antre dikirim otomatis saat sinyal pulih.`
+                    : `Data laporan untuk Panel #${successData?.panelNo} (Potongan ${successData?.potonganKe}) telah terekam.`}
               </p>
               {(successData as any).autoAdjustedDowntimeMsg && (
                 <div className="w-full mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left shadow-inner">

@@ -288,23 +288,15 @@ export default function ProductionPlansPage() {
                 </div>
               )}
               
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-600 uppercase">Nomor Mesin *</label>
                   <select
                     required
                     value={formData.nomor_mc}
-                    onChange={async (e) => {
+                    onChange={(e) => {
                       const mc = e.target.value;
-                      let defaultPcs = formData.pcs_count || 1;
-                      if (mc && !formData.id) {
-                        const cfgRes = await getMachineConfigs();
-                        if (cfgRes.success && cfgRes.data) {
-                          const match = cfgRes.data.find(c => c.nomor_mc.toUpperCase() === mc.toUpperCase());
-                          if (match) defaultPcs = match.default_pcs;
-                        }
-                      }
-                      setFormData({ ...formData, nomor_mc: mc, pcs_count: defaultPcs });
+                      setFormData({ ...formData, nomor_mc: mc });
                     }}
                     className="h-10 px-3 rounded-xl border border-slate-200 focus:border-blue-500 outline-none uppercase font-bold"
                   >
@@ -323,19 +315,6 @@ export default function ProductionPlansPage() {
                     onChange={(e) => setFormData({ ...formData, potongan_ke: e.target.value })}
                     className="h-10 px-3 rounded-xl border border-slate-200 focus:border-blue-500 outline-none font-bold text-amber-600"
                     placeholder="Contoh: 550"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-blue-600 uppercase">Jumlah PCS *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="50"
-                    required
-                    value={formData.pcs_count ?? 1}
-                    onChange={(e) => setFormData({ ...formData, pcs_count: parseInt(e.target.value) || 1 })}
-                    className="h-10 px-3 rounded-xl border border-blue-200 bg-blue-50/30 focus:border-blue-500 outline-none font-black text-blue-700"
-                    placeholder="1"
                   />
                 </div>
               </div>

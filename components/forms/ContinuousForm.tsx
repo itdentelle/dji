@@ -40,6 +40,8 @@ import {
   Send,
   Scissors,
   AlertTriangle,
+  Info,
+  Lock,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
@@ -247,7 +249,7 @@ const compressImage = (
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
-      const img = new window.Image();
+      const img = document.createElement("img");
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement("canvas");
@@ -369,11 +371,36 @@ export default function ContinuousForm({
   // Accordion UI State
   const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
   const [highlightPotonganKe, setHighlightPotonganKe] = useState(false);
+  const [highlightOperator, setHighlightOperator] = useState(false);
 
   // Pop-up Modal State
   const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
   const [isLastRoll, setIsLastRoll] = useState(false);
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
+  const [activeInfo, setActiveInfo] = useState<string | null>(null);
+  const [machineInputTypes, setMachineInputTypes] = useState<Record<string, "PANEL" | "METER">>({});
+
+  useEffect(() => {
+    async function loadMachineTypes() {
+      let localTypes: Record<string, "PANEL" | "METER"> = {};
+      try {
+        const saved = localStorage.getItem("dji_machine_input_types");
+        if (saved) localTypes = JSON.parse(saved);
+      } catch (e) {}
+
+      const cfgRes = await getMachineConfigs();
+      if (cfgRes.success && cfgRes.data) {
+        const typeMap: Record<string, "PANEL" | "METER"> = { ...localTypes };
+        cfgRes.data.forEach((c) => {
+          typeMap[c.nomor_mc.toUpperCase()] = localTypes[c.nomor_mc] || c.input_type || "METER";
+        });
+        setMachineInputTypes(typeMap);
+      } else {
+        setMachineInputTypes(localTypes);
+      }
+    }
+    loadMachineTypes();
+  }, []);
 
   // States untuk upload foto
   const [isUploading, setIsUploading] = useState<{
@@ -1077,6 +1104,13 @@ export default function ContinuousForm({
   };
 
   const onSubmit = async (data: ContinuousFormInput) => {
+    const currentMc = data.nomorMc || getValues("nomorMc") || watch("nomorMc") || "";
+    if (currentMc && machineInputTypes[currentMc.toUpperCase()] === "PANEL") {
+      setIsSubmitting(false);
+      setErrorMsg(`Mesin ${currentMc} telah dikunci oleh Admin khusus untuk input PANEL. Anda tidak dapat mengisi form Meter untuk mesin ini.`);
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
     const uppercaseFields: (keyof ContinuousFormInput)[] = ["designId", "pick", "course", "noOrderBarang", "noCustomer", "jenisBenangDasar", "liner", "heavy", "shadow", "pinggiran", "rpm"];
@@ -1398,9 +1432,13 @@ export default function ContinuousForm({
     setLiveTimerSeconds(0);
     setPreviews({ before: null, after: null });
 
-    if (wasLastRoll) {
+    const submittedJenis = successData?.jenisLaporan;
+    const wasAkhirShift = submittedJenis === "Akhir Shift";
+
+    if (wasLastRoll || wasAkhirShift) {
       setIsHeaderModalOpen(true);
-      setHighlightPotonganKe(true);
+      if (wasLastRoll) setHighlightPotonganKe(true);
+      if (wasAkhirShift) setHighlightOperator(true);
     }
   };
 
@@ -1525,12 +1563,37 @@ export default function ContinuousForm({
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-slate-100 pb-4 mb-6 gap-4">
           <div>
             <h3 className="text-base font-bold text-slate-900">
-              Form Input Produksi
+              Form Input Produksi (Meteran)
             </h3>
             <p className="text-xs text-slate-400 font-normal mt-1">
-              Data Header akan otomatis tersimpan untuk panel berikutnya.
+              Data Header akan otomatis tersimpan untuk roll/meteran berikutnya.
             </p>
           </div>
+
+          {watch("nomorMc") && machineInputTypes[watch("nomorMc").toUpperCase()] === "PANEL" && (
+            <div className="p-3 bg-indigo-50 border border-indigo-200/80 rounded-2xl flex items-center justify-between gap-3 animate-fadeIn shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100/80 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-indigo-900 uppercase tracking-wide leading-none">
+                    Mesin {watch("nomorMc")} Di-set Input PANEL
+                  </h4>
+                  <p className="text-[11px] font-medium text-indigo-700 leading-snug mt-1">
+                    Admin mengatur mesin ini khusus untuk pelaporan <strong>Panel</strong>.
+                  </p>
+                </div>
+              </div>
+              <a
+                href={`/input?mc=${encodeURIComponent(watch("nomorMc"))}`}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap"
+              >
+                <span>Pindah Form Panel</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          )}
         </div>
 
         {errorMsg && (
@@ -1572,6 +1635,7 @@ export default function ContinuousForm({
                   onEdit={() => {
                     setIsHeaderModalOpen(true);
                     setHighlightPotonganKe(false);
+                    setHighlightOperator(false);
                   }}
                   showEditButton
                   showEditButtonPlacement="bottom"
@@ -1583,6 +1647,7 @@ export default function ContinuousForm({
                 onClose={() => {
                   setIsHeaderModalOpen(false);
                   setHighlightPotonganKe(false);
+                  setHighlightOperator(false);
                 }}
                 register={register}
                 errors={errors}
@@ -1592,6 +1657,7 @@ export default function ContinuousForm({
                 activeShiftName={activeShiftName}
                 onClearHeader={handleClearHeader}
                 highlightPotonganKe={highlightPotonganKe}
+                highlightOperator={highlightOperator}
                 pcsCount={fields.length}
                 onChangePcsCount={handleChangePcsCount}
               />
@@ -1690,150 +1756,219 @@ export default function ContinuousForm({
             {showAdvancedActions ? (
               <>Tutup Opsi Lanjutan</>
             ) : (
-              <>Buka Opsi Lanjutan (Potong / Lanjut Shift)</>
+              <>Buka Opsi Lanjutan (Potong Kain)</>
             )}
           </button>
 
-          {/* Tindakan Akhir Panel */}
+          {/* Tindakan Akhir Panel Modal Pop-Up */}
           {showAdvancedActions && (
-            <div className="flex flex-col gap-3 mb-6 animate-fadeIn">
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
+              onClick={() => setShowAdvancedActions(false)}
+            >
               <div
-                data-tour="meter-cut-roll"
-                className={`p-4 border rounded-2xl transition-all duration-300 ${isLastRoll ? "bg-emerald-50 border-emerald-300 shadow-sm" : "bg-slate-50 border-slate-200"}`}
+                className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-scaleIn"
+                onClick={(e) => e.stopPropagation()}
               >
-                <label className="flex items-center justify-between cursor-pointer select-none">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={isLastRoll}
-                      onChange={(e) => {
-                        setIsLastRoll(e.target.checked);
-                        if (e.target.checked) {
-                          setValue(
-                            "tanggalPotong",
-                            new Date().toISOString().split("T")[0],
-                          );
-                        } else {
-                          setValue("tanggalPotong", "");
-                        }
-                      }}
-                      className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
-                    />
-                    <div>
-                      <h5
-                        className={`text-sm font-bold ${isLastRoll ? "text-emerald-700" : "text-slate-600"}`}
-                      >
-                        Potong Kain
-                      </h5>
-                    </div>
-                  </div>
-                  <Scissors
-                    className={`w-5 h-5 shrink-0 scale-x-[-1] ${isLastRoll ? "text-emerald-600" : "text-slate-400"}`}
-                  />
-                </label>
+                <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50">
+                  <h3 className="font-black text-slate-800 text-lg">
+                    Opsi Lanjutan Meter
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedActions(false)}
+                    className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
-                {isLastRoll && (
-                  <div className="mt-4 pt-4 border-t border-emerald-200/60 animate-fadeIn">
-                    <div className="flex flex-col md:flex-row md:items-end gap-4">
-                      <div className="flex flex-col gap-1 flex-1">
-                        <label className="text-[10px] font-bold text-emerald-600 uppercase">
-                          Tanggal Potong
-                        </label>
+                <div 
+                  className="p-5 sm:p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/30 custom-scrollbar"
+                  onClick={() => setActiveInfo(null)}
+                >
+                  {/* Potong Kain Toggle */}
+                  <div className="flex flex-col gap-2 relative" data-tour="meter-cut-roll">
+                    <label className={`relative flex flex-col items-center justify-center p-4 h-32 rounded-2xl border-2 cursor-pointer transition-all duration-300 text-center ${
+                      isLastRoll 
+                        ? "bg-gradient-to-br from-[#0070bc] to-[#004777] border-transparent shadow-lg shadow-sky-500/30 text-white" 
+                        : "bg-white border-slate-200 hover:border-sky-300 text-slate-600 hover:bg-sky-50"
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={isLastRoll}
+                        onChange={(e) => {
+                          setIsLastRoll(e.target.checked);
+                          if (e.target.checked) {
+                            setValue("tanggalPotong", new Date().toISOString().split("T")[0]);
+                          } else {
+                            setValue("tanggalPotong", "");
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <Scissors className={`w-8 h-8 mb-2 transition-transform duration-300 ${isLastRoll ? "-rotate-12 scale-110" : "text-slate-400"}`} style={{ transform: isLastRoll ? "scaleX(-1) rotate(12deg)" : "scaleX(-1)" }} />
+                      <span className="font-black uppercase text-xs tracking-wide">Potong Kain</span>
+                      
+                      {isLastRoll && (
+                        <div className="absolute top-2 right-2 bg-white/20 rounded-full p-1">
+                          <CheckCircle2 className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setActiveInfo(activeInfo === "potong" ? null : "potong");
+                      }}
+                      className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${
+                        activeInfo === "potong" 
+                          ? "bg-slate-800 text-white" 
+                          : isLastRoll ? "bg-white/20 text-white hover:bg-white/30" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                      }`}
+                    >
+                      <Info className="w-4 h-4" />
+                    </button>
+                    {activeInfo === "potong" && (
+                      <div className="absolute top-12 left-0 w-full p-3 bg-slate-800 text-white text-[11px] leading-relaxed rounded-xl z-50 shadow-xl animate-fadeIn">
+                        Tandai khusus untuk potongan terakhir dalam roll kain.
+                      </div>
+                    )}
+
+                    {isLastRoll && (
+                      <div className="animate-fadeIn space-y-2 mt-1">
                         <input
                           type="date"
                           {...register("tanggalPotong")}
-                          className="h-12 px-4 rounded-xl bg-white border border-emerald-200 text-sm font-semibold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none shadow-sm"
+                          className="h-10 px-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-800 text-xs font-bold focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none shadow-sm w-full text-center"
                         />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setShowAdvancedActions(false);
+                            await refreshAutomaticMeterStart();
+                            setIsMeterModalOpen(true);
+                          }}
+                          className="w-full h-10 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          <Save className="w-4 h-4" /> Lanjut Isi Total Meter
+                        </button>
                       </div>
+                    )}
+                  </div>
+
+                  {/* Pilih PCS yang BS */}
+                  {fields.length > 0 && (
+                    <div className="flex flex-col gap-2 relative">
+                      <div className="relative flex flex-col items-center justify-center p-4 min-h-32 h-auto rounded-2xl border-2 bg-gradient-to-br from-rose-50 to-white border-rose-200 text-center shadow-sm">
+                        <AlertCircle className="w-7 h-7 mb-2 text-rose-500" />
+                        <span className="font-black uppercase text-xs text-rose-700 tracking-wide mb-2">Tandai PCS BS</span>
+                        
+                        <div className="flex flex-wrap justify-center gap-1.5 w-full">
+                          {fields.map((field, index) => (
+                            <div key={field.id} className="relative flex-1 min-w-[45%] z-10">
+                              <input
+                                type="checkbox"
+                                id={`pcsBs-${index}`}
+                                {...register(`pcsData.${index}.isBs` as const)}
+                                className="peer hidden"
+                              />
+                              <label htmlFor={`pcsBs-${index}`} className="flex items-center justify-center cursor-pointer py-1.5 px-2 rounded-lg border-2 bg-white border-rose-200 text-rose-600 font-bold text-[10px] uppercase transition-all duration-300 hover:border-rose-400 hover:bg-rose-50 peer-checked:bg-rose-500 peer-checked:border-rose-600 peer-checked:text-white peer-checked:shadow-md">
+                                PCS {index + 1}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       <button
                         type="button"
-                        onClick={async () => {
-                          await refreshAutomaticMeterStart();
-                          setIsMeterModalOpen(true);
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActiveInfo(activeInfo === "pcs" ? null : "pcs");
                         }}
-                        className="flex-[2] h-12 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm md:text-base font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
+                        className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${
+                          activeInfo === "pcs" ? "bg-slate-800 text-white" : "bg-rose-100 text-rose-400 hover:bg-rose-200"
+                        }`}
                       >
-                        <Save className="w-5 h-5" /> Lanjut Isi Total Produksi
-                        (Meteran)
+                        <Info className="w-4 h-4" />
                       </button>
+                      {activeInfo === "pcs" && (
+                        <div className="absolute top-12 left-0 w-full p-3 bg-slate-800 text-white text-[11px] leading-relaxed rounded-xl z-50 shadow-xl animate-fadeIn">
+                          Klik tombol PCS yang cacat/rusak. Otomatis akan menahan nomor urut potongan selanjutnya.
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                <div className="p-4 sm:p-5 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedActions(false)}
+                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-all uppercase tracking-wider cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      setShowAdvancedActions(false);
+                      handleSubmit(onSubmit, onInvalid)();
+                    }}
+                    className="flex-1 h-12 sm:h-14 bg-[#0070bc] hover:bg-[#004777] active:scale-[0.98] text-white font-black text-sm rounded-xl shadow-lg shadow-sky-900/20 transition-all uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-5 h-5" />
+                    <span>{isSubmitting ? "Menyimpan..." : "Kirim Laporan Sekarang"}</span>
+                  </button>
+                </div>
               </div>
-
-              {/* Pilih PCS yang BS */}
-              {fields.length > 0 && (
-                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 transition-all duration-300 shadow-sm mb-4">
-                  <h5 className="text-xs font-black text-rose-800 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <AlertCircle className="w-4 h-4" />
-                    Tandai PCS BS
-                  </h5>
-                  <p className="text-[10px] font-medium text-rose-600 mb-4">
-                    Centang PCS yang rusak. Jika ada 1 saja yang dicentang, nomor potongan akan otomatis diulang untuk roll/potongan selanjutnya.
-                  </p>
-                  <div className="flex flex-wrap gap-4">
-                    {fields.map((field, index) => (
-                      <label key={field.id} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
-                        <input
-                          type="checkbox"
-                          {...register(`pcsData.${index}.isBs` as const)}
-                          className="w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
-                        />
-                        <span className="text-xs font-bold text-rose-700">
-                          PCS {index + 1}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Lanjut Shift Checkbox */}
-              {!isEdit && (
-                <div className="bg-orange-50/80 border border-orange-200/60 rounded-2xl p-4 transition-all duration-300">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      {...register("mesinMasihStop")}
-                      className="w-5 h-5 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black text-orange-800 uppercase tracking-wide">Masalah Lanjut Shift (Mesin Stop)</span>
-                      <span className="text-[10px] font-medium text-orange-600/80">Centang jika masalah belum selesai dan panel dilanjutkan shift berikutnya.</span>
-                    </div>
-                  </label>
-                </div>
-              )}
             </div>
           )}
 
           <div className="flex flex-col gap-4 mt-6">
-            <button
-              data-tour="meter-submit-defect"
-              type="button"
-              onClick={() => {
-                if (watch("nomorMc") !== "T2A") {
-                  setValue("meterAwal", "");
-                }
-                setValue("meterAkhir", "");
-                handleSubmit(onSubmit, onInvalid)();
-              }}
-              disabled={isSubmitting}
-              className={`w-full h-12 rounded-xl active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md ${isLastRoll ? "bg-slate-400 hover:bg-slate-500" : "bg-[#0070bc] hover:bg-[#004777]"}`}
-            >
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="w-5 h-5 animate-spin" /> Menyimpan...
-                </>
-              ) : (
-                <>
-                  <Save className="w-5 h-5" />{" "}
-                  {isEdit
-                    ? "Simpan Perubahan Cacat"
-                    : "Kirim Laporan Titik Cacat"}
-                </>
-              )}
-            </button>
+            {watch("nomorMc") && machineInputTypes[watch("nomorMc").toUpperCase()] === "PANEL" ? (
+              <button
+                type="button"
+                disabled
+                className="w-full h-12 rounded-xl bg-slate-200 text-slate-500 font-extrabold text-xs uppercase tracking-wide cursor-not-allowed flex items-center justify-center gap-2 border border-slate-300"
+              >
+                <Lock className="w-4 h-4 text-slate-500" />
+                <span>Ditolak: Mesin {watch("nomorMc")} Khusus Input PANEL</span>
+              </button>
+            ) : (
+              <button
+                data-tour="meter-submit-defect"
+                type="button"
+                onClick={() => {
+                  if (watch("nomorMc") !== "T2A") {
+                    setValue("meterAwal", "");
+                  }
+                  setValue("meterAkhir", "");
+                  handleSubmit(onSubmit, onInvalid)();
+                }}
+                disabled={isSubmitting}
+                className={`w-full h-12 rounded-xl active:scale-[0.99] disabled:opacity-50 text-white text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-md ${isLastRoll ? "bg-slate-400 hover:bg-slate-500" : "bg-[#0070bc] hover:bg-[#004777]"}`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="w-5 h-5 animate-spin" /> Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />{" "}
+                    {isEdit
+                      ? "Simpan Perubahan Cacat"
+                      : "Kirim Laporan Titik Cacat"}
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {isMeterModalOpen && (
@@ -1974,7 +2109,11 @@ export default function ContinuousForm({
                       </div>
                       <div className="flex flex-col gap-1">
                         <label className="text-xs font-bold text-slate-600 uppercase">
-                          Finish Meter
+                          {watchJenisLaporan === "Mulai Istirahat"
+                            ? "Meter Ketika Istirahat"
+                            : watchJenisLaporan === "Selesai Istirahat"
+                              ? "Meter Selesai Istirahat"
+                              : "Finish Meter"}
                         </label>
                         <input
                           type="number"
@@ -2068,9 +2207,16 @@ export default function ContinuousForm({
                         className="w-full h-10 px-3 rounded-lg border border-amber-300 text-sm font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-amber-400 outline-none"
                       >
                         <option value="">-- Pilih Operator --</option>
-                        {operators.map(op => (
-                          <option key={op.id} value={op.name}>{op.name}</option>
-                        ))}
+                        {(() => {
+                          const currentOperatorId = watch("operatorId");
+                          const currentOp = operators.find(o => o.id.toString() === currentOperatorId);
+                          const backupOps = currentOp?.shift 
+                            ? operators.filter(o => o.shift === currentOp.shift && o.id.toString() !== currentOperatorId)
+                            : operators;
+                          return backupOps.map(op => (
+                            <option key={op.id} value={op.name}>{op.name}</option>
+                          ));
+                        })()}
                       </select>
                     </div>
                   )}

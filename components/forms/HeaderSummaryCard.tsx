@@ -90,14 +90,14 @@ export default function HeaderSummaryCard({
           </div>
 
           {pcsCount !== undefined && (
-            <div className="p-2.5 sm:p-3 lg:p-5 bg-amber-50/70 sm:col-span-2 border-t border-slate-100 flex items-center justify-between">
+            <div className="p-2.5 sm:p-3 lg:p-5 bg-sky-50/60 sm:col-span-2 border-t border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                <FileText className="w-4 h-4 text-sky-500 shrink-0" />
                 <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
                   PCS:
                 </span>
               </div>
-              <span className="px-3 py-1 bg-amber-500 text-white font-black text-sm rounded-lg shadow-sm">
+              <span className="px-3 py-1 bg-[#0070bc] text-white font-black text-sm rounded-lg shadow-sm">
                 {pcsCount} Pcs
               </span>
             </div>

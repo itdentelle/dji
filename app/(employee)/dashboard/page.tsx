@@ -549,12 +549,8 @@ export default function DashboardPage() {
         ? (countMasalahMeteran / totalProduksiMeter) * 100
         : 0;
 
-    // Perhitungan Efisiensi Waktu Kerja Akumulatif
-    // Menghitung jumlah kombinasi Tanggal + Operator_ID (Jumlah Sesi Shift)
-    const shiftSessions = new Set(
-      gradeScoped.map((item) => item.tanggal + "_" + item.nama_operator),
-    ).size;
-    const totalDetikTersedia = shiftSessions * 480 * 60;
+    const uniqueDatesCount = new Set(gradeScoped.map((item) => item.tanggal)).size || 1;
+    const totalDetikTersedia = uniqueDatesCount * 24 * 3600;
     const totalDowntimeDetik = gradeScoped.reduce(
       (acc, curr) => acc + (curr.total_downtime_detik || 0),
       0,

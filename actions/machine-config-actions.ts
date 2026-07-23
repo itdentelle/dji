@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 export interface MachineConfig {
   nomor_mc: string;
   default_pcs: number;
+  input_type: "PANEL" | "METER";
 }
 
 const DEFAULT_MACHINES: Record<string, number> = {
@@ -22,23 +23,32 @@ const DEFAULT_MACHINES: Record<string, number> = {
   Winding: 1,
 };
 
+const DEFAULT_INPUT_TYPES: Record<string, "PANEL" | "METER"> = {
+  T2A: "METER",
+  "Warping D6": "METER",
+  Winding: "METER",
+};
+
 export async function getMachineConfigs(): Promise<{ success: boolean; data: MachineConfig[]; error?: string }> {
   try {
     const supabase = await createClient();
 
     const { data, error } = await supabase
       .from("machine_configs")
-      .select("nomor_mc, default_pcs");
+      .select("nomor_mc, default_pcs, input_type");
 
     if (error && error.code !== "PGRST116" && !error.message.includes("does not exist")) {
       console.error("Error fetching machine_configs:", error);
     }
 
-    const configMap = new Map<string, number>();
+    const configMap = new Map<string, { pcs: number; input_type?: "PANEL" | "METER" }>();
     if (data && Array.isArray(data)) {
       data.forEach((item: any) => {
         if (item.nomor_mc) {
-          configMap.set(String(item.nomor_mc).trim().toUpperCase(), item.default_pcs || 1);
+          configMap.set(String(item.nomor_mc).trim().toUpperCase(), {
+            pcs: item.default_pcs || 1,
+            input_type: item.input_type === "METER" ? "METER" : item.input_type === "PANEL" ? "PANEL" : undefined,
+          });
         }
       });
     }
@@ -47,11 +57,14 @@ export async function getMachineConfigs(): Promise<{ success: boolean; data: Mac
 
     const results: MachineConfig[] = ALL_MACHINES.map((mc) => {
       const mcKey = mc.toUpperCase();
-      const pcsFromDb = configMap.get(mcKey);
+      const dbObj = configMap.get(mcKey);
       const fallbackPcs = DEFAULT_MACHINES[mc] || 1;
+      const fallbackType = DEFAULT_INPUT_TYPES[mc] || "PANEL";
+
       return {
         nomor_mc: mc,
-        default_pcs: pcsFromDb !== undefined ? pcsFromDb : fallbackPcs,
+        default_pcs: dbObj?.pcs !== undefined ? dbObj.pcs : fallbackPcs,
+        input_type: dbObj?.input_type || fallbackType,
       };
     });
 
@@ -63,18 +76,20 @@ export async function getMachineConfigs(): Promise<{ success: boolean; data: Mac
     const fallbackData = ALL_MACHINES.map((mc) => ({
       nomor_mc: mc,
       default_pcs: DEFAULT_MACHINES[mc] || 1,
+      input_type: DEFAULT_INPUT_TYPES[mc] || ("PANEL" as const),
     }));
     return { success: true, data: fallbackData };
   }
 }
 
-export async function upsertMachineConfig(nomorMc: string, defaultPcs: number) {
+export async function upsertMachineConfig(nomorMc: string, defaultPcs: number, inputType: "PANEL" | "METER" = "PANEL") {
   try {
     const supabase = await createClient();
 
     const payload = {
       nomor_mc: nomorMc,
       default_pcs: defaultPcs,
+      input_type: inputType,
       updated_at: new Date().toISOString(),
     };
 
@@ -88,7 +103,7 @@ export async function upsertMachineConfig(nomorMc: string, defaultPcs: number) {
     if (existing) {
       const res = await supabase
         .from("machine_configs")
-        .update({ default_pcs: defaultPcs, updated_at: new Date().toISOString() })
+        .update({ default_pcs: defaultPcs, input_type: inputType, updated_at: new Date().toISOString() })
         .eq("nomor_mc", nomorMc);
       error = res.error;
     } else {
@@ -104,6 +119,45 @@ export async function upsertMachineConfig(nomorMc: string, defaultPcs: number) {
     return { success: true };
   } catch (err: any) {
     console.error("Error in upsertMachineConfig:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function upsertAllMachineConfigs(configs: MachineConfig[]) {
+  try {
+    const supabase = await createClient();
+
+    for (const cfg of configs) {
+      const payload = {
+        nomor_mc: cfg.nomor_mc,
+        default_pcs: cfg.default_pcs,
+        input_type: cfg.input_type,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: existing } = await supabase
+        .from("machine_configs")
+        .select("nomor_mc")
+        .eq("nomor_mc", cfg.nomor_mc)
+        .single();
+
+      if (existing) {
+        await supabase
+          .from("machine_configs")
+          .update({
+            default_pcs: cfg.default_pcs,
+            input_type: cfg.input_type,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("nomor_mc", cfg.nomor_mc);
+      } else {
+        await supabase.from("machine_configs").insert(payload);
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error in upsertAllMachineConfigs:", err);
     return { success: false, error: err.message };
   }
 }

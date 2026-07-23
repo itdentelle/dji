@@ -3,6 +3,8 @@ import { Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import OfflineSyncManager from "@/components/OfflineSyncManager";
+import AnnouncementTicker from "@/components/AnnouncementTicker";
+import DirectUserMessageModal from "@/components/DirectUserMessageModal";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -28,6 +30,8 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-[var(--background)] text-[#1f2d3d] flex flex-col font-sans">
         <AuthProvider>
+          <AnnouncementTicker />
+          <DirectUserMessageModal />
           <div className="min-h-full flex flex-col flex-1">
             {children}
             <OfflineSyncManager />

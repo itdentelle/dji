@@ -106,6 +106,7 @@ export interface MachineStatus {
   status: "Beroperasi" | "Idle" | "Tidak Aktif";
   nama_operator: string;
   design: string;
+  potongan_ke?: number | string;
   last_input_date: string;
   last_input_time?: string;
 }
@@ -121,7 +122,7 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
     // Query production_headers and join operators to get the operator's name
     const { data, error } = await supabase
       .from("production_headers")
-      .select("nomor_mc, tgl, design_id, tanggal_jam, operators(nama_operator), created_by_name, pic")
+      .select("nomor_mc, tgl, design_id, potongan_ke, tanggal_jam, operators(nama_operator), created_by_name, pic")
       .gte("tgl", dateLimit)
       .order("tanggal_jam", { ascending: false });
 
@@ -152,6 +153,7 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
           status: "Tidak Aktif",
           nama_operator: "-",
           design: "-",
+          potongan_ke: "-",
           last_input_date: "-",
           last_input_time: "-"
         };
@@ -188,6 +190,7 @@ export async function getMachineStatuses(): Promise<{ success: boolean; data?: M
         status,
         nama_operator: (row.operators as any)?.nama_operator || row.pic || row.created_by_name || "-",
         design: row.design_id || "-",
+        potongan_ke: row.potongan_ke || "-",
         last_input_date: row.tgl,
         last_input_time: lastTime
       };

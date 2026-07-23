@@ -28,6 +28,7 @@ import {
   Calendar,
   ShieldCheck,
   Users,
+  Megaphone,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -188,6 +189,12 @@ export default function Sidebar() {
           icon: Users,
           roles: ["admin"],
         },
+        {
+          name: "Set Pengumuman",
+          href: "/announcements",
+          icon: Megaphone,
+          roles: ["admin", "manager"],
+        },
       ],
     },
     {
@@ -272,6 +279,7 @@ function SidebarInner({
 }: any) {
   const [openGroups, setOpenGroups] =
     useState<Record<string, boolean>>(getInitialOpenGroups);
+  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
 
   const toggleGroup = (label: string) => {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -351,6 +359,24 @@ function SidebarInner({
                   {visibleItems.map((item: any) => {
                     const Icon = item.icon;
                     const isActive = pathname === item.href;
+                    if (item.isModal) {
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => {
+                            setIsMobileOpen(false);
+                            setIsAnnouncementModalOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 h-9 rounded-xl text-xs font-semibold text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition-all duration-200 group/item cursor-pointer text-left"
+                        >
+                          <Icon className="w-4 h-4 shrink-0 transition-transform group-hover/item:scale-105 text-amber-500" />
+                          <span className="whitespace-nowrap transition-all duration-300 md:opacity-0 md:w-0 md:group-hover:opacity-100 md:group-hover:w-auto overflow-hidden">
+                            {item.name}
+                          </span>
+                        </button>
+                      );
+                    }
                     return (
                       <Link
                         key={item.href}

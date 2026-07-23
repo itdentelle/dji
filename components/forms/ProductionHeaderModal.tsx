@@ -15,6 +15,7 @@ interface ProductionHeaderModalProps {
   activeShiftName: string;
   onClearHeader: () => void;
   highlightPotonganKe?: boolean;
+  highlightOperator?: boolean;
   pcsCount?: number;
   onChangePcsCount?: (count: number) => void;
 }
@@ -30,11 +31,12 @@ export default function ProductionHeaderModal({
   activeShiftName,
   onClearHeader,
   highlightPotonganKe,
+  highlightOperator,
   pcsCount,
   onChangePcsCount,
 }: ProductionHeaderModalProps) {
   const { user } = useAuth();
-  
+
   return (
     <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 ${isOpen ? '' : 'hidden'}`}>
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
@@ -64,19 +66,52 @@ export default function ProductionHeaderModal({
 
         {/* Body Modal (Form) */}
         <div className="p-6 overflow-y-auto custom-scrollbar">
+          {/* Banner Peringatan Pergantian Shift (Jika ada highlightOperator) */}
+          {highlightOperator && (
+            <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-xl flex items-start gap-3 animate-fadeIn shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+                <Settings2 className="w-4 h-4 animate-spin" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-amber-900 uppercase">
+                  Penggantian Shift - Harap Ganti Nama Operator
+                </h4>
+                <p className="text-[11px] font-semibold text-amber-800 mt-0.5 leading-relaxed">
+                  Laporan Akhir Shift telah disimpan. Silakan pilih <strong>Nama Operator & Grup Shift</strong> yang bertugas untuk shift baru ini.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Operator & Grup */}
-          <div className="flex flex-col gap-4 mb-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
+          <div className={`flex flex-col gap-4 mb-6 p-5 rounded-xl border transition-all duration-500 ${
+            highlightOperator 
+              ? 'bg-amber-50/70 border-2 border-amber-400 shadow-md ring-2 ring-amber-400 ring-offset-2' 
+              : 'bg-slate-50 border-slate-100'
+          }`}>
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Grup Shift *</label>
-              <select {...register("groupId")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all">
+              <label className={`text-[10px] font-bold uppercase tracking-wider ${highlightOperator ? 'text-amber-900' : 'text-slate-500'}`}>
+                Grup Shift *
+              </label>
+              <select {...register("groupId")} className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all outline-none ${
+                highlightOperator
+                  ? 'bg-white border-2 border-amber-400 text-amber-900 font-extrabold focus:ring-4 focus:ring-amber-400/20'
+                  : 'bg-white border border-slate-200 text-slate-700 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 shadow-sm'
+              }`}>
                 {groups.map(g => <option key={g.id} value={g.id.toString()}>Grup {g.name}</option>)}
               </select>
               {errors.groupId && <span className="text-red-500 text-[10px] font-bold">{errors.groupId.message as string}</span>}
             </div>
             
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nama Operator (Shift {activeShiftName}) *</label>
-              <select {...register("operatorId")} className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 outline-none shadow-sm transition-all">
+              <label className={`text-[10px] font-bold uppercase tracking-wider ${highlightOperator ? 'text-amber-900' : 'text-slate-500'}`}>
+                Nama Operator (Shift {activeShiftName}) * {highlightOperator && <span className="text-amber-600 ml-1 font-black animate-pulse">(Wajib Disesuaikan)</span>}
+              </label>
+              <select {...register("operatorId")} className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all outline-none ${
+                highlightOperator
+                  ? 'bg-white border-2 border-amber-500 text-amber-900 font-black focus:ring-4 focus:ring-amber-400/20 shadow-md ring-2 ring-amber-300'
+                  : 'bg-white border border-slate-200 text-slate-700 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10 shadow-sm'
+              }`}>
                 <option value="">-- Pilih Operator --</option>
                 {operators.map(op => <option key={op.id} value={op.id.toString()}>{op.name}</option>)}
               </select>
