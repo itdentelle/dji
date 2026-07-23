@@ -334,10 +334,10 @@ const getNiceChartMax = (rawValue: number, minimum = 5) => {
   const normalized = roughTick / magnitude;
   const niceNormalized =
     normalized <= 1 ? 1 :
-    normalized <= 2 ? 2 :
-    normalized <= 2.5 ? 2.5 :
-    normalized <= 5 ? 5 :
-    10;
+      normalized <= 2 ? 2 :
+        normalized <= 2.5 ? 2.5 :
+          normalized <= 5 ? 5 :
+            10;
 
   return niceNormalized * magnitude * 4;
 };
@@ -796,7 +796,7 @@ export default function DashboardPage() {
         selectedMachines.includes(item.mesin_id),
       );
     }
-    
+
     return result;
   }, [
     transactions,
@@ -908,13 +908,16 @@ export default function DashboardPage() {
     // 1. Top Operators, mengikuti mode Panel/Meteran.
     const operatorMap: Record<
       string,
-      { headers: Set<string>; meterHeaders: Map<string, number>; group: string }
+      { headers: Set<string>; meterHeaders: Map<string, number>; panelSet: Set<string>; group: string }
     > = {};
     leaderboardData.forEach((item) => {
+      if (item.grade === "BS") return;
+
       if (!operatorMap[item.nama_operator]) {
         operatorMap[item.nama_operator] = {
           headers: new Set(),
           meterHeaders: new Map(),
+          panelSet: new Set(),
           group: item.group || "Tanpa Group",
         };
       }
@@ -927,6 +930,16 @@ export default function DashboardPage() {
           parseFloat(item.hasil_meter as any) || 0,
         ),
       );
+
+      if (
+        item.panel_no !== undefined &&
+        item.panel_no !== null &&
+        !isNaN(Number(item.panel_no)) &&
+        (item.hasil_meter || 0) === 0
+      ) {
+        const key = `${item.mesin_id}_${item.design}_${item.potongan_ke}_${Number(item.panel_no)}`;
+        operatorMap[item.nama_operator].panelSet.add(key);
+      }
     });
     const topOperators = Object.entries(operatorMap)
       .map(([name, data]) => {
@@ -934,10 +947,11 @@ export default function DashboardPage() {
           (sum, value) => sum + value,
           0,
         );
+        const totalPanel = data.panelSet.size;
         return {
           name,
-          value: isMeterMode ? meter : data.headers.size,
-          pcs: data.headers.size,
+          value: isMeterMode ? meter : totalPanel,
+          pcs: totalPanel,
           meter,
           group: data.group,
         };
@@ -953,14 +967,18 @@ export default function DashboardPage() {
         headers: Set<string>;
         meterHeaders: Map<string, number>;
         downtimeHeaders: Map<string, number>;
+        panelSet: Set<string>;
       }
     > = {};
     leaderboardData.forEach((item) => {
+      if (item.grade === "BS") return;
+
       if (!machineMap[item.mesin_id]) {
         machineMap[item.mesin_id] = {
           headers: new Set(),
           meterHeaders: new Map(),
           downtimeHeaders: new Map(),
+          panelSet: new Set(),
         };
       }
 
@@ -976,6 +994,16 @@ export default function DashboardPage() {
         item.header_id,
         item.total_downtime_detik || 0,
       );
+
+      if (
+        item.panel_no !== undefined &&
+        item.panel_no !== null &&
+        !isNaN(Number(item.panel_no)) &&
+        (item.hasil_meter || 0) === 0
+      ) {
+        const key = `${item.mesin_id}_${item.design}_${item.potongan_ke}_${Number(item.panel_no)}`;
+        machineMap[item.mesin_id].panelSet.add(key);
+      }
     });
     const topMachines = Object.entries(machineMap)
       .map(([id, data]) => {
@@ -987,10 +1015,11 @@ export default function DashboardPage() {
           (sum, val) => sum + val,
           0,
         );
+        const totalPanel = data.panelSet.size;
         return {
           id,
-          value: isMeterMode ? meter : data.headers.size,
-          pcs: data.headers.size,
+          value: isMeterMode ? meter : totalPanel,
+          pcs: totalPanel,
           meter,
           downtime,
         };
@@ -1011,7 +1040,7 @@ export default function DashboardPage() {
           downtimeHeaders: new Map(),
         };
       }
-      if (item.status_qc === "Recheck") {
+      if (item.status_qc === "Recheck" || (item.kategori_masalah && item.kategori_masalah.trim() !== "")) {
         criticalMachineMap[item.mesin_id].defects += 1;
       }
       criticalMachineMap[item.mesin_id].downtimeHeaders.set(
@@ -1091,16 +1120,16 @@ export default function DashboardPage() {
         });
       });
     } else {
-      // Group by MESIN
+      // Group by MESIN: hitung jumlah kejadian masalah/cacat sesungguhnya per mesin
       transactionsToAnalyze.forEach((item) => {
-        const hasProblem = (item.kategori_masalah && item.kategori_masalah.trim() !== "") || (item.total_downtime_detik && item.total_downtime_detik > 0) || item.status_qc === "Recheck" || item.grade === "BS";
-        if (!hasProblem) return;
+        const isDefect = item.status_qc === "Recheck" || (item.kategori_masalah && item.kategori_masalah.trim() !== "");
+        const downtime = item.total_downtime_detik || 0;
+        if (!isDefect && downtime === 0) return;
 
         const key = getMachineKey(item) || "Mesin -";
-        const downtime = item.total_downtime_detik || 0;
         const existing = itemMap.get(key) || { count: 0, downtime: 0 };
         itemMap.set(key, {
-          count: existing.count + 1,
+          count: existing.count + (isDefect ? 1 : 0),
           downtime: existing.downtime + downtime,
         });
       });
@@ -1140,7 +1169,7 @@ export default function DashboardPage() {
       cumulativeSum += value;
       const cumulativePct = total > 0 ? (cumulativeSum / total) * 100 : 0;
       const roundedCumPct = parseFloat(cumulativePct.toFixed(1));
-      
+
       const isVital80 = !crossed80;
       if (roundedCumPct >= 80) {
         crossed80 = true;
@@ -1683,14 +1712,14 @@ export default function DashboardPage() {
                 </span>
               </h1>
               {isLive ? (
-                <span 
+                <span
                   title="Indikator Biru: Terhubung ke Database"
                   className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white border border-sky-100 shadow-[0_2px_10px_-3px_rgba(14,165,233,0.15)] cursor-help"
                 >
                   <span className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.6)] animate-pulse" />
                 </span>
               ) : (
-                <span 
+                <span
                   title="Indikator Abu: Terputus dari Database (Demo)"
                   className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm cursor-help"
                 >
@@ -1722,22 +1751,20 @@ export default function DashboardPage() {
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-full border border-slate-200 shadow-inner">
               <button
                 onClick={() => setDashboardMode("PRODUKSI")}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all duration-300 cursor-pointer flex items-center gap-1.5 ${
-                  dashboardMode === "PRODUKSI"
+                className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all duration-300 cursor-pointer flex items-center gap-1.5 ${dashboardMode === "PRODUKSI"
                     ? "bg-white text-[#0070bc] shadow-[0_2px_10px_rgba(0,0,0,0.08)]"
                     : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                }`}
+                  }`}
               >
                 <BarChart2 className="w-3.5 h-3.5" />
                 Produksi
               </button>
               <button
                 onClick={() => setDashboardMode("KEHADIRAN")}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all duration-300 cursor-pointer flex items-center gap-1.5 ${
-                  dashboardMode === "KEHADIRAN"
+                className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all duration-300 cursor-pointer flex items-center gap-1.5 ${dashboardMode === "KEHADIRAN"
                     ? "bg-white text-emerald-600 shadow-[0_2px_10px_rgba(0,0,0,0.08)]"
                     : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                }`}
+                  }`}
               >
                 <Users className="w-3.5 h-3.5" />
                 Kehadiran
@@ -1773,75 +1800,71 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-150">
-            <button
-              onClick={() => setDateRangeMode("ALL")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                dateRangeMode === "ALL"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-150"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Semua
-            </button>
-            <button
-              onClick={() => setDateRangeMode("TODAY")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                dateRangeMode === "TODAY"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-150"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Hari Ini
-            </button>
-            <button
-              onClick={() => setDateRangeMode("7DAYS")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                dateRangeMode === "7DAYS"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-150"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              7 Hari
-            </button>
-            <button
-              onClick={() => setDateRangeMode("CUSTOM")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                dateRangeMode === "CUSTOM"
-                  ? "bg-white text-slate-800 shadow-xs border border-slate-150"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Kustom
-            </button>
-          </div>
-
-          {/* Custom Calendar Inputs (Only visible when CUSTOM is active) */}
-          {dateRangeMode === "CUSTOM" && (
-            <div className="flex items-center gap-3 animate-fadeIn">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">
-                  Mulai:
-                </span>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold cursor-pointer"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">
-                  Sampai:
-                </span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold cursor-pointer"
-                />
-              </div>
+              <button
+                onClick={() => setDateRangeMode("ALL")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${dateRangeMode === "ALL"
+                    ? "bg-white text-slate-800 shadow-xs border border-slate-150"
+                    : "text-slate-500 hover:text-slate-800"
+                  }`}
+              >
+                Semua
+              </button>
+              <button
+                onClick={() => setDateRangeMode("TODAY")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${dateRangeMode === "TODAY"
+                    ? "bg-white text-slate-800 shadow-xs border border-slate-150"
+                    : "text-slate-500 hover:text-slate-800"
+                  }`}
+              >
+                Hari Ini
+              </button>
+              <button
+                onClick={() => setDateRangeMode("7DAYS")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${dateRangeMode === "7DAYS"
+                    ? "bg-white text-slate-800 shadow-xs border border-slate-150"
+                    : "text-slate-500 hover:text-slate-800"
+                  }`}
+              >
+                7 Hari
+              </button>
+              <button
+                onClick={() => setDateRangeMode("CUSTOM")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${dateRangeMode === "CUSTOM"
+                    ? "bg-white text-slate-800 shadow-xs border border-slate-150"
+                    : "text-slate-500 hover:text-slate-800"
+                  }`}
+              >
+                Kustom
+              </button>
             </div>
-          )}
+
+            {/* Custom Calendar Inputs (Only visible when CUSTOM is active) */}
+            {dateRangeMode === "CUSTOM" && (
+              <div className="flex items-center gap-3 animate-fadeIn">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    Mulai:
+                  </span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold cursor-pointer"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    Sampai:
+                  </span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1858,21 +1881,19 @@ export default function DashboardPage() {
           <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-150">
             <button
               onClick={() => setMetricMode("PCS")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                metricMode === "PCS"
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${metricMode === "PCS"
                   ? "bg-white text-slate-800 shadow-xs border border-slate-150"
                   : "text-slate-500 hover:text-slate-800"
-              }`}
+                }`}
             >
               Panel
             </button>
             <button
               onClick={() => setMetricMode("METER")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                metricMode === "METER"
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${metricMode === "METER"
                   ? "bg-white text-slate-800 shadow-xs border border-slate-150"
                   : "text-slate-500 hover:text-slate-800"
-              }`}
+                }`}
             >
               Meteran
             </button>
@@ -1881,7 +1902,7 @@ export default function DashboardPage() {
 
         {/* Entity Filters (Machine & Operator) */}
         <div className="flex flex-col gap-3 bg-white border border-[#e9ecef] rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] lg:shrink-0 flex-1 lg:flex-none">
-          
+
           {/* Machine Slicer */}
           <div className="flex items-center justify-between w-full gap-4 shrink-0">
             <div className="flex items-center gap-2">
@@ -2112,11 +2133,10 @@ export default function DashboardPage() {
                 {/* Card 2: Availability (Ketersediaan Mesin) */}
                 <div
                   onClick={() => setActiveFilter("ALL")}
-                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${
-                    activeFilter === "ALL" && metricMode === "PCS"
+                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${activeFilter === "ALL" && metricMode === "PCS"
                       ? "bg-slate-50/50 border-slate-500 text-slate-800 shadow-md"
                       : "bg-white border-[#e9ecef] text-slate-800 hover:scale-[1.01] hover:shadow-xs"
-                  }`}
+                    }`}
                 >
                   <div className="flex justify-between items-start relative z-10">
                     <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
@@ -2369,11 +2389,10 @@ export default function DashboardPage() {
               <>
                 {/* CLASSIC Card 1: Hasil Produksi (Slider Slicer) */}
                 <div
-                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group transition-all duration-300 flex flex-col ${
-                    activeFilter === "ALL"
+                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group transition-all duration-300 flex flex-col ${activeFilter === "ALL"
                       ? "bg-[#004777] shadow-xl scale-[1.03] ring-2 ring-[#0070bc] ring-offset-2 text-white"
                       : "bg-[#0070bc] shadow-md hover:scale-[1.01] text-white"
-                  }`}
+                    }`}
                   onTouchStart={handleTouchStart}
                   onTouchEnd={handleTouchEndMetric}
                 >
@@ -2474,11 +2493,10 @@ export default function DashboardPage() {
 
                 {/* CLASSIC Card 2: Lolos QC */}
                 <div
-                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border transition-all duration-300 flex flex-col ${
-                    activeFilter === "LOLOS"
+                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] group border transition-all duration-300 flex flex-col ${activeFilter === "LOLOS"
                       ? "bg-sky-50/50 border-sky-500 text-slate-800 shadow-md scale-[1.03] ring-2 ring-sky-500"
                       : "bg-white border-[#e9ecef] text-slate-800 hover:scale-[1.01] hover:shadow-xs"
-                  }`}
+                    }`}
                   onTouchStart={handleTouchStart}
                   onTouchEnd={handleTouchEndMetric}
                 >
@@ -2500,11 +2518,10 @@ export default function DashboardPage() {
                           Cacat Produksi Panel ({gradeLabel})
                         </span>
                         <span
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                            activeFilter === "LOLOS"
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "LOLOS"
                               ? "bg-sky-100 text-[#0070bc]"
                               : "bg-slate-100 text-slate-500"
-                          }`}
+                            }`}
                         >
                           QC
                         </span>
@@ -2535,11 +2552,10 @@ export default function DashboardPage() {
                           Cacat Produksi Meteran ({gradeLabel})
                         </span>
                         <span
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                            activeFilter === "LOLOS"
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "LOLOS"
                               ? "bg-sky-100 text-[#0070bc]"
                               : "bg-slate-100 text-slate-500"
-                          }`}
+                            }`}
                         >
                           QC
                         </span>
@@ -2590,11 +2606,10 @@ export default function DashboardPage() {
                 {/* CLASSIC Card 3: Efisiensi Waktu */}
                 <div
                   onClick={() => setActiveFilter("EFISIENSI")}
-                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${
-                    activeFilter === "EFISIENSI"
+                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${activeFilter === "EFISIENSI"
                       ? "bg-emerald-50/40 shadow-[0_8px_30px_rgba(16,185,129,0.12)] text-slate-800"
                       : "bg-white hover:shadow-xs text-slate-800"
-                  }`}
+                    }`}
                 >
                   {activeFilter === "EFISIENSI" && (
                     <div className="absolute inset-0 ring-2 ring-emerald-500 rounded-[24px] pointer-events-none" />
@@ -2604,11 +2619,10 @@ export default function DashboardPage() {
                       Efisiensi Waktu Kerja ({gradeLabel})
                     </span>
                     <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                        activeFilter === "EFISIENSI"
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "EFISIENSI"
                           ? "bg-emerald-100 text-emerald-600"
                           : "bg-slate-100 text-slate-500"
-                      }`}
+                        }`}
                     >
                       %
                     </span>
@@ -2648,11 +2662,10 @@ export default function DashboardPage() {
                     setActiveFilter("PROBLEMS");
                     setMetricMode("PCS");
                   }}
-                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${
-                    activeFilter === "PROBLEMS"
+                  className={`relative overflow-hidden rounded-[24px] h-full min-h-[11rem] border border-[#e9ecef] cursor-pointer p-5 flex flex-col justify-between transition-all duration-300 ${activeFilter === "PROBLEMS"
                       ? "bg-red-50/40 shadow-[0_8px_30px_rgba(239,68,68,0.12)] text-slate-800"
                       : "bg-white hover:shadow-xs text-slate-800"
-                  }`}
+                    }`}
                 >
                   {activeFilter === "PROBLEMS" && (
                     <div className="absolute inset-0 ring-2 ring-red-500 rounded-[24px] pointer-events-none" />
@@ -2662,11 +2675,10 @@ export default function DashboardPage() {
                       Masalah ({gradeLabel})
                     </span>
                     <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                        activeFilter === "PROBLEMS"
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${activeFilter === "PROBLEMS"
                           ? "bg-red-100 text-red-600 animate-pulse"
                           : "bg-slate-100 text-slate-500"
-                      }`}
+                        }`}
                     >
                       <AlertTriangle className="w-3.5 h-3.5" />
                     </span>
@@ -2711,51 +2723,46 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200">
                     <button
                       onClick={() => setChartGroupBy("HARI")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
-                        chartGroupBy === "HARI"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${chartGroupBy === "HARI"
                           ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                           : "text-slate-500 hover:text-slate-800"
-                      }`}
+                        }`}
                     >
                       <BarChart2 className="w-3 h-3" /> Tanggal
                     </button>
                     <button
                       onClick={() => setChartGroupBy("DESIGN")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
-                        chartGroupBy === "DESIGN"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${chartGroupBy === "DESIGN"
                           ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                           : "text-slate-500 hover:text-slate-800"
-                      }`}
+                        }`}
                     >
                       <Palette className="w-3 h-3" /> Design
                     </button>
                     <button
                       onClick={() => setChartGroupBy("PEGAWAI")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
-                        chartGroupBy === "PEGAWAI"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${chartGroupBy === "PEGAWAI"
                           ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                           : "text-slate-500 hover:text-slate-800"
-                      }`}
+                        }`}
                     >
                       <Users className="w-3 h-3" /> Pegawai
                     </button>
                     <button
                       onClick={() => setChartGroupBy("GROUP")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
-                        chartGroupBy === "GROUP"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${chartGroupBy === "GROUP"
                           ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                           : "text-slate-500 hover:text-slate-800"
-                      }`}
+                        }`}
                     >
                       <Layers className="w-3 h-3" /> Group
                     </button>
                     <button
                       onClick={() => setChartGroupBy("MESIN")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${
-                        chartGroupBy === "MESIN"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer flex items-center gap-1 ${chartGroupBy === "MESIN"
                           ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                           : "text-slate-500 hover:text-slate-800"
-                      }`}
+                        }`}
                     >
                       <Cpu className="w-3 h-3" /> Mesin
                     </button>
@@ -2765,21 +2772,19 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200">
                     <button
                       onClick={() => setChartType("BAR")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                        chartType === "BAR"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartType === "BAR"
                           ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                           : "text-slate-500 hover:text-slate-800"
-                      }`}
+                        }`}
                     >
                       Bar
                     </button>
                     <button
                       onClick={() => setChartType("LINE")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                        chartType === "LINE"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartType === "LINE"
                           ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                           : "text-slate-500 hover:text-slate-800"
-                      }`}
+                        }`}
                     >
                       Line
                     </button>
@@ -2789,51 +2794,46 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200">
                     <button
                       onClick={() => setChartGradeFilter("ALL")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                        chartGradeFilter === "ALL"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "ALL"
                           ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                           : "text-slate-500 hover:text-slate-800"
-                      }`}
+                        }`}
                     >
                       Semua
                     </button>
                     <button
                       onClick={() => setChartGradeFilter("GRADE_A")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                        chartGradeFilter === "GRADE_A"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "GRADE_A"
                           ? "bg-sky-600 text-white shadow-xs"
                           : "text-[#0070bc] hover:bg-sky-50"
-                      }`}
+                        }`}
                     >
                       Grade A
                     </button>
                     <button
                       onClick={() => setChartGradeFilter("GRADE_B")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                        chartGradeFilter === "GRADE_B"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "GRADE_B"
                           ? "bg-amber-500 text-white shadow-xs"
                           : "text-amber-700 hover:bg-amber-50"
-                      }`}
+                        }`}
                     >
                       Grade B
                     </button>
                     <button
                       onClick={() => setChartGradeFilter("BS")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                        chartGradeFilter === "BS"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "BS"
                           ? "bg-rose-500 text-white shadow-xs"
                           : "text-rose-700 hover:bg-rose-50"
-                      }`}
+                        }`}
                     >
                       BS
                     </button>
                     <button
                       onClick={() => setChartGradeFilter("UNGRADED")}
-                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
-                        chartGradeFilter === "UNGRADED"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${chartGradeFilter === "UNGRADED"
                           ? "bg-slate-500 text-white shadow-xs"
                           : "text-slate-500 hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       Belum Diinspeksi
                     </button>
@@ -3065,7 +3065,7 @@ export default function DashboardPage() {
                                       const h =
                                         maxChartValue > 0
                                           ? (d.ungraded_sum / maxChartValue) *
-                                            175
+                                          175
                                           : 0;
                                       return `${cx},${195 - Math.max(h, 1.5)}`;
                                     })
@@ -3090,7 +3090,7 @@ export default function DashboardPage() {
                                       const h =
                                         maxChartValue > 0
                                           ? (d.ungraded_sum / maxChartValue) *
-                                            175
+                                          175
                                           : 0;
                                       return `${cx},${195 - Math.max(h, 1.5)}`;
                                     })
@@ -3832,182 +3832,182 @@ export default function DashboardPage() {
               const pctUngraded =
                 totalQuality > 0 ? (totalUngraded / totalQuality) * 100 : 0;
 
-                return (
-                  <div className="space-y-6 flex flex-col flex-1">
-                    <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between flex-1">
-                      <div>
-                        <div className="border-b border-slate-100 pb-4 mb-6 flex justify-between items-start">
-                          <div>
-                            <h3 className="text-base font-extrabold text-slate-800">
-                              Ringkasan Kualitas
-                            </h3>
-                            <p className="text-[11px] text-slate-400 font-semibold">
-                              Persentase barang berdasarkan Grade
-                            </p>
-                          </div>
-                          <span className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-sky-50 text-sky-600 flex items-center gap-1 shrink-0">
-                            {totalQuality} {metricMode === "PCS" ? "Panel" : "Meter"}
-                          </span>
+              return (
+                <div className="space-y-6 flex flex-col flex-1">
+                  <div className="bg-white border border-[#e9ecef] rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between flex-1">
+                    <div>
+                      <div className="border-b border-slate-100 pb-4 mb-6 flex justify-between items-start">
+                        <div>
+                          <h3 className="text-base font-extrabold text-slate-800">
+                            Ringkasan Kualitas
+                          </h3>
+                          <p className="text-[11px] text-slate-400 font-semibold">
+                            Persentase barang berdasarkan Grade
+                          </p>
                         </div>
+                        <span className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-sky-50 text-sky-600 flex items-center gap-1 shrink-0">
+                          {totalQuality} {metricMode === "PCS" ? "Panel" : "Meter"}
+                        </span>
+                      </div>
 
-                        {/* Donut Chart Visual */}
-                        <div className="relative w-48 h-48 mx-auto flex items-center justify-center">
-                          <svg
-                            viewBox="0 0 100 100"
-                            className="w-full h-full transform -rotate-90"
-                          >
+                      {/* Donut Chart Visual */}
+                      <div className="relative w-48 h-48 mx-auto flex items-center justify-center">
+                        <svg
+                          viewBox="0 0 100 100"
+                          className="w-full h-full transform -rotate-90"
+                        >
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="40"
+                            fill="transparent"
+                            stroke="#f1f5f9"
+                            strokeWidth="12"
+                          />
+                          {pctA > 0 && (
                             <circle
                               cx="50"
                               cy="50"
                               r="40"
                               fill="transparent"
-                              stroke="#f1f5f9"
+                              stroke="#0070bc"
                               strokeWidth="12"
+                              strokeDasharray={`${(pctA / 100) * 251.2} 251.2`}
+                              strokeDashoffset="0"
+                              className="transition-all duration-1000 ease-out"
                             />
-                            {pctA > 0 && (
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="transparent"
-                                stroke="#0070bc"
-                                strokeWidth="12"
-                                strokeDasharray={`${(pctA / 100) * 251.2} 251.2`}
-                                strokeDashoffset="0"
-                                className="transition-all duration-1000 ease-out"
-                              />
-                            )}
-                            {pctB > 0 && (
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="transparent"
-                                stroke="#f59e0b"
-                                strokeWidth="12"
-                                strokeDasharray={`${(pctB / 100) * 251.2} 251.2`}
-                                strokeDashoffset={`-${(pctA / 100) * 251.2}`}
-                                className="transition-all duration-1000 ease-out"
-                              />
-                            )}
-                            {pctBS > 0 && (
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="transparent"
-                                stroke="#ef4444"
-                                strokeWidth="12"
-                                strokeDasharray={`${(pctBS / 100) * 251.2} 251.2`}
-                                strokeDashoffset={`-${((pctA + pctB) / 100) * 251.2}`}
-                                className="transition-all duration-1000 ease-out"
-                              />
-                            )}
-                            {pctUngraded > 0 && (
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="transparent"
-                                stroke="#94a3b8"
-                                strokeWidth="12"
-                                strokeDasharray={`${(pctUngraded / 100) * 251.2} 251.2`}
-                                strokeDashoffset={`-${((pctA + pctB + pctBS) / 100) * 251.2}`}
-                                className="transition-all duration-1000 ease-out"
-                              />
-                            )}
-                          </svg>
+                          )}
+                          {pctB > 0 && (
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="transparent"
+                              stroke="#f59e0b"
+                              strokeWidth="12"
+                              strokeDasharray={`${(pctB / 100) * 251.2} 251.2`}
+                              strokeDashoffset={`-${(pctA / 100) * 251.2}`}
+                              className="transition-all duration-1000 ease-out"
+                            />
+                          )}
+                          {pctBS > 0 && (
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="transparent"
+                              stroke="#ef4444"
+                              strokeWidth="12"
+                              strokeDasharray={`${(pctBS / 100) * 251.2} 251.2`}
+                              strokeDashoffset={`-${((pctA + pctB) / 100) * 251.2}`}
+                              className="transition-all duration-1000 ease-out"
+                            />
+                          )}
+                          {pctUngraded > 0 && (
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="transparent"
+                              stroke="#94a3b8"
+                              strokeWidth="12"
+                              strokeDasharray={`${(pctUngraded / 100) * 251.2} 251.2`}
+                              strokeDashoffset={`-${((pctA + pctB + pctBS) / 100) * 251.2}`}
+                              className="transition-all duration-1000 ease-out"
+                            />
+                          )}
+                        </svg>
 
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-3xl font-black text-slate-800 tracking-tight">
-                              {Math.round(pctA)}%
-                            </span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                              GRADE A
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Breakdown List */}
-                        <div className="mt-8 space-y-3">
-                          <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <span className="w-3 h-3 rounded-full bg-[#0070bc]" />
-                              <span className="text-xs font-extrabold text-slate-700">
-                                Grade A (Lolos)
-                              </span>
-                            </div>
-                            <div className="text-right flex items-baseline gap-1.5">
-                              <span className="text-sm font-black text-slate-800">
-                                {totalA}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-bold">
-                                {metricMode === "PCS" ? "Panel" : "Meter"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <span className="w-3 h-3 rounded-full bg-[#f59e0b]" />
-                              <span className="text-xs font-extrabold text-slate-700">
-                                Grade B (Lolos)
-                              </span>
-                            </div>
-                            <div className="text-right flex items-baseline gap-1.5">
-                              <span className="text-sm font-black text-slate-800">
-                                {totalB}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-bold">
-                                {metricMode === "PCS" ? "Panel" : "Meter"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <span className="w-3 h-3 rounded-full bg-[#ef4444]" />
-                              <span className="text-xs font-extrabold text-slate-700">
-                                BS (Recheck)
-                              </span>
-                            </div>
-                            <div className="text-right flex items-baseline gap-1.5">
-                              <span className="text-sm font-black text-slate-800">
-                                {totalBS}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-bold">
-                                {metricMode === "PCS" ? "Panel" : "Meter"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <span className="w-3 h-3 rounded-full bg-[#94a3b8]" />
-                              <span className="text-xs font-extrabold text-slate-700">
-                                Belum Diinspeksi (Ungraded)
-                              </span>
-                            </div>
-                            <div className="text-right flex items-baseline gap-1.5">
-                              <span className="text-sm font-black text-slate-800">
-                                {totalUngraded}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-bold">
-                                {metricMode === "PCS" ? "Panel" : "Meter"}
-                              </span>
-                            </div>
-                          </div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                          <span className="text-3xl font-black text-slate-800 tracking-tight">
+                            {Math.round(pctA)}%
+                          </span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                            GRADE A
+                          </span>
                         </div>
                       </div>
 
-                      <div className="border-t border-slate-100 pt-4 mt-6 text-center">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                          Ringkasan Kualifikasi
-                        </span>
+                      {/* Breakdown List */}
+                      <div className="mt-8 space-y-3">
+                        <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className="w-3 h-3 rounded-full bg-[#0070bc]" />
+                            <span className="text-xs font-extrabold text-slate-700">
+                              Grade A (Lolos)
+                            </span>
+                          </div>
+                          <div className="text-right flex items-baseline gap-1.5">
+                            <span className="text-sm font-black text-slate-800">
+                              {totalA}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              {metricMode === "PCS" ? "Panel" : "Meter"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className="w-3 h-3 rounded-full bg-[#f59e0b]" />
+                            <span className="text-xs font-extrabold text-slate-700">
+                              Grade B (Lolos)
+                            </span>
+                          </div>
+                          <div className="text-right flex items-baseline gap-1.5">
+                            <span className="text-sm font-black text-slate-800">
+                              {totalB}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              {metricMode === "PCS" ? "Panel" : "Meter"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className="w-3 h-3 rounded-full bg-[#ef4444]" />
+                            <span className="text-xs font-extrabold text-slate-700">
+                              BS (Recheck)
+                            </span>
+                          </div>
+                          <div className="text-right flex items-baseline gap-1.5">
+                            <span className="text-sm font-black text-slate-800">
+                              {totalBS}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              {metricMode === "PCS" ? "Panel" : "Meter"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className="w-3 h-3 rounded-full bg-[#94a3b8]" />
+                            <span className="text-xs font-extrabold text-slate-700">
+                              Belum Diinspeksi (Ungraded)
+                            </span>
+                          </div>
+                          <div className="text-right flex items-baseline gap-1.5">
+                            <span className="text-sm font-black text-slate-800">
+                              {totalUngraded}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              {metricMode === "PCS" ? "Panel" : "Meter"}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
+
+                    <div className="border-t border-slate-100 pt-4 mt-6 text-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                        Ringkasan Kualifikasi
+                      </span>
+                    </div>
                   </div>
-                );
+                </div>
+              );
             })()}
           </div>
 
@@ -4041,15 +4041,14 @@ export default function DashboardPage() {
                       >
                         <div className="flex items-center gap-3">
                           <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                              idx === 0
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${idx === 0
                                 ? "bg-amber-100 text-amber-700"
                                 : idx === 1
                                   ? "bg-slate-200 text-slate-700"
                                   : idx === 2
                                     ? "bg-orange-100 text-orange-700"
                                     : "bg-slate-100 text-slate-500"
-                            }`}
+                              }`}
                           >
                             {idx + 1}
                           </span>
@@ -4103,11 +4102,10 @@ export default function DashboardPage() {
                       >
                         <div className="flex items-center gap-3">
                           <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                              idx === 0
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${idx === 0
                                 ? "bg-sky-100 text-sky-700"
                                 : "bg-slate-100 text-slate-500"
-                            }`}
+                              }`}
                           >
                             {idx + 1}
                           </span>
@@ -4226,21 +4224,19 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
                       <button
                         onClick={() => setParetoGroupBy("KATEGORI")}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                          paretoGroupBy === "KATEGORI"
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${paretoGroupBy === "KATEGORI"
                             ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                             : "text-slate-500 hover:text-slate-800"
-                        }`}
+                          }`}
                       >
                         Kategori Masalah
                       </button>
                       <button
                         onClick={() => setParetoGroupBy("MESIN")}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                          paretoGroupBy === "MESIN"
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${paretoGroupBy === "MESIN"
                             ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                             : "text-slate-500 hover:text-slate-800"
-                        }`}
+                          }`}
                       >
                         Per Mesin Produksi
                       </button>
@@ -4266,21 +4262,19 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
                       <button
                         onClick={() => setParetoMode("COUNT")}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                          paretoMode === "COUNT"
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${paretoMode === "COUNT"
                             ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                             : "text-slate-500 hover:text-slate-800"
-                        }`}
+                          }`}
                       >
-                        Frekuensi Cacat
+                        Frekuensi Masalah
                       </button>
                       <button
                         onClick={() => setParetoMode("DURATION")}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                          paretoMode === "DURATION"
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${paretoMode === "DURATION"
                             ? "bg-white text-slate-800 shadow-xs border border-slate-200"
                             : "text-slate-500 hover:text-slate-800"
-                        }`}
+                          }`}
                       >
                         Durasi Downtime
                       </button>
@@ -4349,12 +4343,15 @@ export default function DashboardPage() {
                             {/* 80% Cutoff Line */}
                             <line x1={paddingLeft} y1={y80} x2={svgWidth - paddingRight} y2={y80} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5 4" />
                             <text x={paddingLeft + 8} y={y80 - 6} fontSize="9" fontWeight="black" fill="#ef4444">
-                              Batas Pareto 80% (Vital Few)
+                              Batas Pareto 80%
                             </text>
 
                             {/* Left Y Axis */}
                             <text x={paddingLeft - 8} y={paddingTop + 4} textAnchor="end" fontSize="9" fontWeight="bold" fill="#64748b">
                               {paretoMode === "COUNT" ? maxValue : `${Math.round(maxValue / 60)}m`}
+                            </text>
+                            <text x={paddingLeft - 8} y={y80 + 4} textAnchor="end" fontSize="9" fontWeight="black" fill="#ef4444">
+                              {paretoMode === "COUNT" ? Math.round(maxValue * 0.8) : `${Math.round((maxValue * 0.8) / 60)}m`}
                             </text>
                             <text x={paddingLeft - 8} y={paddingTop + chartHeight / 2 + 4} textAnchor="end" fontSize="9" fontWeight="bold" fill="#64748b">
                               {paretoMode === "COUNT" ? Math.round(maxValue / 2) : `${Math.round(maxValue / 120)}m`}
@@ -4428,18 +4425,16 @@ export default function DashboardPage() {
                   {list.map((item, idx) => (
                     <div
                       key={item.code}
-                      className={`p-3.5 rounded-2xl transition-all border ${
-                        item.isVital80
+                      className={`p-3.5 rounded-2xl transition-all border ${item.isVital80
                           ? "bg-amber-50/50 border-amber-200/80 shadow-xs hover:border-amber-300"
                           : "bg-slate-50/40 border-slate-200/60 hover:border-slate-300"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] ${
-                              item.isVital80 ? "bg-amber-500 text-white shadow-xs" : "bg-slate-300 text-slate-700"
-                            }`}
+                            className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] ${item.isVital80 ? "bg-amber-500 text-white shadow-xs" : "bg-slate-300 text-slate-700"
+                              }`}
                           >
                             {idx + 1}
                           </span>

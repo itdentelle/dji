@@ -1183,7 +1183,7 @@ export default function EmployeeForm({
     designs.find((d) => d.id.toString() === id)?.name || id;
 
   return (
-    <div className="w-full bg-gradient-to-br from-blue-50/40 via-white to-white border border-[#e9ecef] rounded-[24px] p-6 sm:p-8 shadow-[0_8px_30px_rgba(0,112,188,0.06)] text-slate-800 relative overflow-hidden">
+    <div className="w-full max-w-5xl mx-auto bg-gradient-to-br from-blue-50/40 via-white to-white border border-[#e9ecef] rounded-[24px] p-4 sm:p-6 lg:p-8 shadow-[0_8px_30px_rgba(0,112,188,0.06)] text-slate-800 relative overflow-hidden">
       {/* Decorative background shape */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none -z-10"></div>
 

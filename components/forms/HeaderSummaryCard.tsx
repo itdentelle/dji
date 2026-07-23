@@ -38,66 +38,66 @@ export default function HeaderSummaryCard({
   if (isBottom) {
     return (
       <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden mb-0 h-full flex flex-col justify-between">
-        <div className="grid grid-cols-1 sm:grid-cols-2 grow">
-          <div className="p-2.5 sm:p-3 lg:p-5 bg-sky-50/80">
+        <div className="grid grid-cols-2 grow">
+          <div className="p-2.5 sm:p-3 lg:p-4 bg-sky-50/80">
             <div className="flex items-center gap-1 mb-0.5">
               <Factory className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-sky-600 shrink-0" />
-              <span className="text-[9px] lg:text-[10px] font-bold text-sky-600 uppercase tracking-wider">
+              <span className="text-[9px] sm:text-[10px] font-bold text-sky-600 uppercase tracking-wider">
                 Mesin & Desain
               </span>
             </div>
-            <p className="text-xs sm:text-sm lg:text-base font-black text-slate-900 leading-tight break-words">
+            <p className="text-xs sm:text-sm font-black text-slate-900 leading-tight break-words">
               {nomorMc || "Belum dipilih"} / {design || "-"}
             </p>
           </div>
 
-          <div className="p-2.5 sm:p-3 lg:p-5 bg-emerald-50/70">
+          <div className="p-2.5 sm:p-3 lg:p-4 bg-emerald-50/70">
             <div className="flex items-center gap-1 mb-0.5">
               <CheckCircle2 className={`w-3 h-3 lg:w-3.5 lg:h-3.5 shrink-0 ${statusMatching === "OK" ? "text-emerald-600" : "text-rose-600"}`} />
-              <span className="text-[9px] lg:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                 Status Matching
               </span>
             </div>
             <p
-              className={`text-xs sm:text-sm lg:text-base font-black leading-tight break-words ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
+              className={`text-xs sm:text-sm font-black leading-tight break-words ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
             >
               {statusMatching || "-"}
             </p>
           </div>
 
-          <div className="p-2.5 sm:p-3 lg:p-5 bg-slate-50/80">
+          <div className="p-2.5 sm:p-3 lg:p-4 bg-slate-50/80">
             <div className="flex items-center gap-1 mb-0.5">
               <User className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-slate-600 shrink-0" />
-              <span className="text-[9px] lg:text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                 Operator ({shiftName})
               </span>
             </div>
-            <p className="text-xs sm:text-sm lg:text-base font-black text-slate-900 leading-tight break-words">
+            <p className="text-xs sm:text-sm font-black text-slate-900 leading-tight break-words">
               {operatorName || "Belum dipilih"}
             </p>
           </div>
 
-          <div className="p-2.5 sm:p-3 lg:p-5 bg-indigo-50/70">
+          <div className="p-2.5 sm:p-3 lg:p-4 bg-indigo-50/70">
             <div className="flex items-center gap-1 mb-0.5">
               <Box className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-indigo-600 shrink-0" />
-              <span className="text-[9px] lg:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                 Potongan Ke
               </span>
             </div>
-            <p className="text-xs sm:text-sm lg:text-base font-black text-slate-900 leading-tight break-words">
+            <p className="text-xs sm:text-sm font-black text-slate-900 leading-tight break-words">
               {potonganKe || "-"}
             </p>
           </div>
 
           {pcsCount !== undefined && (
-            <div className="p-2.5 sm:p-3 lg:p-5 bg-sky-50/60 sm:col-span-2 border-t border-slate-100 flex items-center justify-between">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-sky-50/60 col-span-2 border-t border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-sky-500 shrink-0" />
                 <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
                   PCS:
                 </span>
               </div>
-              <span className="px-3 py-1 bg-[#0070bc] text-white font-black text-sm rounded-lg shadow-sm">
+              <span className="px-3 py-1 bg-[#0070bc] text-white font-black text-xs sm:text-sm rounded-lg shadow-sm">
                 {pcsCount} Pcs
               </span>
             </div>

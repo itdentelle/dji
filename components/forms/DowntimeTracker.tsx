@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useFieldArray, Control, UseFormSetValue, UseFormWatch } from "react-hook-form";
-import { Play, Square, Timer, AlertTriangle, Plus, X, Trash2, Box, CheckCircle2, RefreshCw, FileText, Lock, User, ClipboardList } from "lucide-react";
+import { Play, Square, Timer, AlertTriangle, Plus, X, Trash2, Box, CheckCircle2, RefreshCw, FileText, Lock, User, ClipboardList, Info } from "lucide-react";
 import { ContinuousFormInput } from "@/lib/schemas";
 import { submitMechanicDowntime } from "@/actions/mechanic-actions";
 
@@ -118,6 +118,34 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
   const [namaPenanganan, setNamaPenanganan] = useState<string>("");
   const [unresolvedDowntime, setUnresolvedDowntime] = useState<any>(null);
   const [isSavingMechanic, setIsSavingMechanic] = useState(false);
+
+  const [requiredBlockDefects, setRequiredBlockDefects] = useState<string[]>([
+    "L1,L2,L3 Benang timbul putus",
+    "Benang lolos",
+    "Bolong corak",
+    "Jarum pattern patah/bengkok",
+    "Ganti Jacquard",
+  ]);
+  const [blockValidationError, setBlockValidationError] = useState<string | null>(null);
+  const [showBlockInfo, setShowBlockInfo] = useState(false);
+
+  useEffect(() => {
+    const loadRequiredDefects = () => {
+      try {
+        const saved = localStorage.getItem("dji_required_block_defects");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRequiredBlockDefects(parsed);
+          }
+        }
+      } catch (e) { }
+    };
+
+    loadRequiredDefects();
+    window.addEventListener("storage_dji_required_block_defects", loadRequiredDefects);
+    return () => window.removeEventListener("storage_dji_required_block_defects", loadRequiredDefects);
+  }, [showModal]);
 
   // Machine Blocking (Approach A) State
   const targetMc = watch("nomorMc") || "";
@@ -344,7 +372,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     setDikerjakanOleh("Operator");
     setNamaPenanganan("");
     setIsUnblockingBlock(false);
-    
+
     // Automatically select the default PCS if provided via URL
     if (defaultPcsIndex && pcsKeys.includes(defaultPcsIndex)) {
       setSelectedPcsKeList([defaultPcsIndex]);
@@ -353,7 +381,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     } else {
       setSelectedPcsKeList([]);
     }
-    
+
     setShowModal(true);
   };
 
@@ -412,6 +440,20 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     if (selectedCategories.length === 0) return;
     if (dikerjakanOleh === "Operator" && selectedPcsKeList.length === 0) return;
 
+    // Validate mandatory block number
+    for (const catId of selectedCategories) {
+      const details = selectedDetails[catId] || [];
+      const reqDetails = details.filter((d) => requiredBlockDefects.includes(d));
+      if (reqDetails.length > 0) {
+        const blockVal = inputBloks[catId]?.trim();
+        if (!blockVal) {
+          setBlockValidationError(`Nomor blok WAJIB DIISI untuk masalah: "${reqDetails.join(", ")}"`);
+          return;
+        }
+      }
+    }
+    setBlockValidationError(null);
+
     const meterStr = pcsKeys.length === 1
       ? inputMeters[pcsKeys[0]]?.trim()
       : Object.entries(inputMeters)
@@ -427,10 +469,10 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     }));
 
     // If all PCS keys are selected or if Downtime Khusus, use "Semua"
-    const pcsKeStr = dikerjakanOleh === "Operator" 
+    const pcsKeStr = dikerjakanOleh === "Operator"
       ? (selectedPcsKeList.length === pcsCount ? "Semua" : selectedPcsKeList.join(", "))
       : "Semua";
-    
+
     let dikerjakanGabungan = dikerjakanOleh;
     if (dikerjakanOleh === "Operator") {
       dikerjakanGabungan = `Operator (${currentOperatorName || "Operator Aktif"})`;
@@ -582,32 +624,55 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     <div className={showMeterInput ? "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-start" : "flex flex-col space-y-4 mb-6"}>
       {/* 1. SEKSI BLOCK MESIN (SEKSUIL TERPISAH DI ATAS CARD DOWNTIME BIASA) */}
       {!activeBlock ? (
-        <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col">
-          <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mb-2">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">
+              <div className="w-8 h-8 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0">
                 <Lock className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">
-                  Perbaikan Khusus (Block Mesin)
-                </h4>
-                <p className="text-[10px] font-semibold text-slate-500">
-                  Untuk perbaikan berat / mesin mati total lintas shift (tanpa produksi kain)
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">
+                    Block Mesin
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowBlockInfo((prev) => !prev)}
+                    className="p-1 rounded-full text-sky-600 hover:bg-sky-100/80 transition-colors cursor-pointer"
+                    title="Klik untuk info Block Mesin"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
-            <span className="text-[9px] font-extrabold text-slate-700 bg-slate-200 px-2.5 py-1 rounded-full border border-slate-300 shrink-0">
+            <span className="text-[9px] font-extrabold text-slate-700 bg-slate-200 px-2.5 py-1 rounded-full border border-slate-300 shrink-0 self-start sm:self-auto">
               Mesin Stop Total
             </span>
           </div>
 
+          {showBlockInfo && (
+            <div className="my-2 p-2.5 bg-sky-50 border border-sky-200/80 rounded-xl text-[10px] font-medium text-sky-900 flex items-start gap-2 animate-fadeIn shadow-xs">
+              <Info className="w-3.5 h-3.5 text-sky-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed flex-1">
+                Untuk perbaikan berat / mesin mati total lintas shift (tanpa produksi kain)
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowBlockInfo(false)}
+                className="text-sky-400 hover:text-sky-800 p-0.5 rounded cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleInitiateBlock}
-            className="flex items-center justify-center gap-2 w-full h-11 mt-3 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-slate-800/20 active:scale-[0.98] cursor-pointer"
+            className="flex items-center justify-center gap-2 w-full h-11 mt-2 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-slate-800/20 active:scale-[0.98] cursor-pointer"
           >
-            <Lock className="w-4 h-4" /> Block Mesin (Perbaikan Lama)
+            <Lock className="w-4 h-4" /> Block Mesin
           </button>
         </div>
       ) : (
@@ -623,9 +688,6 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                   <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">
                     Mesin Diblok (Dalam Perbaikan)
                   </h4>
-                  <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-800 font-extrabold text-[9px] animate-pulse">
-                    LIVE
-                  </span>
                 </div>
                 <p className="text-[10px] font-semibold text-slate-500 mt-0.5">
                   Mulai perbaikan {activeBlock.startDateStr} pkl {activeBlock.startTimeStr} • Pelapor: <strong>{activeBlock.initialReporter}</strong>
@@ -673,7 +735,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
               <X className="w-3.5 h-3.5" />
               <span>Batalkan Block</span>
             </button>
-            
+
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -692,7 +754,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Serah Terima</span>
               </button>
-              
+
               <button
                 type="button"
                 onClick={handleUnblockMachine}
@@ -782,160 +844,168 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
             )}
           </div>
 
-        {fields.length > 0 && (
-          <div className={`space-y-1.5 w-full ${showMeterInput ? "md:w-2/3" : ""}`}>
-            <div className="flex items-center justify-between mb-1.5">
-              <h4 className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Riwayat Berhenti:</h4>
-              <span className="bg-slate-100 text-slate-500 text-[9px] px-2 py-0.5 rounded-full border border-slate-200 uppercase tracking-wider font-bold">
-                {fields.length} Kejadian
-              </span>
-            </div>
-            <div className="flex flex-col gap-2 max-h-[140px] overflow-y-auto pr-1 custom-scrollbar">
-              {fields.map((event: any, index) => (
-                <div key={event.id} className="flex flex-row items-start justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl gap-2">
-                  <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                      <span className="text-[10px] font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm">
-                        {formatTimer(event.durasiDetik)}
-                      </span>
-                      {(() => {
-                        const meterStr = event.meter || (event.problems && event.problems.length > 0 ? event.problems[0]?.meter : null);
-
-                        if (!event.pcsKe || event.pcsKe === "Semua") {
-                          if (meterStr) {
-                            return (
-                              <span className="text-[9px] font-extrabold text-sky-600 bg-sky-50 border border-sky-100/80 px-1.5 py-0.5 rounded">
-                                {meterStr.includes("PCS") ? meterStr : `Meter: ${meterStr}`}
-                              </span>
-                            );
-                          }
-                          return null;
-                        }
-
-                        const pcsArray = event.pcsKe.split(",").map((s: string) => s.trim());
-                        const meterMap: Record<string, string> = {};
-
-                        if (meterStr) {
-                          if (meterStr.includes("PCS")) {
-                            meterStr.split(",").forEach((m: string) => {
-                              const match = m.match(/PCS (\d+):\s*(.+)/);
-                              if (match) {
-                                meterMap[match[1]] = match[2];
-                              }
-                            });
-                          } else {
-                            meterMap[pcsArray[0]] = meterStr;
-                          }
-                        }
-
-                        return pcsArray.map((pcs: string) => (
-                          <span key={pcs} className="text-[9px] font-extrabold text-sky-600 bg-sky-50 border border-sky-100/80 px-1.5 py-0.5 rounded">
-                            PCS {pcs} {meterMap[pcs] ? `(${meterMap[pcs]}m)` : ""}
-                          </span>
-                        ));
-                      })()}
-                    </div>
-                    
-                    {event.dikerjakanOleh && (
-                      <div className="mb-1 flex items-center">
-                        <span className={`inline-flex text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-sm border ${
-                          event.dikerjakanOleh === 'Operator' ? 'bg-indigo-500 text-white border-indigo-600' :
-                          (event.dikerjakanOleh === 'Mekanik/Teknisi' || event.dikerjakanOleh === 'Perbaikan Khusus') ? 'bg-fuchsia-500 text-white border-fuchsia-600' :
-                          'bg-slate-500 text-white border-slate-600'
-                        }`}>
-                          {event.dikerjakanOleh}
+          {fields.length > 0 && (
+            <div className={`space-y-1.5 w-full ${showMeterInput ? "md:w-2/3" : ""}`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <h4 className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Riwayat Berhenti:</h4>
+                <span className="bg-slate-100 text-slate-500 text-[9px] px-2 py-0.5 rounded-full border border-slate-200 uppercase tracking-wider font-bold">
+                  {fields.length} Kejadian
+                </span>
+              </div>
+              <div className="flex flex-col gap-2 max-h-[140px] overflow-y-auto pr-1 custom-scrollbar">
+                {fields.map((event: any, index) => (
+                  <div key={event.id} className="flex flex-row items-start justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl gap-2">
+                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        <span className="text-[10px] font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm">
+                          {formatTimer(event.durasiDetik)}
                         </span>
-                        {event.isSubmitted && (
-                          <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 ml-1">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Terkirim
-                          </span>
-                        )}
-                      </div>
-                    )}
+                        {(() => {
+                          const meterStr = event.meter || (event.problems && event.problems.length > 0 ? event.problems[0]?.meter : null);
 
-                    {/* Handle backward compatibility for old data struct (kategori/detail as strings) */}
-                    {event.kategori && typeof event.kategori === "string" && (
-                      <div className="text-[11px] text-slate-650 pl-0.5 leading-relaxed break-words">
-                        <span className="font-black text-slate-800">{event.kategori}:</span> {event.detail}
-                        {event.blok && (
-                          <span className="inline-flex font-bold text-sky-700 bg-sky-50/50 px-1 py-0.5 rounded items-center gap-0.5 text-[9px] ml-1.5 border border-sky-100/60">
-                            <Box className="w-2.5 h-2.5" /> Blok {event.blok}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                          if (!event.pcsKe || event.pcsKe === "Semua") {
+                            if (meterStr) {
+                              return (
+                                <span className="text-[9px] font-extrabold text-sky-600 bg-sky-50 border border-sky-100/80 px-1.5 py-0.5 rounded">
+                                  {meterStr.includes("PCS") ? meterStr : `Meter: ${meterStr}`}
+                                </span>
+                              );
+                            }
+                            return null;
+                          }
 
-                    {/* Handle new array-based problems struct */}
-                    {event.problems && event.problems.map((prob: any, pIdx: number) => (
-                      <div key={pIdx} className="pl-1.5 border-l border-slate-300/80 ml-0.5 mb-0.5 text-[11px] text-slate-650 leading-relaxed break-words flex flex-col gap-1">
-                        <div>
-                          <span className="font-black text-slate-850">{prob.kategori}:</span> {prob.details.join(", ")}
-                          {prob.blok && (
-                            <span className="inline-flex font-bold text-sky-700 bg-sky-50/50 px-1 py-0.5 rounded items-center gap-0.5 text-[9px] ml-1.5 border border-sky-100/60">
-                              <Box className="w-2.5 h-2.5" /> Blok {prob.blok}
+                          const pcsArray = event.pcsKe.split(",").map((s: string) => s.trim());
+                          const meterMap: Record<string, string> = {};
+
+                          if (meterStr) {
+                            if (meterStr.includes("PCS")) {
+                              meterStr.split(",").forEach((m: string) => {
+                                const match = m.match(/PCS (\d+):\s*(.+)/);
+                                if (match) {
+                                  meterMap[match[1]] = match[2];
+                                }
+                              });
+                            } else {
+                              meterMap[pcsArray[0]] = meterStr;
+                            }
+                          }
+
+                          return pcsArray.map((pcs: string) => (
+                            <span key={pcs} className="text-[9px] font-extrabold text-sky-600 bg-sky-50 border border-sky-100/80 px-1.5 py-0.5 rounded">
+                              PCS {pcs} {meterMap[pcs] ? `(${meterMap[pcs]}m)` : ""}
+                            </span>
+                          ));
+                        })()}
+                      </div>
+
+                      {event.dikerjakanOleh && (
+                        <div className="mb-1 flex items-center">
+                          <span className={`inline-flex text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-sm border ${event.dikerjakanOleh === 'Operator' ? 'bg-indigo-500 text-white border-indigo-600' :
+                            (event.dikerjakanOleh === 'Mekanik/Teknisi' || event.dikerjakanOleh === 'Perbaikan Khusus') ? 'bg-fuchsia-500 text-white border-fuchsia-600' :
+                              'bg-slate-500 text-white border-slate-600'
+                            }`}>
+                            {event.dikerjakanOleh}
+                          </span>
+                          {event.isSubmitted && (
+                            <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 ml-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Terkirim
                             </span>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      )}
+
+                      {/* Handle backward compatibility for old data struct (kategori/detail as strings) */}
+                      {event.kategori && typeof event.kategori === "string" && (
+                        <div className="text-[11px] text-slate-650 pl-0.5 leading-relaxed break-words">
+                          <span className="font-black text-slate-800">{event.kategori}:</span> {event.detail}
+                          {event.blok && (
+                            <span className="inline-flex font-bold text-sky-700 bg-sky-50/50 px-1 py-0.5 rounded items-center gap-0.5 text-[9px] ml-1.5 border border-sky-100/60">
+                              <Box className="w-2.5 h-2.5" /> Blok {event.blok}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Handle new array-based problems struct */}
+                      {event.problems && event.problems.map((prob: any, pIdx: number) => (
+                        <div key={pIdx} className="pl-1.5 border-l border-slate-300/80 ml-0.5 mb-0.5 text-[11px] text-slate-650 leading-relaxed break-words flex flex-col gap-1">
+                          <div>
+                            <span className="font-black text-slate-850">{prob.kategori}:</span> {prob.details.join(", ")}
+                            {prob.blok && (
+                              <span className="inline-flex font-bold text-sky-700 bg-sky-50/50 px-1 py-0.5 rounded items-center gap-0.5 text-[9px] ml-1.5 border border-sky-100/60">
+                                <Box className="w-2.5 h-2.5" /> Blok {prob.blok}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => remove(index)}
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0 self-start"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => remove(index)}
-                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0 self-start"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
 
       {/* Modal Input Masalah */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[90vh]">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/90">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center">
-                  <Timer className="w-4.5 h-4.5" />
+                <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center shrink-0 shadow-xs">
+                  <Timer className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-800 text-sm sm:text-base">Simpan Downtime</h3>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Waktu terhenti:</p>
-                    <div className="flex items-center bg-white border border-slate-200 rounded px-1.5 py-0.5 shadow-sm focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400 transition-all">
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-8 text-[10px] sm:text-xs font-bold text-orange-600 text-right bg-transparent outline-none focus:outline-none appearance-none p-0 border-none m-0 focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        value={Math.floor(tempDuration / 60)}
-                        onChange={(e) => {
-                          const val = e.target.value === "" ? 0 : parseInt(e.target.value);
-                          setTempDuration((isNaN(val) ? 0 : val) * 60 + (tempDuration % 60));
-                        }}
-                      />
-                      <span className="text-[10px] sm:text-xs font-bold text-slate-400 mx-0.5">:</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="59"
-                        className="w-7 text-[10px] sm:text-xs font-bold text-orange-600 text-left bg-transparent outline-none focus:outline-none appearance-none p-0 border-none m-0 focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        value={tempDuration % 60 < 10 && tempDuration % 60 !== 0 ? `0${tempDuration % 60}` : tempDuration % 60}
-                        onChange={(e) => {
-                          const val = e.target.value === "" ? 0 : parseInt(e.target.value);
-                          setTempDuration(Math.floor(tempDuration / 60) * 60 + (isNaN(val) ? 0 : Math.min(59, val)));
-                        }}
-                      />
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                    <h3 className="font-black text-slate-800 text-sm sm:text-base">Simpan Downtime</h3>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-orange-200/90 rounded-xl shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Waktu Terhenti:</span>
+                      <div className="flex items-center font-mono font-black text-xs sm:text-sm text-orange-600">
+                        <input
+                          type="number"
+                          min="0"
+                          className="w-7 text-center bg-transparent outline-none p-0 m-0 border-none focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none font-mono font-black"
+                          value={Math.floor(tempDuration / 60)}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseInt(e.target.value);
+                            setTempDuration((isNaN(val) ? 0 : val) * 60 + (tempDuration % 60));
+                          }}
+                        />
+                        <span className="text-orange-400 font-bold mx-0.5 animate-pulse">:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="59"
+                          className="w-7 text-center bg-transparent outline-none p-0 m-0 border-none focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none font-mono font-black"
+                          value={tempDuration % 60 < 10 && tempDuration % 60 !== 0 ? `0${tempDuration % 60}` : tempDuration % 60}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseInt(e.target.value);
+                            setTempDuration(Math.floor(tempDuration / 60) * 60 + (isNaN(val) ? 0 : Math.min(59, val)));
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
+                  <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-1">
+                    Isi detail masalah yang menyebabkan mesin terhenti.
+                  </p>
                 </div>
               </div>
-              <button onClick={() => { setShowModal(false); setIsUnblockingBlock(false); }} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-xl transition-colors">
+              <button
+                type="button"
+                onClick={() => { setShowModal(false); setIsUnblockingBlock(false); }}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/80 rounded-xl transition-colors cursor-pointer shrink-0 ml-2"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1093,25 +1163,57 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                             ))}
                           </div>
 
-                          {showBlockInput !== false && (cat.id === "A" || cat.id === "B") && selectedDetails[cat.id]?.length > 0 && (
-                            <div className="mt-3 p-3 bg-sky-50 border border-sky-100 rounded-xl">
-                              <label className="text-[10px] font-bold text-sky-800 uppercase mb-1.5 block flex items-center gap-1.5">
-                                <Box className="w-3 h-3" />
-                                Lokasi / Nomor Blok (Khusus A & B)
-                              </label>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={inputBloks[cat.id] || ""}
-                                onChange={(e) => {
-                                  const filtered = e.target.value.replace(/[^0-9\-]/g, "");
-                                  setInputBloks((prev) => ({ ...prev, [cat.id]: filtered }));
-                                }}
-                                placeholder="Contoh: 15 atau 1-61"
-                                className="w-full h-10 px-3 rounded-lg border border-sky-200 focus:outline-none focus:ring-2 focus:ring-sky-500 text-xs font-bold text-slate-700 placeholder:font-medium placeholder:text-slate-400 bg-white"
-                              />
-                            </div>
-                          )}
+                          {showBlockInput !== false && (() => {
+                            const details = selectedDetails[cat.id] || [];
+                            const reqDetails = details.filter((d) => requiredBlockDefects.includes(d));
+                            const isRequired = reqDetails.length > 0;
+                            const isCategoryEligible = (cat.id === "A" || cat.id === "B") || isRequired;
+
+                            if (!isCategoryEligible || details.length === 0) return null;
+
+                            const isMissing = isRequired && (!inputBloks[cat.id] || inputBloks[cat.id]?.trim() === "");
+
+                            return (
+                              <div className={`mt-3 p-3 rounded-xl border transition-all ${isMissing
+                                ? "bg-rose-50/80 border-rose-300 ring-2 ring-rose-200"
+                                : "bg-sky-50 border-sky-100"
+                                }`}>
+                                <label className="text-[10px] font-extrabold uppercase mb-1.5 flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5 text-slate-800">
+                                    <Box className="w-3.5 h-3.5 text-[#0070bc]" />
+                                    Lokasi / Nomor Blok {isRequired && <span className="text-rose-500 font-black">*</span>}
+                                  </span>
+                                  {isRequired ? (
+                                    <span className="bg-rose-600 text-white font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                      Wajib Diisi
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 font-bold text-[9px]">Opsional</span>
+                                  )}
+                                </label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={inputBloks[cat.id] || ""}
+                                  onChange={(e) => {
+                                    setBlockValidationError(null);
+                                    const filtered = e.target.value.replace(/[^0-9\-]/g, "");
+                                    setInputBloks((prev) => ({ ...prev, [cat.id]: filtered }));
+                                  }}
+                                  placeholder="Contoh: 15 atau 1-61"
+                                  className={`w-full h-10 px-3 rounded-lg border focus:outline-none focus:ring-2 text-xs font-bold text-slate-800 placeholder:font-medium placeholder:text-slate-400 bg-white ${isMissing
+                                    ? "border-rose-400 focus:ring-rose-500"
+                                    : "border-sky-200 focus:ring-sky-500"
+                                    }`}
+                                />
+                                {isMissing && (
+                                  <p className="text-[10px] font-bold text-rose-600 mt-1">
+                                    ⚠️ Admin menginstruksikan nomor blok wajib diisi untuk masalah ini.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
@@ -1265,7 +1367,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                   Konfirmasi Block Mesin
                 </h3>
                 <p className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">
-                  Apakah Anda yakin ingin memblokir <strong className="text-slate-800">Mesin {targetMc}</strong>? Mesin akan ditandai dalam status perbaikan lama (mati total lintas shift).
+                  Apakah Anda yakin ingin memblokir <strong className="text-slate-800">Mesin {targetMc}</strong>? Mesin akan ditandai dalam status perbaikan khusus.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-2">

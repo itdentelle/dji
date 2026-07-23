@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getMachineStatuses, MachineStatus } from "@/actions/dashboard-actions";
-import { getMachineConfigs, upsertAllMachineConfigs, MachineConfig } from "@/actions/machine-config-actions";
+import { getMachineConfigs, upsertAllMachineConfigs, MachineConfig, getBlockRequiredDefects, saveBlockRequiredDefects } from "@/actions/machine-config-actions";
 import {
   Activity,
   Power,
@@ -17,33 +17,140 @@ import {
   ChevronRight,
   BarChart3,
   Search,
-  Filter,
-  CheckCircle2,
   Cpu,
-  Layers,
-  Radio,
   SlidersHorizontal,
+  Zap,
+  AlertCircle,
+  TrendingUp,
+  Sliders,
+  Layers,
+  Sparkles,
+  Box,
+  CheckCircle2,
 } from "lucide-react";
 import ProductTour, { ProductTourStep } from "@/components/ProductTour";
+
+const MASTER_PROBLEM_CATEGORIES: Record<string, { label: string; desc: string; items: string[] }> = {
+  A: {
+    label: "Kategori A",
+    desc: "Benang Timbul / Lolos",
+    items: [
+      "L1,L2,L3 Benang timbul putus",
+      "Benang lolos",
+      "Bolong corak",
+      "Benang narik/Kendor",
+      "Benang Nyilang",
+      "Perbaikan/Beset benang Dasar",
+      "Benang Kejepit/Jebol/Kusut",
+      "Jalur benang",
+    ],
+  },
+  B: {
+    label: "Kategori B",
+    desc: "Jarum / Jacquard",
+    items: [
+      "Jarum pattern patah/bengkok",
+      "Ganti Jacquard",
+      "Ganti jarum Compoun Nedle, pattern",
+      "Ngampul",
+      "Ganti dari scaloop ke non scaloop atau sebaliknya",
+      "Ngegaris/Stopline",
+      "Keluar Jarum",
+      "Ganti String bar",
+      "Ganti PBO",
+      "Pressan As beam kendor",
+      "Tensi tensioner",
+    ],
+  },
+  C: {
+    label: "Kategori C",
+    desc: "Design / Proofing",
+    items: [
+      "Loading design/Ganti Design",
+      "Perbaikan corak/revisi",
+      "Salah ganti design",
+      "Error design",
+      "Proofing/PCB",
+      "Ganti Pattern Disk",
+      "Ganti pick",
+    ],
+  },
+  D: {
+    label: "Kategori D",
+    desc: "Benang Dasar / Rewind",
+    items: [
+      "Ganti benang dasar L1/L2",
+      "Salah ganti benang dasar",
+      "Ganti benang Pattern Linner",
+      "Ganti benang Pattern Heavy",
+      "Ganti benang Pattern Shadow",
+      "Ganti benang pattern keseluruhan (L,H,S)",
+      "salah ganti benang pattern",
+      "Ngelancarin",
+      "Over Cone/Rewind",
+      "Tunggu benang dasar dari warping",
+      "Tunggu benang (benang belum datang)",
+    ],
+  },
+  E: {
+    label: "Kategori E",
+    desc: "Servo / Elektrik",
+    items: [
+      "Error Servo Drive",
+      "Ganti motor servo",
+      "Sensor Benang/Laser Stop",
+      "Perbaikan Eletrik lainnya",
+      "Konsleting",
+      "Perbaikan listrik",
+    ],
+  },
+  F: {
+    label: "Kategori F",
+    desc: "Cylinder / Mekanik",
+    items: [
+      "Perbaikan cilynder Angin",
+      "Ganti Bellow",
+      "Perbaikan gear/Take Up Roll",
+      "Ganti rantai/pertensi",
+      "Ganti Black grip roll",
+      "Ganti Oli",
+      "Pelumasan/greace pada mesin",
+      "Ganti Vanbelt",
+      "Perawatan Panel Listrik",
+      "Servis Overhaul",
+    ],
+  },
+  G: {
+    label: "Kategori G",
+    desc: "Lain-lain / Operational",
+    items: [
+      "Hari Libur",
+      "Tidak ada order",
+      "Tunggu info",
+      "Demo",
+      "Bencana/gempa/banjir",
+      "Istirahat selama buka puasa",
+      "Tunggu Sparepart",
+      "Mati Listrik",
+    ],
+  },
+};
 
 const MACHINE_TOUR_STEPS: ProductTourStep[] = [
   {
     target: "machine-header",
     title: "Monitoring Mesin",
-    description:
-      "Pantau status mesin produksi secara real-time dan gunakan refresh jika ingin mengambil data terbaru secara manual.",
+    description: "Pantau aktivitas & status operasional mesin produksi secara real-time.",
   },
   {
     target: "machine-summary",
     title: "Ringkasan Status",
-    description:
-      "Klik kartu ringkasan ini untuk langsung mengfilter daftar mesin berdasarkan status operasionalnya.",
+    description: "Klik pada salah satu kartu ringkasan untuk memfilter daftar mesin.",
   },
   {
     target: "machine-grid",
     title: "Kartu Mesin",
-    description:
-      "Setiap kartu menampilkan nomor mesin, operator, desain aktif, potongan ke, dan status operasional real-time.",
+    description: "Klik kartu mesin untuk membuka analisis detail per-blok dan riwayat downtime.",
   },
 ];
 
@@ -56,15 +163,53 @@ export default function MachinesPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [isTourOpen, setIsTourOpen] = useState(false);
-
-  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("Semua");
-
-  // Config Modal State
   const [configs, setConfigs] = useState<MachineConfig[]>([]);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((current) => (current === msg ? null : current));
+    }, 4000);
+  };
+
+  const [configTab, setConfigTab] = useState<"MACHINES" | "BLOCK_REQUIRED">("MACHINES");
+  const [requiredBlockDefects, setRequiredBlockDefects] = useState<string[]>([
+    "L1,L2,L3 Benang timbul putus",
+    "Benang lolos",
+    "Bolong corak",
+    "Jarum pattern patah/bengkok",
+    "Ganti Jacquard",
+  ]);
+
+  const toggleRequiredDefect = (item: string) => {
+    setRequiredBlockDefects((prev) =>
+      prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
+    );
+  };
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("dji_required_block_defects");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRequiredBlockDefects(parsed);
+          return;
+        }
+      }
+    } catch (e) {}
+
+    getBlockRequiredDefects().then((res) => {
+      if (res.success && res.data && res.data.length > 0) {
+        setRequiredBlockDefects(res.data);
+      }
+    });
+  }, [isConfigModalOpen]);
 
   const fetchStatuses = async () => {
     try {
@@ -93,7 +238,6 @@ export default function MachinesPage() {
       const savedTypes = localStorage.getItem("dji_machine_input_types");
       if (savedTypes) localDataTypes = JSON.parse(savedTypes);
     } catch (e) {}
-
     const res = await getMachineConfigs();
     if (res.success && res.data) {
       const merged = res.data.map((c) => ({
@@ -105,78 +249,71 @@ export default function MachinesPage() {
     }
   };
 
-  useEffect(() => {
-    fetchConfigs();
-  }, []);
-
+  useEffect(() => { fetchConfigs(); }, []);
   useEffect(() => {
     fetchStatuses();
-
-    // Auto refresh every 60 seconds
-    const interval = setInterval(() => {
-      fetchStatuses();
-    }, 60000);
-
+    const interval = setInterval(() => { fetchStatuses(); }, 60000);
     return () => clearInterval(interval);
   }, []);
 
-  // Counts
-  const totalOperating = useMemo(
-    () => machines.filter((m) => m.status === "Beroperasi").length,
-    [machines]
-  );
-  const totalIdle = useMemo(
-    () => machines.filter((m) => m.status === "Idle").length,
-    [machines]
-  );
-  const totalTidakAktif = useMemo(
-    () => machines.filter((m) => m.status === "Tidak Aktif").length,
-    [machines]
-  );
+  const totalOperating = useMemo(() => machines.filter((m) => m.status === "Beroperasi").length, [machines]);
+  const totalIdle = useMemo(() => machines.filter((m) => m.status === "Idle").length, [machines]);
+  const totalTidakAktif = useMemo(() => machines.filter((m) => m.status === "Tidak Aktif").length, [machines]);
+  const operatingPct = useMemo(() => machines.length === 0 ? 0 : Math.round((totalOperating / machines.length) * 100), [machines.length, totalOperating]);
 
-  const operatingPercentage = useMemo(() => {
-    if (machines.length === 0) return 0;
-    return Math.round((totalOperating / machines.length) * 100);
-  }, [machines.length, totalOperating]);
-
-  // Filtered Machines
   const filteredMachines = useMemo(() => {
     return machines.filter((m) => {
-      const matchesStatus =
-        statusFilter === "Semua" || m.status === statusFilter;
+      const matchesStatus = statusFilter === "Semua" || m.status === statusFilter;
       const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        m.mesin_id.toLowerCase().includes(q) ||
-        m.nama_operator.toLowerCase().includes(q) ||
-        m.design.toLowerCase().includes(q);
+      const matchesSearch = !q || m.mesin_id.toLowerCase().includes(q) || m.nama_operator.toLowerCase().includes(q) || m.design.toLowerCase().includes(q);
       return matchesStatus && matchesSearch;
     });
   }, [machines, statusFilter, searchQuery]);
 
   return (
-    <div className="min-h-screen bg-slate-50/80 p-4 sm:p-6 lg:p-8">
-      {/* Top Bar Header */}
+    <div className="min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8">
+
+      {/* ── Top Bar Header ── */}
       <div
         data-tour="machine-header"
-        className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 lg:mb-8 gap-4"
+        className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
       >
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
-              Monitoring Mesin
-            </h1>
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-sky-50 border border-sky-100/80 flex items-center justify-center text-[#0070bc] shrink-0">
+            <Cpu className="w-5 h-5" />
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Status operasional & aktivitas mesin rajut secara real-time.
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-black text-slate-800 tracking-tight">Monitoring Mesin</h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-bold">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                </span>
+                LIVE
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Pantau status operasional & aktivitas mesin rajut secara real-time.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full md:w-auto">
+        <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto justify-end">
+          {/* Last Refresh Badge */}
+          <div className="h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 font-medium flex items-center gap-2.5">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span>Update: <strong className="text-slate-800 font-mono font-bold">{lastRefresh ? lastRefresh.toLocaleTimeString("id-ID") : "—"}</strong></span>
+            <button
+              onClick={fetchStatuses}
+              disabled={loading}
+              className={`p-1 rounded-md hover:bg-slate-200/70 text-slate-600 transition-all cursor-pointer ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+              title="Refresh Data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => setIsConfigModalOpen(true)}
@@ -189,236 +326,187 @@ export default function MachinesPage() {
           <button
             type="button"
             onClick={() => setIsTourOpen(true)}
-            className="h-10 px-3.5 rounded-xl border border-sky-100 bg-sky-50/80 hover:bg-sky-100 text-[#0070bc] text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+            className="h-10 px-3.5 rounded-xl border border-sky-100 bg-sky-50 hover:bg-sky-100 text-[#0070bc] text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
           >
             <HelpCircle className="w-4 h-4 shrink-0" />
             <span className="hidden sm:inline">Tutorial</span>
           </button>
-
-          <div className="h-10 inline-flex items-center gap-3 bg-white px-3.5 rounded-xl border border-slate-200 shadow-xs text-xs ml-auto md:ml-0">
-            <span className="text-slate-500 font-medium hidden sm:inline">
-              Update:
-            </span>
-            <strong className="text-slate-800 font-bold tabular-nums">
-              {lastRefresh
-                ? lastRefresh.toLocaleTimeString("id-ID")
-                : "Memuat..."}
-            </strong>
-            <button
-              onClick={fetchStatuses}
-              disabled={loading}
-              className={`p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 transition-all cursor-pointer active:scale-90 ${
-                loading ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-              title="Refresh Data"
-            >
-              <RefreshCw
-                className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
-              />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* ── KPI Stat Grid Cards ── */}
       <div
         data-tour="machine-summary"
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
       >
         {/* Total Mesin Card */}
         <div
           onClick={() => setStatusFilter("Semua")}
-          className={`p-4 lg:p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between ${
+          className={`p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
             statusFilter === "Semua"
-              ? "bg-gradient-to-br from-blue-600 to-[#0070bc] border-blue-600 text-white shadow-lg shadow-blue-500/20 scale-[1.01]"
-              : "bg-white border-slate-200 text-slate-800 hover:border-blue-300 hover:shadow-md"
+              ? "bg-sky-50/80 border-sky-300 text-slate-900 shadow-sm ring-1 ring-sky-200/60"
+              : "bg-white border-slate-200/80 text-slate-800 hover:border-slate-300 hover:shadow-xs"
           }`}
         >
-          <div className="flex items-center gap-3.5">
-            <div
-              className={`p-3 rounded-xl ${
-                statusFilter === "Semua"
-                  ? "bg-white/20 text-white"
-                  : "bg-blue-50 text-blue-600"
-              }`}
-            >
-              <Activity className="w-6 h-6" />
-            </div>
+          <div className="flex items-start justify-between">
             <div>
-              <div
-                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
-                  statusFilter === "Semua" ? "text-blue-100" : "text-slate-400"
-                }`}
-              >
-                Total Mesin Aktif
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Total Mesin Rajut
+              </span>
+              <div className="text-3xl font-black tracking-tight mt-1 text-slate-900">
+                {machines.length} <span className="text-xs font-bold text-slate-400">Unit</span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black tracking-tight mt-0.5">
-                {machines.length}
-              </div>
+            </div>
+            <div className="p-3 rounded-2xl bg-sky-100/70 text-[#0070bc]">
+              <Layers className="w-6 h-6" />
             </div>
           </div>
-          <div
-            className={`text-right text-xs font-bold ${
-              statusFilter === "Semua" ? "text-blue-100" : "text-slate-400"
-            }`}
-          >
-            <div className="text-lg font-black">{operatingPercentage}%</div>
-            <div className="text-[10px] uppercase font-bold tracking-wider">Efisiensi</div>
+          <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold">
+            <span className="text-slate-500">Efisiensi Operasional</span>
+            <span className="text-[#0070bc]">{operatingPct}%</span>
           </div>
         </div>
 
         {/* Beroperasi Card */}
         <div
           onClick={() => setStatusFilter("Beroperasi")}
-          className={`p-4 lg:p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between ${
+          className={`p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
             statusFilter === "Beroperasi"
-              ? "bg-gradient-to-br from-emerald-600 to-emerald-700 border-emerald-600 text-white shadow-lg shadow-emerald-500/20 scale-[1.01]"
-              : "bg-white border-slate-200 text-slate-800 hover:border-emerald-300 hover:shadow-md"
+              ? "bg-emerald-50/80 border-emerald-300 text-slate-900 shadow-sm ring-1 ring-emerald-200/60"
+              : "bg-white border-slate-200/80 text-slate-800 hover:border-emerald-200 hover:shadow-xs"
           }`}
         >
-          <div className="flex items-center gap-3.5">
-            <div
-              className={`p-3 rounded-xl relative ${
-                statusFilter === "Beroperasi"
-                  ? "bg-white/20 text-white"
-                  : "bg-emerald-50 text-emerald-600"
-              }`}
-            >
-              <Power className="w-6 h-6" />
-            </div>
+          <div className="flex items-start justify-between">
             <div>
-              <div
-                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
-                  statusFilter === "Beroperasi"
-                    ? "text-emerald-100"
-                    : "text-slate-400"
-                }`}
-              >
-                Beroperasi
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Beroperasi Saat Ini
+              </span>
+              <div className="text-3xl font-black tracking-tight mt-1 text-slate-900">
+                {totalOperating} <span className="text-xs font-bold text-slate-400">Mesin</span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black tracking-tight mt-0.5">
-                {totalOperating}
-              </div>
+            </div>
+            <div className="p-3 rounded-2xl bg-emerald-100/70 text-emerald-600">
+              <Zap className="w-6 h-6" />
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`inline-block w-2.5 h-2.5 rounded-full ${
-                statusFilter === "Beroperasi" ? "bg-white" : "bg-emerald-500"
-              } animate-pulse`}
-            />
-            <span
-              className={`text-xs font-bold ${
-                statusFilter === "Beroperasi"
-                  ? "text-emerald-100"
-                  : "text-emerald-600"
-              }`}
-            >
-              Aktif
+          <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold">
+            <span className="flex items-center gap-1.5 text-emerald-700">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              Aktif produksi
             </span>
+            <span className="text-emerald-800">{operatingPct}% Total</span>
           </div>
         </div>
 
         {/* Idle Card */}
         <div
           onClick={() => setStatusFilter("Idle")}
-          className={`p-4 lg:p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between ${
+          className={`p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
             statusFilter === "Idle"
-              ? "bg-gradient-to-br from-amber-500 to-amber-600 border-amber-500 text-white shadow-lg shadow-amber-500/20 scale-[1.01]"
-              : "bg-white border-slate-200 text-slate-800 hover:border-amber-300 hover:shadow-md"
+              ? "bg-amber-50/80 border-amber-300 text-slate-900 shadow-sm ring-1 ring-amber-200/60"
+              : "bg-white border-slate-200/80 text-slate-800 hover:border-amber-200 hover:shadow-xs"
           }`}
         >
-          <div className="flex items-center gap-3.5">
-            <div
-              className={`p-3 rounded-xl ${
-                statusFilter === "Idle"
-                  ? "bg-white/20 text-white"
-                  : "bg-amber-50 text-amber-600"
-              }`}
-            >
+          <div className="flex items-start justify-between">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Idle / Standby
+              </span>
+              <div className="text-3xl font-black tracking-tight mt-1 text-slate-900">
+                {totalIdle} <span className="text-xs font-bold text-slate-400">Mesin</span>
+              </div>
+            </div>
+            <div className="p-3 rounded-2xl bg-amber-100/70 text-amber-600">
               <Clock className="w-6 h-6" />
             </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold">
+            <span className="text-slate-500">Menunggu Antrean</span>
+            <span className="text-amber-700">{machines.length > 0 ? Math.round((totalIdle / machines.length) * 100) : 0}%</span>
+          </div>
+        </div>
+
+        {/* Off Card */}
+        <div
+          onClick={() => setStatusFilter("Tidak Aktif")}
+          className={`p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+            statusFilter === "Tidak Aktif"
+              ? "bg-slate-100/90 border-slate-300 text-slate-900 shadow-sm ring-1 ring-slate-200/60"
+              : "bg-white border-slate-200/80 text-slate-800 hover:border-slate-300 hover:shadow-xs"
+          }`}
+        >
+          <div className="flex items-start justify-between">
             <div>
-              <div
-                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
-                  statusFilter === "Idle" ? "text-amber-100" : "text-slate-400"
-                }`}
-              >
-                Idle / Standby
-              </div>
-              <div className="text-2xl sm:text-3xl font-black tracking-tight mt-0.5">
-                {totalIdle}
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Tidak Aktif / Off
+              </span>
+              <div className="text-3xl font-black tracking-tight mt-1 text-slate-900">
+                {totalTidakAktif} <span className="text-xs font-bold text-slate-400">Mesin</span>
               </div>
             </div>
+            <div className="p-3 rounded-2xl bg-slate-200/70 text-slate-600">
+              <AlertCircle className="w-6 h-6" />
+            </div>
           </div>
-          <div
-            className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-              statusFilter === "Idle"
-                ? "bg-white/20 text-white"
-                : "bg-amber-50 text-amber-600 border border-amber-200"
-            }`}
-          >
-            {totalTidakAktif > 0 ? `${totalTidakAktif} Off` : "Normal"}
+          <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold">
+            <span className="text-slate-500">Libur / Stop</span>
+            <span className="text-slate-700">{machines.length > 0 ? Math.round((totalTidakAktif / machines.length) * 100) : 0}%</span>
           </div>
         </div>
       </div>
 
-      {/* Filter & Search Controls */}
-      <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs mb-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* ── Search & Segmented Filter Bar ── */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs mb-6 flex flex-col sm:flex-row items-center justify-between gap-3">
         {/* Filter Status Tabs */}
-        <div className="flex items-center gap-1 w-full sm:w-auto overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
-          {(["Semua", "Beroperasi", "Idle", "Tidak Aktif"] as FilterStatus[]).map(
-            (status) => {
-              const isActive = statusFilter === status;
-              const count =
-                status === "Semua"
-                  ? machines.length
-                  : status === "Beroperasi"
-                  ? totalOperating
-                  : status === "Idle"
-                  ? totalIdle
-                  : totalTidakAktif;
+        <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
+          {(["Semua", "Beroperasi", "Idle", "Tidak Aktif"] as FilterStatus[]).map((status) => {
+            const isActive = statusFilter === status;
+            const count =
+              status === "Semua" ? machines.length
+              : status === "Beroperasi" ? totalOperating
+              : status === "Idle" ? totalIdle
+              : totalTidakAktif;
 
-              return (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                    isActive
-                      ? "bg-slate-800 text-white shadow-xs"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            return (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+                  isActive
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                }`}
+              >
+                <span>{status}</span>
+                <span
+                  className={`px-2 py-0.5 text-[10px] rounded-lg font-black ${
+                    isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
                   }`}
                 >
-                  <span>{status}</span>
-                  <span
-                    className={`px-1.5 py-0.2 text-[10px] rounded-md font-extrabold ${
-                      isActive
-                        ? "bg-white/20 text-white"
-                        : "bg-slate-200 text-slate-700"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            }
-          )}
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Search Input */}
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari mesin, operator, design..."
-            className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#0070bc] focus:ring-1 focus:ring-[#0070bc] outline-none transition-all"
+            placeholder="Cari nomor mesin, operator, design..."
+            className="w-full h-10 pl-10 pr-9 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#0070bc] focus:ring-2 focus:ring-blue-500/10 outline-none transition-all"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -434,19 +522,16 @@ export default function MachinesPage() {
         </div>
       )}
 
-      {/* Loading Skeleton Grid */}
+      {/* Loading Skeleton */}
       {loading && machines.length === 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div
-              key={i}
-              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs animate-pulse space-y-4"
-            >
+            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs animate-pulse space-y-4">
               <div className="flex justify-between items-center">
                 <div className="w-24 h-4 bg-slate-200 rounded-md" />
                 <div className="w-16 h-4 bg-slate-200 rounded-full" />
               </div>
-              <div className="h-10 bg-slate-200 rounded-xl w-1/2 mx-auto my-4" />
+              <div className="h-12 bg-slate-200 rounded-2xl w-1/2 mx-auto my-4" />
               <div className="space-y-2">
                 <div className="h-3 bg-slate-100 rounded w-full" />
                 <div className="h-3 bg-slate-100 rounded w-full" />
@@ -461,28 +546,21 @@ export default function MachinesPage() {
           <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
             <Cpu className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">
-            Tidak ada mesin ditemukan
-          </h3>
+          <h3 className="text-base font-bold text-slate-800">Tidak ada mesin ditemukan</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-sm">
-            Tidak ditemukan mesin yang cocok dengan kata kunci{" "}
-            <strong>"{searchQuery}"</strong> atau filter status{" "}
-            <strong>"{statusFilter}"</strong>.
+            Tidak ditemukan mesin yang cocok dengan kata kunci <strong>"{searchQuery}"</strong> atau filter <strong>"{statusFilter}"</strong>.
           </p>
           {(searchQuery || statusFilter !== "Semua") && (
             <button
-              onClick={() => {
-                setSearchQuery("");
-                setStatusFilter("Semua");
-              }}
-              className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+              onClick={() => { setSearchQuery(""); setStatusFilter("Semua"); }}
+              className="mt-4 px-5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl transition-all hover:bg-slate-800 cursor-pointer shadow-sm"
             >
               Reset Filter & Pencarian
             </button>
           )}
         </div>
       ) : (
-        /* Machine Grid */
+        /* ── Machine Cards Grid ── */
         <div
           data-tour="machine-grid"
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
@@ -498,7 +576,7 @@ export default function MachinesPage() {
                 onClick={() => router.push(`/machines/${machine.mesin_id}`)}
                 className={`group bg-white rounded-2xl shadow-xs border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 ${
                   isInactive
-                    ? "border-slate-200 bg-slate-50/40"
+                    ? "border-slate-200 bg-slate-50/50"
                     : isIdle
                     ? "border-amber-200 hover:border-amber-400"
                     : "border-emerald-200 hover:border-emerald-400"
@@ -521,21 +599,13 @@ export default function MachinesPage() {
                       )}
                       <span
                         className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                          isOperating
-                            ? "bg-emerald-500"
-                            : isIdle
-                            ? "bg-amber-500"
-                            : "bg-slate-400"
+                          isOperating ? "bg-emerald-500" : isIdle ? "bg-amber-500" : "bg-slate-400"
                         }`}
                       />
                     </span>
                     <span
                       className={`text-xs font-black uppercase tracking-wider ${
-                        isOperating
-                          ? "text-emerald-800"
-                          : isIdle
-                          ? "text-amber-800"
-                          : "text-slate-600"
+                        isOperating ? "text-emerald-800" : isIdle ? "text-amber-800" : "text-slate-600"
                       }`}
                     >
                       {machine.status}
@@ -544,7 +614,7 @@ export default function MachinesPage() {
 
                   {machine.last_input_time !== "-" && (
                     <div
-                      className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-xs ${
+                      className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-2xs ${
                         isOperating
                           ? "bg-white text-emerald-700 border border-emerald-200"
                           : isIdle
@@ -560,17 +630,17 @@ export default function MachinesPage() {
 
                 {/* Card Body */}
                 <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div className="text-center my-2">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
+                  <div className="text-center my-3">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">
                       Nomor Mesin
                     </span>
                     <div
-                      className={`inline-flex items-center justify-center px-4 py-1 rounded-xl text-3xl font-black tracking-tight border font-mono shadow-2xs ${
+                      className={`text-3xl sm:text-4xl font-black tracking-tight font-mono ${
                         isOperating
-                          ? "bg-emerald-50/90 border-emerald-200/80 text-emerald-900"
+                          ? "text-slate-900"
                           : isIdle
-                          ? "bg-amber-50/90 border-amber-200/80 text-amber-900"
-                          : "bg-slate-100 border-slate-200 text-slate-600"
+                          ? "text-slate-800"
+                          : "text-slate-400"
                       }`}
                     >
                       {machine.mesin_id}
@@ -595,9 +665,7 @@ export default function MachinesPage() {
 
                     {/* Desain Aktif */}
                     <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-100">
-                      <span className="text-slate-500 font-medium">
-                        Desain Aktif
-                      </span>
+                      <span className="text-slate-500 font-medium">Desain Aktif</span>
                       <span
                         className={`font-bold text-[11px] px-2.5 py-0.5 rounded-md truncate max-w-[140px] ${
                           isOperating
@@ -613,19 +681,15 @@ export default function MachinesPage() {
 
                     {/* Potongan Ke */}
                     <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-100">
-                      <span className="text-slate-500 font-medium">
-                        Potongan Ke
-                      </span>
+                      <span className="text-slate-500 font-medium">Potongan Ke</span>
                       <span
-                        className={`font-black text-[11px] px-2 py-0.5 rounded-md ${
+                        className={`font-black text-[11px] px-2.5 py-0.5 rounded-md ${
                           machine.potongan_ke && machine.potongan_ke !== "-"
                             ? "bg-slate-100 text-slate-800 border border-slate-200 font-mono"
                             : "text-slate-400"
                         }`}
                       >
-                        {machine.potongan_ke && machine.potongan_ke !== "-"
-                          ? `#${machine.potongan_ke}`
-                          : "-"}
+                        {machine.potongan_ke && machine.potongan_ke !== "-" ? `#${machine.potongan_ke}` : "-"}
                       </span>
                     </div>
 
@@ -633,9 +697,7 @@ export default function MachinesPage() {
                     <div className="flex justify-between items-center text-xs pb-1">
                       <span className="text-slate-400">Tgl Update</span>
                       <span className="text-slate-500 font-medium">
-                        {machine.last_input_date !== "-"
-                          ? machine.last_input_date
-                          : "-"}
+                        {machine.last_input_date !== "-" ? machine.last_input_date : "-"}
                       </span>
                     </div>
                   </div>
@@ -655,10 +717,10 @@ export default function MachinesPage() {
         </div>
       )}
 
-      {/* Modal Pengaturan Default Mesin */}
+      {/* Modal Pengaturan Default & Aturan Mesin */}
       {isConfigModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-scaleIn">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden animate-scaleIn">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
               <div className="flex items-center gap-3">
@@ -667,10 +729,10 @@ export default function MachinesPage() {
                 </div>
                 <div>
                   <h2 className="text-base font-black text-slate-800">
-                    Pengaturan Default Parameter Mesin
+                    Pengaturan Default & Aturan Mesin
                   </h2>
                   <p className="text-xs text-slate-500 font-medium">
-                    Tentukan target PCS & mode input default untuk setiap mesin rajut.
+                    Kelola parameter default mesin & instruksi wajib nomor blok.
                   </p>
                 </div>
               </div>
@@ -682,85 +744,173 @@ export default function MachinesPage() {
               </button>
             </div>
 
+            {/* Modal Sub Header Tabs */}
+            <div className="px-6 pt-3 pb-0 bg-slate-50/50 border-b border-slate-200/60 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfigTab("MACHINES")}
+                className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+                  configTab === "MACHINES"
+                    ? "border-[#0070bc] text-[#0070bc] bg-white shadow-xs"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Cpu className="w-4 h-4" />
+                <span>Parameter Default Mesin</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setConfigTab("BLOCK_REQUIRED")}
+                className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+                  configTab === "BLOCK_REQUIRED"
+                    ? "border-[#0070bc] text-[#0070bc] bg-white shadow-xs"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Box className="w-4 h-4 text-rose-600" />
+                <span>Aturan Wajib Nomor Blok ({requiredBlockDefects.length})</span>
+              </button>
+            </div>
+
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto flex-1 space-y-4 custom-scrollbar">
-              <div className="text-xs text-slate-600 bg-blue-50/80 p-3.5 rounded-2xl border border-blue-100 flex items-start gap-2.5">
-                <SlidersHorizontal className="w-4 h-4 text-[#0070bc] shrink-0 mt-0.5" />
-                <p className="leading-relaxed">
-                  <strong>Catatan:</strong> Parameter ini otomatis digunakan sebagai default saat Admin membuat Jadwal Produksi baru atau saat Operator menginput laporan panel/meter.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {configs.map((cfg, idx) => (
-                  <div
-                    key={cfg.nomor_mc}
-                    className="flex flex-col gap-2.5 p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="bg-slate-900 text-white font-black px-3 py-1 rounded-xl text-xs tracking-wider font-mono">
-                        {cfg.nomor_mc}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60">
-                      {/* Default PCS */}
-                      <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200">
-                        <span className="text-[11px] font-bold text-slate-500">
-                          PCS:
-                        </span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="50"
-                          value={cfg.default_pcs}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value) || 1;
-                            const newConfigs = [...configs];
-                            newConfigs[idx].default_pcs = val;
-                            setConfigs(newConfigs);
-                          }}
-                          className="w-12 h-7 text-center rounded-md font-black text-[#0070bc] bg-slate-50 focus:bg-white outline-none text-xs"
-                        />
-                      </div>
-
-                      {/* Jenis Input (PANEL / METER) */}
-                      <div className="flex items-center p-0.5 bg-slate-200/70 rounded-xl border border-slate-200">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newConfigs = [...configs];
-                            newConfigs[idx].input_type = "PANEL";
-                            setConfigs(newConfigs);
-                          }}
-                          className={`flex-1 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
-                            cfg.input_type === "PANEL"
-                              ? "bg-[#0070bc] text-white shadow-xs"
-                              : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          PANEL
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newConfigs = [...configs];
-                            newConfigs[idx].input_type = "METER";
-                            setConfigs(newConfigs);
-                          }}
-                          className={`flex-1 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
-                            cfg.input_type === "METER"
-                              ? "bg-emerald-600 text-white shadow-xs"
-                              : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          METER
-                        </button>
-                      </div>
-                    </div>
+              {configTab === "MACHINES" ? (
+                <>
+                  <div className="text-xs text-slate-600 bg-blue-50/80 p-3.5 rounded-2xl border border-blue-100 flex items-start gap-2.5">
+                    <SlidersHorizontal className="w-4 h-4 text-[#0070bc] shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">
+                      <strong>Catatan:</strong> Parameter ini otomatis digunakan sebagai default saat Admin membuat Jadwal Produksi baru atau saat Operator menginput laporan.
+                    </p>
                   </div>
-                ))}
-              </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {configs.map((cfg, idx) => (
+                      <div
+                        key={cfg.nomor_mc}
+                        className="flex flex-col gap-2.5 p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="bg-slate-900 text-white font-black px-3 py-1 rounded-xl text-xs tracking-wider font-mono">
+                            {cfg.nomor_mc}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60">
+                          <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200">
+                            <span className="text-[11px] font-bold text-slate-500">
+                              PCS:
+                            </span>
+                            <input
+                              type="number"
+                              min="1"
+                              max="50"
+                              value={cfg.default_pcs}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 1;
+                                const newConfigs = [...configs];
+                                newConfigs[idx].default_pcs = val;
+                                setConfigs(newConfigs);
+                              }}
+                              className="w-12 h-7 text-center rounded-md font-black text-[#0070bc] bg-slate-50 focus:bg-white outline-none text-xs"
+                            />
+                          </div>
+
+                          <div className="flex items-center p-0.5 bg-slate-200/70 rounded-xl border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newConfigs = [...configs];
+                                newConfigs[idx].input_type = "PANEL";
+                                setConfigs(newConfigs);
+                              }}
+                              className={`flex-1 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                                cfg.input_type === "PANEL"
+                                  ? "bg-[#0070bc] text-white shadow-xs"
+                                  : "text-slate-600 hover:text-slate-900"
+                              }`}
+                            >
+                              PANEL
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newConfigs = [...configs];
+                                newConfigs[idx].input_type = "METER";
+                                setConfigs(newConfigs);
+                              }}
+                              className={`flex-1 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                                cfg.input_type === "METER"
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "text-slate-600 hover:text-slate-900"
+                              }`}
+                            >
+                              METER
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                /* TAB 2: BLOCK REQUIREMENT CONFIGURATION */
+                <div className="space-y-4">
+                  <div className="text-xs text-rose-950 bg-rose-50/80 p-3.5 rounded-2xl border border-rose-200/80 flex items-start gap-2.5">
+                    <Box className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">
+                      <strong>Aturan Wajib Nomor Blok:</strong> Centang detail masalah di bawah yang <strong>WAJIB</strong> disertai pengisian nomor blok oleh operator saat melaporkan masalah/downtime. Operator tidak akan bisa menyimpan laporan jika nomor blok kosong pada masalah ini.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {Object.entries(MASTER_PROBLEM_CATEGORIES).map(([catCode, catGroup]) => (
+                      <div key={catCode} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+                        <div className="flex items-center justify-between mb-2.5 border-b border-slate-200 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-slate-900 text-white font-black text-xs px-2.5 py-0.5 rounded-md">
+                              {catCode}
+                            </span>
+                            <span className="text-xs font-black text-slate-800">{catGroup.desc}</span>
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-400">
+                            {catGroup.items.filter((item) => requiredBlockDefects.includes(item)).length} / {catGroup.items.length} Wajib
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {catGroup.items.map((item) => {
+                            const isReq = requiredBlockDefects.includes(item);
+                            return (
+                              <button
+                                type="button"
+                                key={item}
+                                onClick={() => toggleRequiredDefect(item)}
+                                className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-between select-none active:scale-95 ${
+                                  isReq
+                                    ? "bg-rose-50 border-rose-300 text-rose-950 shadow-xs"
+                                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                                }`}
+                              >
+                                <span className="pr-2 text-left">{item}</span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
+                                    isReq
+                                      ? "bg-rose-600 text-white"
+                                      : "bg-slate-100 text-slate-400"
+                                  }`}
+                                >
+                                  {isReq ? "WAJIB BLOK" : "Opsional"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -788,31 +938,47 @@ export default function MachinesPage() {
                         mapPcs[cfg.nomor_mc] = cfg.default_pcs;
                         mapTypes[cfg.nomor_mc] = cfg.input_type;
                       });
-                      localStorage.setItem(
-                        "dji_machine_configs",
-                        JSON.stringify(mapPcs)
-                      );
-                      localStorage.setItem(
-                        "dji_machine_input_types",
-                        JSON.stringify(mapTypes)
-                      );
+                      localStorage.setItem("dji_machine_configs", JSON.stringify(mapPcs));
+                      localStorage.setItem("dji_machine_input_types", JSON.stringify(mapTypes));
+                      localStorage.setItem("dji_required_block_defects", JSON.stringify(requiredBlockDefects));
+                      window.dispatchEvent(new Event("storage_dji_required_block_defects"));
                     } catch (e) {}
 
                     await upsertAllMachineConfigs(configs);
+                    await saveBlockRequiredDefects(requiredBlockDefects);
+
                     setSavingConfig(false);
                     setIsConfigModalOpen(false);
-                    alert("Seluruh Konfigurasi Mesin Berhasil Disimpan!");
+                    showToast("Seluruh Konfigurasi & Aturan Wajib Nomor Blok Berhasil Disimpan!");
                   }}
                   className="px-6 py-2.5 rounded-xl bg-[#0070bc] hover:bg-[#004777] active:scale-95 text-white text-xs font-bold shadow-md shadow-sky-900/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <Save className="w-4 h-4" />
-                  <span>
-                    {savingConfig ? "Menyimpan..." : "Selesai & Simpan Semua"}
-                  </span>
+                  <span>{savingConfig ? "Menyimpan..." : "Selesai & Simpan Semua"}</span>
                 </button>
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Modern Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-3 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700/80 animate-fadeIn">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-black text-white">{toastMessage}</p>
+            <p className="text-[10px] text-slate-400 font-medium mt-0.5">Perubahan telah tersimpan secara otomatis.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="ml-2 text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 

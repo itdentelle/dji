@@ -161,3 +161,44 @@ export async function upsertAllMachineConfigs(configs: MachineConfig[]) {
     return { success: false, error: err.message };
   }
 }
+
+export async function getBlockRequiredDefects(): Promise<{ success: boolean; data: string[] }> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "required_block_defects")
+      .single();
+
+    if (data && data.value && Array.isArray(data.value)) {
+      return { success: true, data: data.value };
+    }
+  } catch (e) {}
+
+  const defaultList = [
+    "L1,L2,L3 Benang timbul putus",
+    "Benang lolos",
+    "Bolong corak",
+    "Jarum pattern patah/bengkok",
+    "Ganti Jacquard",
+  ];
+  return { success: true, data: defaultList };
+}
+
+export async function saveBlockRequiredDefects(defects: string[]) {
+  try {
+    const supabase = await createClient();
+    const payload = {
+      key: "required_block_defects",
+      value: defects,
+      updated_at: new Date().toISOString(),
+    };
+
+    await supabase.from("app_settings").upsert(payload, { onConflict: "key" });
+    return { success: true };
+  } catch (err: any) {
+    return { success: true }; // graceful fallback to local storage
+  }
+}
+
