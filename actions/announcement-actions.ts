@@ -197,31 +197,41 @@ export async function sendDirectUserMessage(
 
 export async function fetchUnreadDirectUserMessage(
   targetUserId?: string,
-  targetUserName?: string
+  targetUserName?: string,
+  employeeId?: string
 ) {
   try {
     const supabase = await createClient();
-    let query = supabase
+    const { data, error } = await supabase
       .from("app_direct_messages")
       .select("*")
       .eq("is_read", false)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .order("created_at", { ascending: false });
 
-    if (targetUserId) {
-      query = query.eq("target_user_id", targetUserId);
-    } else if (targetUserName) {
-      query = query.ilike("target_user_name", `%${targetUserName}%`);
-    } else {
-      return { success: false, data: null };
-    }
-
-    const { data, error } = await query;
     if (error || !data || data.length === 0) {
       return { success: false, data: null };
     }
 
-    return { success: true, data: data[0] };
+    const matched = data.find((dm: any) => {
+      const uId = (targetUserId || "").toLowerCase();
+      const empId = (employeeId || "").toLowerCase();
+      const uName = (targetUserName || "").toLowerCase();
+      const targetId = (dm.target_user_id || "").toLowerCase();
+      const targetName = (dm.target_user_name || "").toLowerCase();
+
+      return (
+        (uId && targetId === uId) ||
+        (empId && targetId === empId) ||
+        (empId && targetName === empId) ||
+        (uName && targetName === uName) ||
+        (uName && targetName.includes(uName)) ||
+        (uName && uName.includes(targetName)) ||
+        (empId && targetName.includes(empId))
+      );
+    });
+
+    if (!matched) return { success: false, data: null };
+    return { success: true, data: matched };
   } catch (err: any) {
     return { success: false, data: null };
   }

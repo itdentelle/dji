@@ -27,11 +27,13 @@ export default function DirectUserMessageModal() {
 
     const userId = user.id || "";
     const userName = user.fullName || "";
+    const employeeId = user.employeeId || "";
 
     try {
       const localDm =
         localStorage.getItem(`dji_dm_${userId}`) ||
-        localStorage.getItem(`dji_dm_${userName}`);
+        localStorage.getItem(`dji_dm_${userName}`) ||
+        localStorage.getItem(`dji_dm_${employeeId}`);
       if (localDm) {
         const parsed: DirectUserMessage = JSON.parse(localDm);
         if (!parsed.is_read) {
@@ -42,7 +44,7 @@ export default function DirectUserMessageModal() {
       }
     } catch (e) {}
 
-    const res = await fetchUnreadDirectUserMessage(userId, userName);
+    const res = await fetchUnreadDirectUserMessage(userId, userName, employeeId);
     if (res?.success && res?.data) {
       setActiveMessage(res.data);
       setIsOpen(true);
@@ -53,6 +55,10 @@ export default function DirectUserMessageModal() {
     if (!user) return;
 
     checkUnreadMessages();
+
+    const interval = setInterval(() => {
+      checkUnreadMessages();
+    }, 5000);
 
     const handleSync = () => checkUnreadMessages();
     window.addEventListener("storage", handleSync);
@@ -73,13 +79,14 @@ export default function DirectUserMessageModal() {
             (payload: any) => {
               if (payload.new) {
                 const dm: DirectUserMessage = payload.new;
-                const matchId = dm.target_user_id === user.id;
+                const matchId = user.id && dm.target_user_id === user.id;
+                const matchEmpId = user.employeeId && (dm.target_user_id === user.employeeId || dm.target_user_name === user.employeeId);
                 const matchName =
                   user.fullName &&
                   dm.target_user_name
                     ?.toLowerCase()
                     .includes(user.fullName.toLowerCase());
-                if ((matchId || matchName) && !dm.is_read) {
+                if ((matchId || matchEmpId || matchName) && !dm.is_read) {
                   setActiveMessage(dm);
                   setIsOpen(true);
                 }
@@ -91,6 +98,7 @@ export default function DirectUserMessageModal() {
     } catch (e) {}
 
     return () => {
+      clearInterval(interval);
       window.removeEventListener("storage", handleSync);
       window.removeEventListener("dji_direct_message_sent", handleSync);
       if (channel) {
