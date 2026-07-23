@@ -160,7 +160,7 @@ const PANEL_TOUR_STEPS = [
 
 const NEW_PROBLEMS: Record<string, string[]> = {
   A: [
-    "L1,L2,L3 Benang timbul putus",
+    "L1/L2/L3 Benang timbul putus",
     "Benang lolos",
     "Bolong corak",
     "Benang narik/Kendor",
@@ -889,11 +889,13 @@ export default function EmployeeForm({
       ? { ...data, panelNo: "" }
       : data;
 
-    // Jika mesinMasihStop, tahan nomor panel (tidak maju)
-    // Shift 2 bisa submit panel yang sama karena backend izinkan beda operator
+    // Jika mesinMasihStop atau ada panel gagal/BS, tahan nomor panel (tidak maju)
+    // Operator harus menginput panel fisik yang valid untuk nomor panel ini terlebih dahulu
+    const hasBs = data.pcsData && data.pcsData.some((p: any) => p.isBs);
     let nextPanelNoForSave = isCutSubmit ? "1" : nextPanelNo;
-    if ((data.mesinMasihStop || data.isPanelGagal) && !isCutSubmit) {
-      nextPanelNoForSave = currentPanelNo || nextPanelNo; // tetap di panel yang sama
+    if ((data.mesinMasihStop || data.isPanelGagal || hasBs) && !isCutSubmit) {
+      const cleanCurrentPanelNo = currentPanelNo ? currentPanelNo.replace(/\s*\(BS\)/gi, "").trim() : "";
+      nextPanelNoForSave = cleanCurrentPanelNo || currentPanelNo || nextPanelNo; // tetap di nomor panel yang sama untuk panel valid
       if (data.mesinMasihStop && data.downtimeEvents && data.downtimeEvents.length > 0) {
         const lastEvent = data.downtimeEvents[data.downtimeEvents.length - 1];
         localStorage.setItem("dji_unresolved_downtime", JSON.stringify({

@@ -18,7 +18,7 @@ const PROBLEM_CATEGORIES = [
 
 const PROBLEM_DETAILS: Record<string, string[]> = {
   A: [
-    "L1,L2,L3 Benang timbul putus",
+    "L1/L2/L3 Benang timbul putus",
     "Benang lolos",
     "Bolong corak",
     "Benang narik/Kendor",
@@ -120,7 +120,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
   const [isSavingMechanic, setIsSavingMechanic] = useState(false);
 
   const [requiredBlockDefects, setRequiredBlockDefects] = useState<string[]>([
-    "L1,L2,L3 Benang timbul putus",
+    "L1/L2/L3 Benang timbul putus",
     "Benang lolos",
     "Bolong corak",
     "Jarum pattern patah/bengkok",
@@ -393,6 +393,8 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     setTimerStartRef(null);
     localStorage.removeItem("dji_active_downtime_start");
     setIsUnblockingBlock(false);
+    setDikerjakanOleh("Operator");
+    setNamaPenanganan("");
 
     // Pre-fill if resuming from previous shift
     if (unresolvedDowntime) {
@@ -543,6 +545,9 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
           setLiveTimerSeconds(0);
           localStorage.removeItem("dji_active_downtime_start");
           setIsSavingMechanic(false);
+          setIsUnblockingBlock(false);
+          setDikerjakanOleh("Operator");
+          setNamaPenanganan("");
           return;
         }
 
@@ -571,6 +576,9 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
           setLiveTimerSeconds(0);
           localStorage.removeItem("dji_active_downtime_start");
           setIsSavingMechanic(false);
+          setIsUnblockingBlock(false);
+          setDikerjakanOleh("Operator");
+          setNamaPenanganan("");
           return;
         } else {
           alert("Gagal mengirim downtime khusus: " + res.error);
@@ -597,6 +605,9 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
     setTimerStartRef(null);
     setLiveTimerSeconds(0);
     localStorage.removeItem("dji_active_downtime_start");
+    setIsUnblockingBlock(false);
+    setDikerjakanOleh("Operator");
+    setNamaPenanganan("");
 
     // Hapus status tertunda (unresolved) setelah berhasil disave
     if (unresolvedDowntime) {
@@ -1167,9 +1178,8 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                             const details = selectedDetails[cat.id] || [];
                             const reqDetails = details.filter((d) => requiredBlockDefects.includes(d));
                             const isRequired = reqDetails.length > 0;
-                            const isCategoryEligible = (cat.id === "A" || cat.id === "B") || isRequired;
 
-                            if (!isCategoryEligible || details.length === 0) return null;
+                            if (!isRequired || details.length === 0) return null;
 
                             const isMissing = isRequired && (!inputBloks[cat.id] || inputBloks[cat.id]?.trim() === "");
 

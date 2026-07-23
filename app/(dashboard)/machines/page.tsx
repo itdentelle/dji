@@ -35,7 +35,7 @@ const MASTER_PROBLEM_CATEGORIES: Record<string, { label: string; desc: string; i
     label: "Kategori A",
     desc: "Benang Timbul / Lolos",
     items: [
-      "L1,L2,L3 Benang timbul putus",
+      "L1/L2/L3 Benang timbul putus",
       "Benang lolos",
       "Bolong corak",
       "Benang narik/Kendor",
@@ -179,7 +179,7 @@ export default function MachinesPage() {
 
   const [configTab, setConfigTab] = useState<"MACHINES" | "BLOCK_REQUIRED">("MACHINES");
   const [requiredBlockDefects, setRequiredBlockDefects] = useState<string[]>([
-    "L1,L2,L3 Benang timbul putus",
+    "L1/L2/L3 Benang timbul putus",
     "Benang lolos",
     "Bolong corak",
     "Jarum pattern patah/bengkok",
@@ -859,7 +859,7 @@ export default function MachinesPage() {
                   <div className="text-xs text-rose-950 bg-rose-50/80 p-3.5 rounded-2xl border border-rose-200/80 flex items-start gap-2.5">
                     <Box className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                     <p className="leading-relaxed">
-                      <strong>Aturan Wajib Nomor Blok:</strong> Centang detail masalah di bawah yang <strong>WAJIB</strong> disertai pengisian nomor blok oleh operator saat melaporkan masalah/downtime. Operator tidak akan bisa menyimpan laporan jika nomor blok kosong pada masalah ini.
+                      <strong>Aturan Wajib Nomor Blok:</strong> Centang detail masalah di bawah yang <strong>WAJIB BLOK</strong>. Jika diatur <strong>TIDAK BLOK</strong>, kolom isian nomor blok tidak akan muncul di form operator.
                     </p>
                   </div>
 
@@ -897,10 +897,10 @@ export default function MachinesPage() {
                                   className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
                                     isReq
                                       ? "bg-rose-600 text-white"
-                                      : "bg-slate-100 text-slate-400"
+                                      : "bg-slate-200 text-slate-600"
                                   }`}
                                 >
-                                  {isReq ? "WAJIB BLOK" : "Opsional"}
+                                  {isReq ? "WAJIB BLOK" : "TIDAK BLOK"}
                                 </span>
                               </button>
                             );

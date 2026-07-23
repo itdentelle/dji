@@ -656,7 +656,8 @@ export async function getLastPanelNoByPotongan(
       .eq("nomor_mc", nomorMc)
       .not("panel_no", "is", null)
       .not("panel_no", "eq", "METERAN")
-      .not("panel_no", "like", "%GAGAL%");
+      .not("panel_no", "like", "%GAGAL%")
+      .not("panel_no", "like", "%BS%");
 
     if (error) {
       console.error("Error fetching panel_no:", error);
@@ -667,14 +668,16 @@ export async function getLastPanelNoByPotongan(
       let maxPanelNo = 0;
       for (const row of data as any[]) {
         if (row.panel_no != null) {
-          // Ekstrak angka jika formatnya string misal "1"
-          const lastNumberMatch = String(row.panel_no).match(/\d+$/);
-          if (lastNumberMatch) {
-            const num = parseInt(lastNumberMatch[0], 10);
-            if (num > maxPanelNo) maxPanelNo = num;
-          } else {
-            const num = parseInt(row.panel_no, 10);
-            if (!isNaN(num) && num > maxPanelNo) maxPanelNo = num;
+          const pStr = String(row.panel_no).trim();
+          if (pStr && !pStr.includes("BS") && !pStr.includes("GAGAL") && pStr !== "METERAN") {
+            const lastNumberMatch = pStr.match(/\d+$/);
+            if (lastNumberMatch) {
+              const num = parseInt(lastNumberMatch[0], 10);
+              if (num > maxPanelNo) maxPanelNo = num;
+            } else {
+              const num = parseInt(pStr, 10);
+              if (!isNaN(num) && num > maxPanelNo) maxPanelNo = num;
+            }
           }
         }
       }
@@ -857,18 +860,23 @@ export async function searchEmployeeHistory(filters: {
       updateIfMissing("pinggiran");
 
       let currentMaxPanel = 0;
-      if (row.panel_no && !isNaN(parseInt(row.panel_no))) {
-        currentMaxPanel = Math.max(currentMaxPanel, parseInt(row.panel_no));
-      }
-      if (row.production_details && Array.isArray(row.production_details)) {
-        row.production_details.forEach((det: any) => {
-          if (det.pcs_index && !isNaN(parseInt(det.pcs_index))) {
-            currentMaxPanel = Math.max(currentMaxPanel, parseInt(det.pcs_index));
-          }
-        });
-      }
-      if (row.pcs && !isNaN(parseInt(row.pcs))) {
-        currentMaxPanel = Math.max(currentMaxPanel, parseInt(row.pcs));
+      const pStr = String(row.panel_no || "");
+      const isBsRow = pStr.includes("BS") || (row.production_details && row.production_details.some((d: any) => d.kategori_masalah === "X" || d.grade === "BS"));
+      
+      if (!isBsRow) {
+        if (row.panel_no && !isNaN(parseInt(row.panel_no))) {
+          currentMaxPanel = Math.max(currentMaxPanel, parseInt(row.panel_no));
+        }
+        if (row.production_details && Array.isArray(row.production_details)) {
+          row.production_details.forEach((det: any) => {
+            if (det.pcs_index && !isNaN(parseInt(det.pcs_index))) {
+              currentMaxPanel = Math.max(currentMaxPanel, parseInt(det.pcs_index));
+            }
+          });
+        }
+        if (row.pcs && !isNaN(parseInt(row.pcs))) {
+          currentMaxPanel = Math.max(currentMaxPanel, parseInt(row.pcs));
+        }
       }
       batch.total_panels = Math.max(batch.total_panels, currentMaxPanel);
       batch.total_downtime_detik += row.total_downtime_detik || 0;

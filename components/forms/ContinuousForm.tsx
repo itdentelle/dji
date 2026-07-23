@@ -162,7 +162,7 @@ const METER_TOUR_STEPS = [
 
 const NEW_PROBLEMS: Record<string, string[]> = {
   A: [
-    "L1,L2,L3 Benang timbul putus",
+    "L1/L2/L3 Benang timbul putus",
     "Benang lolos",
     "Bolong corak",
     "Benang narik/Kendor",

@@ -177,7 +177,7 @@ export async function getBlockRequiredDefects(): Promise<{ success: boolean; dat
   } catch (e) {}
 
   const defaultList = [
-    "L1,L2,L3 Benang timbul putus",
+    "L1/L2/L3 Benang timbul putus",
     "Benang lolos",
     "Bolong corak",
     "Jarum pattern patah/bengkok",

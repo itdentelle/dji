@@ -8,6 +8,8 @@ export interface RealProductionItem {
   hari: string;
   header_id: string;
   panel_no?: number;
+  panel_no_str?: string;
+  is_dummy_downtime?: boolean;
   potongan_ke?: string;
   nama_operator: string;
   mesin_id: string;
@@ -23,6 +25,8 @@ export interface RealProductionItem {
   is_production: boolean;
   total_downtime_detik?: number;
   kategori_masalah?: string;
+  detail_masalah?: string;
+  keterangan_cacat?: string;
 }
 
 const DAYS_MAP = ["MIN", "SEN", "SEL", "RAB", "KAM", "JUM", "SAB"];
@@ -69,11 +73,17 @@ export async function getRealProductionsData(): Promise<{
       const mesinId = item.mesin_id || `KNIT-001`;
       
       const actualOperator = item.pic || item.nama_operator || item.created_by_name || "Operator Unknown";
+
+      const rawPanelNo = item.panel_no ? String(item.panel_no).trim() : "";
+      const isDummyDowntime = rawPanelNo.includes("Downtime") || rawPanelNo === "BERHENTI";
+      const parsedPanelNo = !isNaN(parseInt(rawPanelNo)) ? parseInt(rawPanelNo) : undefined;
       
       return {
         id: item.id || `header_${item.header_id}_${Math.random().toString().slice(2, 8)}`,
         header_id: String(item.header_id),
-        panel_no: item.panel_no ? parseInt(item.panel_no) : undefined,
+        panel_no: parsedPanelNo,
+        panel_no_str: rawPanelNo,
+        is_dummy_downtime: isDummyDowntime,
         potongan_ke: item.potongan_ke || undefined,
         tanggal: item.tanggal || new Date().toISOString().split("T")[0],
         hari: getHariFromTanggal(item.tanggal),
@@ -91,6 +101,8 @@ export async function getRealProductionsData(): Promise<{
         is_production: isProduction,
         total_downtime_detik: item.total_downtime_detik || 0,
         kategori_masalah: item.kategori_masalah || undefined,
+        detail_masalah: item.detail_masalah || undefined,
+        keterangan_cacat: item.keterangan_cacat || undefined,
       };
     });
 

@@ -12,9 +12,12 @@ async function clearDB() {
   const tables = [
     'mending_items',
     'qc_inspection_items',
+    'qc_inspections',
     'production_defects',
     'production_details',
-    'production_headers'
+    'downtime_records',
+    'production_headers',
+    'production_plans'
   ];
 
   for (const table of tables) {

@@ -19,6 +19,8 @@ import {
   Table as TableIcon,
   HelpCircle,
   X,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { getRealProductionsData } from "@/actions/dashboard-actions";
 import ProductTour, { ProductTourStep } from "@/components/ProductTour";
@@ -61,7 +63,9 @@ interface Transaction {
   tanggal: string;
   hari: string;
   header_id: string;
-  panel_no?: string | number;
+  panel_no?: number;
+  panel_no_str?: string;
+  is_dummy_downtime?: boolean;
   potongan_ke?: string;
   nama_operator: string;
   mesin_id: string;
@@ -77,6 +81,8 @@ interface Transaction {
   is_production?: boolean;
   total_downtime_detik?: number;
   kategori_masalah?: string;
+  detail_masalah?: string;
+  keterangan_cacat?: string;
 }
 
 const dummyData: Transaction[] = [
@@ -350,6 +356,7 @@ export default function DashboardPage() {
   >("ALL");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [showAllParetoCards, setShowAllParetoCards] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
   // Dashboard View Mode (Produksi vs Kehadiran)
@@ -661,16 +668,27 @@ export default function DashboardPage() {
     gradeScoped
       .filter(
         (item) =>
-          item.status_qc === "Recheck" &&
-          item.is_production &&
-          item.kategori_masalah,
+          item.status_qc === "Recheck" || item.grade === "BS" || (item.kategori_masalah && item.kategori_masalah.trim() !== "")
       )
       .forEach((item) => {
-        const cats = item
-          .kategori_masalah!.split(",")
-          .map((c) => c.trim())
-          .filter((c) => c !== "");
-        countMasalah += cats.length;
+        let itemCount = 1;
+        if (item.kategori_masalah && item.kategori_masalah.trim() !== "") {
+          const cats = item
+            .kategori_masalah.split(",")
+            .map((c) => c.trim())
+            .filter((c) => c !== "");
+          itemCount = Math.max(itemCount, cats.length);
+        }
+
+        const ket = (item as any).keterangan_cacat || (item as any).keterangan || "";
+        if (ket && typeof ket === "string") {
+          const blockMatches = ket.match(/Blok\s*\d+/gi);
+          if (blockMatches && blockMatches.length > 0) {
+            itemCount = Math.max(itemCount, blockMatches.length);
+          }
+        }
+
+        countMasalah += itemCount;
       });
 
     const countNolProduksi = gradeScoped.filter(
@@ -1040,7 +1058,7 @@ export default function DashboardPage() {
           downtimeHeaders: new Map(),
         };
       }
-      if (item.status_qc === "Recheck" || (item.kategori_masalah && item.kategori_masalah.trim() !== "")) {
+      if (item.status_qc === "Recheck" || item.grade === "BS" || (item.kategori_masalah && item.kategori_masalah.trim() !== "")) {
         criticalMachineMap[item.mesin_id].defects += 1;
       }
       criticalMachineMap[item.mesin_id].downtimeHeaders.set(
@@ -1092,6 +1110,7 @@ export default function DashboardPage() {
       F: "Cylinder/Mekanik",
       G: "Lain-lain/Libur",
       H: "Mekanik Direct",
+      BS: "Barang Sortir / Reject",
     };
 
     const transactionsToAnalyze = selectedParetoMachine === "ALL"
@@ -1102,27 +1121,95 @@ export default function DashboardPage() {
 
     if (paretoGroupBy === "KATEGORI") {
       const problemData = transactionsToAnalyze.filter(
-        (item) => item.kategori_masalah && item.kategori_masalah.trim() !== ""
+        (item) =>
+          item.grade === "BS" ||
+          (item.kategori_masalah && item.kategori_masalah.trim() !== "") ||
+          (item.detail_masalah && item.detail_masalah.trim() !== "")
       );
+
+      const PROBLEM_DETAILS_MAP: Record<string, string[]> = {
+        A: [
+          "L1/L2/L3 Benang timbul putus",
+          "Benang lolos",
+          "Bolong corak",
+          "L1/L2/L3 Benang timbul",
+          "Benang Nyilang",
+          "Beda warna benang/salah benang",
+        ],
+        B: [
+          "Jarum pattern patah/bengkok",
+          "Jarum dasar patah/bengkok",
+          "Ganti Jacquard",
+          "Ganti Tali Jacquard",
+          "Ganti Per Jacquard",
+          "Ganti Module",
+          "Ganti Magnet",
+          "Layar Komputer Error/Mati",
+          "Ganti jarum Compoun Nedle, pattern",
+        ],
+        C: [
+          "Perbaikan corak/revisi",
+          "Setel kain tebal/tipis",
+          "Lolos kain ganti artikel",
+          "Setting benang awal",
+          "Ganti Jarum / Olah Mesin",
+        ],
+        D: [
+          "Menunggu mekanik",
+          "Menunggu benang",
+          "Cleaning mesin",
+          "Istirahat",
+        ],
+      };
+
+      const getCategoryForDetail = (detailStr: string, fallbackCategory?: string): string => {
+        for (const [cat, details] of Object.entries(PROBLEM_DETAILS_MAP)) {
+          if (details.some(d => detailStr.toLowerCase().includes(d.toLowerCase()) || d.toLowerCase().includes(detailStr.toLowerCase()))) {
+            return cat;
+          }
+        }
+        return (fallbackCategory && fallbackCategory.trim() !== "" && fallbackCategory !== "X") ? fallbackCategory.toUpperCase() : "X";
+      };
+
       problemData.forEach((item) => {
-        const cats = item
-          .kategori_masalah!.split(",")
-          .map((c) => c.trim())
-          .filter((c) => c !== "");
+        let detailsList: string[] = [];
+        if (item.detail_masalah && item.detail_masalah.trim() !== "") {
+          detailsList = item.detail_masalah.split(",").map(d => d.trim()).filter(d => d !== "");
+        }
+
+        if (detailsList.length === 0) {
+          if (item.kategori_masalah && item.kategori_masalah.trim() !== "" && item.kategori_masalah !== "X") {
+            const cat = item.kategori_masalah.trim().toUpperCase();
+            const desc = CATEGORY_NAMES[cat] || "Masalah Lain";
+            detailsList.push(`[${cat}] ${desc}`);
+          } else if (item.grade === "BS") {
+            detailsList.push("[X] Panel BS (Tanpa Detail)");
+          } else {
+            detailsList.push("[X] Masalah Lain");
+          }
+        }
+
         const downtime = item.total_downtime_detik || 0;
-        cats.forEach((c) => {
-          const key = c.toUpperCase();
+        const downtimeShare = detailsList.length > 0 ? downtime / detailsList.length : downtime;
+
+        detailsList.forEach((det) => {
+          let formattedName = det;
+          if (!det.startsWith("[")) {
+            const cat = getCategoryForDetail(det, item.kategori_masalah);
+            formattedName = `[${cat}] ${det}`;
+          }
+          const key = formattedName;
           const existing = itemMap.get(key) || { count: 0, downtime: 0 };
           itemMap.set(key, {
             count: existing.count + 1,
-            downtime: existing.downtime + downtime,
+            downtime: existing.downtime + downtimeShare,
           });
         });
       });
     } else {
       // Group by MESIN: hitung jumlah kejadian masalah/cacat sesungguhnya per mesin
       transactionsToAnalyze.forEach((item) => {
-        const isDefect = item.status_qc === "Recheck" || (item.kategori_masalah && item.kategori_masalah.trim() !== "");
+        const isDefect = item.status_qc === "Recheck" || item.grade === "BS" || (item.kategori_masalah && item.kategori_masalah.trim() !== "");
         const downtime = item.total_downtime_detik || 0;
         if (!isDefect && downtime === 0) return;
 
@@ -1138,8 +1225,7 @@ export default function DashboardPage() {
     const list = Array.from(itemMap.entries()).map(([code, data]) => {
       let friendlyName = code;
       if (paretoGroupBy === "KATEGORI") {
-        const desc = CATEGORY_NAMES[code] || "Masalah Lain";
-        friendlyName = `[${code}] ${desc}`;
+        friendlyName = code;
       } else {
         friendlyName = code.startsWith("Mesin") ? code : `Mesin ${code}`;
       }
@@ -1197,47 +1283,100 @@ export default function DashboardPage() {
 
   // Filter criteria logic
   const filteredData = useMemo(() => {
+    const validProductionData = dateFilteredTransactions.filter(
+      (item) =>
+        !item.is_dummy_downtime &&
+        item.panel_no_str !== "Downtime Mekanik (Direct)" &&
+        item.panel_no_str !== "BERHENTI" &&
+        !String(item.panel_no_str || "").includes("Downtime")
+    );
+
     switch (activeFilter) {
       case "LOLOS":
-        return dateFilteredTransactions.filter(
+        return validProductionData.filter(
           (item) => item.status_qc === "Lolos",
         );
       case "EFISIENSI":
-        // Filter efisiensi optimal (>= 90%)
-        return dateFilteredTransactions.filter((item) => {
+        return validProductionData.filter((item) => {
           const ef =
             item.target_pcs > 0 ? (item.hasil_pcs / item.target_pcs) * 100 : 0;
           return ef >= 90;
         });
       case "PROBLEMS":
         return dateFilteredTransactions.filter(
-          (item) => item.status_qc === "Recheck" && item.is_production,
+          (item) => item.status_qc === "Recheck" || item.grade === "BS" || (item.kategori_masalah && item.kategori_masalah.trim() !== ""),
         );
       case "NOL_PRODUKSI":
-        return dateFilteredTransactions.filter((item) => item.hasil_pcs === 0);
+        return validProductionData.filter((item) => item.hasil_pcs === 0);
       case "ALL":
       default:
-        return dateFilteredTransactions;
+        return validProductionData;
     }
   }, [activeFilter, dateFilteredTransactions]);
 
   const categoryBreakdown = useMemo(() => {
+    const PROBLEM_DETAILS_MAP: Record<string, string[]> = {
+      A: [
+        "L1/L2/L3 Benang timbul putus",
+        "L1/L2/L3 Benang timbul tebal",
+        "Benang lolos",
+        "Jarum timbul patah/bengkok",
+        "Over-lap/double lap",
+        "Pattern timbul cacat",
+        "Proofing timbul cacat",
+      ],
+      B: [
+        "Jarum pattern patah/bengkok",
+        "Ganti jarum Compoun Nedle, pattern",
+        "Ganti Jacquard",
+        "Stripe/garis jarum",
+        "Lubang/bolong",
+        "Beda warna/stripe",
+      ],
+    };
+
     const problemData = dateFilteredTransactions.filter(
       (item) =>
-        item.status_qc === "Recheck" &&
-        item.is_production &&
-        item.kategori_masalah,
+        item.status_qc === "Recheck" || item.grade === "BS" || (item.kategori_masalah && item.kategori_masalah.trim() !== ""),
     );
     const catMap = new Map<string, number>();
 
     problemData.forEach((item) => {
-      const cats = item
-        .kategori_masalah!.split(",")
-        .map((c) => c.trim())
-        .filter((c) => c !== "");
-      cats.forEach((c) => {
-        catMap.set(c, (catMap.get(c) || 0) + 1);
-      });
+      let itemCount = 1;
+      let cats: string[] = [];
+
+      if (item.kategori_masalah && item.kategori_masalah.trim() !== "" && item.kategori_masalah !== "X") {
+        cats = item
+          .kategori_masalah.split(",")
+          .map((c) => c.trim())
+          .filter((c) => c !== "" && c !== "X");
+      }
+
+      if (cats.length === 0 && item.detail_masalah && item.detail_masalah.trim() !== "") {
+        for (const [kat, detList] of Object.entries(PROBLEM_DETAILS_MAP)) {
+          if (detList.some((d) => item.detail_masalah!.includes(d))) {
+            cats.push(kat);
+            break;
+          }
+        }
+      }
+
+      const ket = item.keterangan_cacat || (item as any).keterangan || "";
+      if (ket && typeof ket === "string") {
+        const blockMatches = ket.match(/Blok\s*\d+/gi);
+        if (blockMatches && blockMatches.length > 0) {
+          itemCount = Math.max(itemCount, blockMatches.length);
+        }
+      }
+
+      if (cats.length > 0) {
+        cats.forEach((c) => {
+          catMap.set(c, (catMap.get(c) || 0) + Math.max(1, Math.floor(itemCount / cats.length)));
+        });
+      } else {
+        const fallbackCat = item.grade === "BS" ? "BS" : "X";
+        catMap.set(fallbackCat, (catMap.get(fallbackCat) || 0) + itemCount);
+      }
     });
 
     const total = Array.from(catMap.values()).reduce(
@@ -1399,24 +1538,39 @@ export default function DashboardPage() {
       let ungraded_sum = 0;
 
       if (metricMode === "PCS") {
-        gradeA_sum = new Set(
-          items.filter((i) => i.grade === "GRADE A").map((i) => i.header_id),
-        ).size;
-        gradeB_sum = new Set(
-          items.filter((i) => i.grade === "GRADE B").map((i) => i.header_id),
-        ).size;
-        bs_sum = new Set(
-          items.filter((i) => i.grade === "BS").map((i) => i.header_id),
-        ).size;
-        ungraded_sum = new Set(
-          items
-            .filter(
-              (i) =>
-                i.grade === "UNGRADED" ||
-                !["GRADE A", "GRADE B", "BS"].includes(i.grade),
-            )
-            .map((i) => i.header_id),
-        ).size;
+        const getPanelCountForGrade = (gradeItems: typeof items) => {
+          const panelGroups: { [key: string]: number[] } = {};
+          gradeItems.forEach((item) => {
+            if (
+              item.panel_no !== undefined &&
+              item.panel_no !== null &&
+              !isNaN(Number(item.panel_no)) &&
+              (item.hasil_meter || 0) === 0
+            ) {
+              const key = `${item.mesin_id}_${item.design}_${item.potongan_ke}`;
+              if (!panelGroups[key]) panelGroups[key] = [];
+              panelGroups[key].push(Number(item.panel_no));
+            }
+          });
+          let totalPanels = 0;
+          Object.keys(panelGroups).forEach((k) => {
+            if (panelGroups[k].length > 0) {
+              totalPanels += Math.max(...panelGroups[k]);
+            }
+          });
+          return totalPanels;
+        };
+
+        gradeA_sum = getPanelCountForGrade(items.filter((i) => i.grade === "GRADE A"));
+        gradeB_sum = getPanelCountForGrade(items.filter((i) => i.grade === "GRADE B"));
+        bs_sum = getPanelCountForGrade(items.filter((i) => i.grade === "BS"));
+        ungraded_sum = getPanelCountForGrade(
+          items.filter(
+            (i) =>
+              i.grade === "UNGRADED" ||
+              !["GRADE A", "GRADE B", "BS"].includes(i.grade),
+          ),
+        );
       } else {
         const uniqueHeadersMap = new Map<string, (typeof items)[0]>();
         items.forEach((item) => {
@@ -4229,7 +4383,7 @@ export default function DashboardPage() {
                             : "text-slate-500 hover:text-slate-800"
                           }`}
                       >
-                        Kategori Masalah
+                        Detail Masalah
                       </button>
                       <button
                         onClick={() => setParetoGroupBy("MESIN")}
@@ -4330,44 +4484,84 @@ export default function DashboardPage() {
                         })
                         .join(" ");
 
+                      // Generate accurate Left Y Axis Ticks & Grid Lines
+                      const yTicks: { val: number; label: string; y: number }[] = [];
+                      if (paretoMode === "COUNT") {
+                        const steps = maxValue <= 5 ? maxValue : 4;
+                        for (let i = 0; i <= steps; i++) {
+                          const val = Math.round((maxValue / steps) * i);
+                          const y = paddingTop + chartHeight - (val / maxValue) * chartHeight;
+                          if (!yTicks.some((t) => t.val === val)) {
+                            yTicks.push({ val, label: val.toString(), y });
+                          }
+                        }
+                      } else {
+                        const maxMin = Math.ceil(maxValue / 60) || 1;
+                        const steps = maxMin <= 5 ? maxMin : 4;
+                        for (let i = 0; i <= steps; i++) {
+                          const minVal = Math.round((maxMin / steps) * i);
+                          const y = paddingTop + chartHeight - (minVal / maxMin) * chartHeight;
+                          if (!yTicks.some((t) => t.val === minVal)) {
+                            yTicks.push({ val: minVal, label: `${minVal}m`, y });
+                          }
+                        }
+                      }
+
                       return (
                         <div style={{ minWidth: `${svgWidth}px` }} className="w-full h-full">
                           <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full">
-                            {/* Horizontal Grid */}
-                            <line x1={paddingLeft} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f1f5f9" strokeWidth="1" />
-                            <line x1={paddingLeft} y1={paddingTop + chartHeight * 0.25} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight * 0.25} stroke="#f8fafc" strokeWidth="1" />
-                            <line x1={paddingLeft} y1={paddingTop + chartHeight * 0.5} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight * 0.5} stroke="#f1f5f9" strokeWidth="1" />
-                            <line x1={paddingLeft} y1={paddingTop + chartHeight * 0.75} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight * 0.75} stroke="#f8fafc" strokeWidth="1" />
-                            <line x1={paddingLeft} y1={paddingTop + chartHeight} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight} stroke="#cbd5e1" strokeWidth="1.5" />
+                            {/* Left Y Axis Grid Lines & Labels */}
+                            {yTicks.map((tick) => (
+                              <g key={`ytick-${tick.val}`}>
+                                <line
+                                  x1={paddingLeft}
+                                  y1={tick.y}
+                                  x2={svgWidth - paddingRight}
+                                  y2={tick.y}
+                                  stroke={tick.val === 0 ? "#cbd5e1" : "#f1f5f9"}
+                                  strokeWidth={tick.val === 0 ? "1.5" : "1"}
+                                />
+                                <text
+                                  x={paddingLeft - 8}
+                                  y={tick.y + 3}
+                                  textAnchor="end"
+                                  fontSize="9"
+                                  fontWeight="bold"
+                                  fill="#64748b"
+                                >
+                                  {tick.label}
+                                </text>
+                              </g>
+                            ))}
 
-                            {/* 80% Cutoff Line */}
-                            <line x1={paddingLeft} y1={y80} x2={svgWidth - paddingRight} y2={y80} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5 4" />
-                            <text x={paddingLeft + 8} y={y80 - 6} fontSize="9" fontWeight="black" fill="#ef4444">
+                            {/* 80% Cutoff Line for Cumulative % */}
+                            <line
+                              x1={paddingLeft}
+                              y1={y80}
+                              x2={svgWidth - paddingRight}
+                              y2={y80}
+                              stroke="#ef4444"
+                              strokeWidth="1.5"
+                              strokeDasharray="5 4"
+                            />
+                            <text
+                              x={paddingLeft + 8}
+                              y={y80 - 6}
+                              fontSize="9"
+                              fontWeight="black"
+                              fill="#ef4444"
+                            >
                               Batas Pareto 80%
                             </text>
 
-                            {/* Left Y Axis */}
-                            <text x={paddingLeft - 8} y={paddingTop + 4} textAnchor="end" fontSize="9" fontWeight="bold" fill="#64748b">
-                              {paretoMode === "COUNT" ? maxValue : `${Math.round(maxValue / 60)}m`}
-                            </text>
-                            <text x={paddingLeft - 8} y={y80 + 4} textAnchor="end" fontSize="9" fontWeight="black" fill="#ef4444">
-                              {paretoMode === "COUNT" ? Math.round(maxValue * 0.8) : `${Math.round((maxValue * 0.8) / 60)}m`}
-                            </text>
-                            <text x={paddingLeft - 8} y={paddingTop + chartHeight / 2 + 4} textAnchor="end" fontSize="9" fontWeight="bold" fill="#64748b">
-                              {paretoMode === "COUNT" ? Math.round(maxValue / 2) : `${Math.round(maxValue / 120)}m`}
-                            </text>
-                            <text x={paddingLeft - 8} y={paddingTop + chartHeight + 4} textAnchor="end" fontSize="9" fontWeight="bold" fill="#64748b">
-                              0
-                            </text>
-
-                            {/* Right Y Axis */}
+                            {/* Right Y Axis Ticks (Cumulative %) */}
                             <text x={svgWidth - paddingRight + 8} y={paddingTop + 4} textAnchor="start" fontSize="9" fontWeight="bold" fill="#ef4444">
                               100%
                             </text>
-                            <text x={svgWidth - paddingRight + 8} y={y80 + 4} textAnchor="start" fontSize="9" fontWeight="black" fill="#ef4444">
+                            <text x={svgWidth - paddingRight + 8} y={y80 + 3} textAnchor="start" fontSize="9" fontWeight="black" fill="#ef4444">
                               80%
                             </text>
-                            <text x={svgWidth - paddingRight + 8} y={paddingTop + chartHeight + 4} textAnchor="start" fontSize="9" fontWeight="bold" fill="#ef4444">
+                            <text x={svgWidth - paddingRight + 8} y={paddingTop + chartHeight + 3} textAnchor="start" fontSize="9" fontWeight="bold" fill="#ef4444">
                               0%
                             </text>
 
@@ -4385,7 +4579,9 @@ export default function DashboardPage() {
                                     {paretoMode === "COUNT" ? item.value : `${Math.round(item.value / 60)}m`}
                                   </text>
                                   <text x={x + barWidth / 2} y={paddingTop + chartHeight + 16} textAnchor="middle" fontSize="9" fontWeight="extrabold" fill={item.isVital80 ? "#b45309" : "#64748b"}>
-                                    {paretoGroupBy === "KATEGORI" ? `Kat ${item.code}` : (item.code.startsWith("Mesin") ? item.code : `M-${item.code}`)}
+                                    {paretoGroupBy === "KATEGORI"
+                                      ? (item.name.length > 14 ? item.name.substring(0, 12) + "..." : item.name)
+                                      : (item.code.startsWith("Mesin") ? item.code : `M-${item.code}`)}
                                   </text>
                                 </g>
                               );
@@ -4421,53 +4617,85 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Category Cards Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-6">
-                  {list.map((item, idx) => (
-                    <div
-                      key={item.code}
-                      className={`p-3.5 rounded-2xl transition-all border ${item.isVital80
-                          ? "bg-amber-50/50 border-amber-200/80 shadow-xs hover:border-amber-300"
-                          : "bg-slate-50/40 border-slate-200/60 hover:border-slate-300"
-                        }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] ${item.isVital80 ? "bg-amber-500 text-white shadow-xs" : "bg-slate-300 text-slate-700"
+                {(() => {
+                  const maxInitialVisible = 4;
+                  const visibleCards = showAllParetoCards ? list : list.slice(0, maxInitialVisible);
+                  const remainingCount = list.length - maxInitialVisible;
+
+                  return (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-6">
+                        {visibleCards.map((item, idx) => (
+                          <div
+                            key={item.code}
+                            className={`p-3.5 rounded-2xl transition-all border ${item.isVital80
+                                ? "bg-amber-50/50 border-amber-200/80 shadow-xs hover:border-amber-300"
+                                : "bg-slate-50/40 border-slate-200/60 hover:border-slate-300"
                               }`}
                           >
-                            {idx + 1}
-                          </span>
-                          <span className="text-xs font-black text-slate-800">
-                            {item.friendlyName}
-                          </span>
-                        </div>
-                        {item.isVital80 && (
-                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300/80">
-                            Vital 80%
-                          </span>
-                        )}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] ${item.isVital80 ? "bg-amber-500 text-white shadow-xs" : "bg-slate-300 text-slate-700"
+                                    }`}
+                                >
+                                  {idx + 1}
+                                </span>
+                                <span className="text-xs font-black text-slate-800">
+                                  {item.friendlyName}
+                                </span>
+                              </div>
+                              {item.isVital80 && (
+                                <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300/80">
+                                  Vital 80%
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-baseline justify-between pt-1 border-t border-slate-200/40 mt-2">
+                              <span className="text-[10px] text-slate-400 font-semibold">
+                                Kumulatif: <strong className="text-slate-700 font-extrabold">{item.cumulativePct}%</strong>
+                              </span>
+                              <div className="text-right">
+                                {paretoMode === "COUNT" ? (
+                                  <span className="text-sm font-black text-slate-800">
+                                    {item.count} <span className="text-[10px] text-slate-400 font-bold">kejadian</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-sm font-black text-slate-800">
+                                    {Math.round(item.downtime / 60)} <span className="text-[10px] text-slate-400 font-bold">menit</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
 
-                      <div className="flex items-baseline justify-between pt-1 border-t border-slate-200/40 mt-2">
-                        <span className="text-[10px] text-slate-400 font-semibold">
-                          Kumulatif: <strong className="text-slate-700 font-extrabold">{item.cumulativePct}%</strong>
-                        </span>
-                        <div className="text-right">
-                          {paretoMode === "COUNT" ? (
-                            <span className="text-sm font-black text-slate-800">
-                              {item.count} <span className="text-[10px] text-slate-400 font-bold">kejadian</span>
-                            </span>
-                          ) : (
-                            <span className="text-sm font-black text-slate-800">
-                              {Math.round(item.downtime / 60)} <span className="text-[10px] text-slate-400 font-bold">menit</span>
-                            </span>
-                          )}
+                      {list.length > maxInitialVisible && (
+                        <div className="flex justify-center mt-4 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowAllParetoCards(!showAllParetoCards)}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-extrabold border border-slate-200 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+                          >
+                            {showAllParetoCards ? (
+                              <>
+                                <ChevronUp className="w-4 h-4 text-slate-500" />
+                                Tampilkan Lebih Sedikit
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-4 h-4 text-slate-500" />
+                                Lihat Lebih Banyak ({remainingCount} detail masalah lagi)
+                              </>
+                            )}
+                          </button>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             );
           })()}
