@@ -184,6 +184,7 @@ export default function MonthlyMachineReportPage() {
         body: JSON.stringify({ 
           action: "sync_monthly_report", 
           machine: selectedMachine,
+          sheetName: selectedMachine,
           month: selectedMonth,
           year: selectedYear,
           data: wsData 
@@ -316,7 +317,7 @@ export default function MonthlyMachineReportPage() {
       }
       ws['!merges'] = merges;
       
-      XLSX.utils.book_append_sheet(wb, ws, `Laporan ${selectedMachine}`);
+      XLSX.utils.book_append_sheet(wb, ws, selectedMachine);
       const fileName = `Laporan_Bulanan_${selectedMachine}_${selectedMonth}_${selectedYear}.xlsx`;
       XLSX.writeFile(wb, fileName);
     });
