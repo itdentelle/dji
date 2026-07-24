@@ -5,6 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getUserProfile } from "@/actions/user-actions";
 
+import { Loader2 } from "lucide-react";
+
 export type UserRole = "admin" | "manager" | "employee" | "qc" | "operator" | "inspeksi" | "mending";
 
 export interface User {
@@ -124,14 +126,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [supabase, router]);
 
+  const isPublic = pathname === "/login" || pathname === "/change-password" || pathname.includes("/print");
+
   useEffect(() => {
     if (!isLoading) {
-      const isPublic = pathname === "/login" || pathname === "/change-password" || pathname.includes("/print");
       if (!isLoggedIn && !isPublic) {
         router.push("/login");
       }
     }
-  }, [isLoading, isLoggedIn, pathname, router]);
+  }, [isLoading, isLoggedIn, isPublic, pathname, router]);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
@@ -157,15 +160,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Switch role for debug toolbar
   const switchRole = (role: UserRole) => {
-    // This function doesn't work effectively with true Supabase Auth because 
-    // it requires changing the actual backend token. 
-    // However, to prevent DebugToolbar from breaking immediately:
     console.warn("switchRole is disabled when using real Supabase Auth. Please login with a different account.");
   };
 
+  const showLoadingScreen = (isLoading || (!isLoggedIn && !isPublic)) && !isPublic;
+
   return (
     <AuthContext.Provider value={{ user, isLoggedIn, isLoading, login, logout, switchRole }}>
-      {children}
+      {showLoadingScreen ? (
+        <div className="min-h-screen w-full bg-slate-900 flex flex-col items-center justify-center p-4 z-50">
+          <div className="flex flex-col items-center gap-4 animate-fadeIn">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0070bc] to-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/30">
+              <Loader2 className="w-6 h-6 text-white animate-spin" />
+            </div>
+            <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+              Memverifikasi Sesi...
+            </p>
+          </div>
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 }
