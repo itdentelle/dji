@@ -499,20 +499,24 @@ export default function DashboardPage() {
 
     const productionOnly = gradeScoped.filter((item) => item.is_production);
 
-    const panelMap = new Map<string, number>();
+    const uniquePanelsSet = new Set<string>();
     productionOnly.forEach((item) => {
-      if ((item.hasil_meter || 0) === 0 && item.potongan_ke) {
-        const groupKey = `${item.tanggal}_${item.mesin_id}_${item.potongan_ke}`;
-        const currentMax = panelMap.get(groupKey) || 0;
-        if (item.panel_no && item.panel_no > currentMax) {
-          panelMap.set(groupKey, item.panel_no);
-        }
+      if ((item.hasil_meter || 0) > 0) return;
+      const panelStr = String(item.panel_no || "").toUpperCase().trim();
+      if (
+        !panelStr ||
+        panelStr.includes("DOWNTIME") ||
+        panelStr === "BERHENTI" ||
+        panelStr.includes("(GAGAL)") ||
+        panelStr.includes("(BS)")
+      ) {
+        return;
       }
+      const cutKey = item.potongan_ke || item.design || item.header_id;
+      const key = `${item.tanggal}_${item.mesin_id}_${cutKey}_${panelStr}_${item.header_id}`;
+      uniquePanelsSet.add(key);
     });
-
-    let totalProduksiPanel = 0;
-    panelMap.forEach((max) => (totalProduksiPanel += max));
-    const totalProduksi = totalProduksiPanel; // Rename to keep compatibility
+    const totalProduksi = uniquePanelsSet.size;
 
     const totalProduksiMeter = productionOnly.reduce(
       (acc, curr) => acc + (parseFloat(curr.hasil_meter as any) || 0),
@@ -533,7 +537,7 @@ export default function DashboardPage() {
         (item.hasil_meter || 0) === 0 &&
         (item.posisi_meter || 0) === 0,
     ).length;
-    const totalPanelValid = totalProduksiPanel; // "dari Y panel"
+    const totalPanelValid = totalProduksi; // "dari Y panel"
     const persentaseCacatPanel =
       totalPanelValid > 0 ? (countMasalahPanel / totalPanelValid) * 100 : 0;
 
@@ -717,40 +721,35 @@ export default function DashboardPage() {
       let ungraded_sum = 0;
 
       if (metricMode === "PCS") {
-        const calcPanelForGrade = (subItems: typeof items) => {
-          const pMap = new Map<string, number>();
-          subItems.forEach((item) => {
-            if ((item.hasil_meter || 0) === 0 && item.potongan_ke) {
-              const groupKey = `${item.tanggal}_${item.mesin_id}_${item.potongan_ke}`;
-              const currentMax = pMap.get(groupKey) || 0;
-              if (item.panel_no && item.panel_no > currentMax) {
-                pMap.set(groupKey, item.panel_no);
-              }
-            }
-          });
-          let total = 0;
-          pMap.forEach((max) => (total += max));
-
-          if (total === 0 && subItems.length > 0) {
-            total = new Set(subItems.map((i) => i.header_id)).size;
+        const cutMap: { [key: string]: typeof items } = {};
+        items.forEach((item) => {
+          if (
+            item.panel_no !== undefined &&
+            item.panel_no !== null &&
+            !isNaN(Number(item.panel_no)) &&
+            (item.hasil_meter || 0) === 0
+          ) {
+            const key = `${item.mesin_id}_${item.design}_${item.potongan_ke}`;
+            if (!cutMap[key]) cutMap[key] = [];
+            cutMap[key].push(item);
           }
-          return total;
-        };
+        });
 
-        gradeA_sum = calcPanelForGrade(
-          items.filter((i) => i.grade === "GRADE A"),
-        );
-        gradeB_sum = calcPanelForGrade(
-          items.filter((i) => i.grade === "GRADE B"),
-        );
-        bs_sum = calcPanelForGrade(items.filter((i) => i.grade === "BS"));
-        ungraded_sum = calcPanelForGrade(
-          items.filter(
-            (i) =>
-              i.grade === "UNGRADED" ||
-              !["GRADE A", "GRADE B", "BS"].includes(i.grade),
-          ),
-        );
+        Object.values(cutMap).forEach((cutItems) => {
+          const presentPanels = new Set<number>();
+
+          cutItems.forEach((i) => {
+            const pNo = Number(i.panel_no);
+            presentPanels.add(pNo);
+            if (i.grade === "GRADE A") gradeA_sum++;
+            else if (i.grade === "GRADE B") gradeB_sum++;
+            else if (i.grade === "BS") bs_sum++;
+            else ungraded_sum++;
+          });
+
+          const uninspectedCount = Math.max(0, presentPanels.size - cutItems.length);
+          ungraded_sum += uninspectedCount;
+        });
       } else {
         const uniqueHeadersMap = new Map<string, (typeof items)[0]>();
         items.forEach((item) => {

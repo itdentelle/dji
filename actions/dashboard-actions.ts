@@ -41,6 +41,42 @@ function getHariFromTanggal(tglStr: string): string {
   }
 }
 
+function getShiftDate(tglStr: string, timestampStr?: string): string {
+  try {
+    if (!timestampStr) return tglStr || new Date().toISOString().split("T")[0];
+
+    let dt: Date;
+    if (timestampStr.includes("T")) {
+      dt = new Date(timestampStr);
+    } else if (timestampStr.includes(" ")) {
+      const parts = timestampStr.split(" ");
+      dt = new Date(`${parts[0]}T${parts[1]}+07:00`);
+    } else {
+      dt = new Date(timestampStr);
+    }
+
+    if (isNaN(dt.getTime())) return tglStr || new Date().toISOString().split("T")[0];
+
+    // Check time in WIB
+    const hourStr = dt.toLocaleTimeString("en-US", { timeZone: "Asia/Jakarta", hour: "2-digit", hour12: false });
+    const minStr = dt.toLocaleTimeString("en-US", { timeZone: "Asia/Jakarta", minute: "2-digit" });
+    const hour = parseInt(hourStr);
+    const min = parseInt(minStr);
+    const totalMinutes = (isNaN(hour) ? 0 : hour) * 60 + (isNaN(min) ? 0 : min);
+
+    // Shift 3 runs 23:10 - 07:10.
+    // Entries between 00:00 and 07:10 AM (< 430 minutes) belong to Shift 3 of PREVIOUS DAY!
+    if (totalMinutes < 430) {
+      const prevDt = new Date(dt.getTime() - 24 * 60 * 60 * 1000);
+      return prevDt.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+    }
+
+    return dt.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  } catch {
+    return tglStr || new Date().toISOString().split("T")[0];
+  }
+}
+
 export async function getRealProductionsData(): Promise<{
   success: boolean;
   data?: RealProductionItem[];
@@ -65,7 +101,28 @@ export async function getRealProductionsData(): Promise<{
       throw error;
     }
 
-    // The view now directly includes created_by_name and pic
+    // Query 2: Fetch header timestamps for exact shift date attribution
+    const headerIds = Array.from(
+      new Set(
+        (data || [])
+          .map((item: any) => item.header_id)
+          .filter(Boolean),
+      ),
+    );
+
+    const headerTimeMap = new Map<string, string>();
+    if (headerIds.length > 0) {
+      const { data: headersData } = await supabase
+        .from("production_headers")
+        .select("id, tanggal_jam")
+        .in("id", headerIds);
+
+      (headersData || []).forEach((h: any) => {
+        if (h.id && h.tanggal_jam) {
+          headerTimeMap.set(String(h.id), String(h.tanggal_jam));
+        }
+      });
+    }
 
     const mappedData: RealProductionItem[] = (data || []).map((item: any) => {
       const isProduction = (item.hasil_pcs || 0) > 0 || (item.posisi_meter || 0) > 0 || (item.hasil_meter || 0) > 0;
@@ -78,6 +135,9 @@ export async function getRealProductionsData(): Promise<{
       const isDummyDowntime = rawPanelNo.includes("Downtime") || rawPanelNo === "BERHENTI";
       const parsedPanelNo = !isNaN(parseInt(rawPanelNo)) ? parseInt(rawPanelNo) : undefined;
       
+      const ts = headerTimeMap.get(String(item.header_id));
+      const shiftTanggal = getShiftDate(item.tanggal, ts);
+
       return {
         id: item.id || `header_${item.header_id}_${Math.random().toString().slice(2, 8)}`,
         header_id: String(item.header_id),
@@ -85,8 +145,8 @@ export async function getRealProductionsData(): Promise<{
         panel_no_str: rawPanelNo,
         is_dummy_downtime: isDummyDowntime,
         potongan_ke: item.potongan_ke || undefined,
-        tanggal: item.tanggal || new Date().toISOString().split("T")[0],
-        hari: getHariFromTanggal(item.tanggal),
+        tanggal: shiftTanggal,
+        hari: getHariFromTanggal(shiftTanggal),
         nama_operator: actualOperator,
         mesin_id: mesinId,
         hasil_pcs: item.hasil_pcs || 0,

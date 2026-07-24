@@ -65,6 +65,7 @@ export async function getMonthlyMachineReport(
           tgl,
           tanggal_jam,
           panel_no,
+          potongan_ke,
           total_produksi_meter,
           pcs,
           design_id,
@@ -333,8 +334,8 @@ export async function getMonthlyMachineReport(
         const isGagal = panelNoStr.includes("(GAGAL)") || panelNoStr.includes("(BS)");
         
         if (!isBerhenti && !isGagal) {
-          // Excel logic uses UNIQUE() per group. We simulate this using a Set key.
-          const panelKey = `${groupName}-${panelNoStr}`;
+          const cutScope = header.potongan_ke || header.design_id || header.id;
+          const panelKey = `${day}-${groupName}-${cutScope}-${panelNoStr}`;
           
           if (!processedPanels.has(panelKey)) {
             processedPanels.set(panelKey, { countedForTeam: groupName, isFailed: false });
