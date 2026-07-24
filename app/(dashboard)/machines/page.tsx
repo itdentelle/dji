@@ -230,22 +230,19 @@ export default function MachinesPage() {
   };
 
   const fetchConfigs = async () => {
-    let localDataPcs: Record<string, number> = {};
-    let localDataTypes: Record<string, "PANEL" | "METER"> = {};
-    try {
-      const savedPcs = localStorage.getItem("dji_machine_configs");
-      if (savedPcs) localDataPcs = JSON.parse(savedPcs);
-      const savedTypes = localStorage.getItem("dji_machine_input_types");
-      if (savedTypes) localDataTypes = JSON.parse(savedTypes);
-    } catch (e) {}
     const res = await getMachineConfigs();
     if (res.success && res.data) {
-      const merged = res.data.map((c) => ({
-        ...c,
-        default_pcs: localDataPcs[c.nomor_mc] !== undefined ? localDataPcs[c.nomor_mc] : c.default_pcs,
-        input_type: localDataTypes[c.nomor_mc] || c.input_type || "PANEL",
-      }));
-      setConfigs(merged);
+      setConfigs(res.data);
+      try {
+        const mapPcs: Record<string, number> = {};
+        const mapTypes: Record<string, string> = {};
+        res.data.forEach((c) => {
+          mapPcs[c.nomor_mc] = c.default_pcs;
+          mapTypes[c.nomor_mc] = c.input_type;
+        });
+        localStorage.setItem("dji_machine_configs", JSON.stringify(mapPcs));
+        localStorage.setItem("dji_machine_input_types", JSON.stringify(mapTypes));
+      } catch (e) {}
     }
   };
 

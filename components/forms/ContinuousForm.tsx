@@ -395,20 +395,19 @@ export default function ContinuousForm({
 
   useEffect(() => {
     async function loadMachineTypes() {
-      let localTypes: Record<string, "PANEL" | "METER"> = {};
-      try {
-        const saved = localStorage.getItem("dji_machine_input_types");
-        if (saved) localTypes = JSON.parse(saved);
-      } catch (e) {}
-
       const cfgRes = await getMachineConfigs();
       if (cfgRes.success && cfgRes.data) {
-        const typeMap: Record<string, "PANEL" | "METER"> = { ...localTypes };
+        const typeMap: Record<string, "PANEL" | "METER"> = {};
         cfgRes.data.forEach((c) => {
-          typeMap[c.nomor_mc.toUpperCase()] = localTypes[c.nomor_mc] || c.input_type || "METER";
+          typeMap[c.nomor_mc.toUpperCase()] = c.input_type || "METER";
         });
         setMachineInputTypes(typeMap);
       } else {
+        let localTypes: Record<string, "PANEL" | "METER"> = {};
+        try {
+          const saved = localStorage.getItem("dji_machine_input_types");
+          if (saved) localTypes = JSON.parse(saved);
+        } catch (e) {}
         setMachineInputTypes(localTypes);
       }
     }
