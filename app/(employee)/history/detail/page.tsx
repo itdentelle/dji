@@ -388,42 +388,28 @@ function HistoryDetailContent() {
                   return str.substring(0, 5);
                 }
 
-                let dt: Date;
-                if (str.includes("T")) {
-                  if (!str.includes("Z") && !str.includes("+") && !str.includes("-", 10)) {
-                    str = str + "Z";
-                  }
-                  dt = new Date(str);
-                } else if (str.includes(" ")) {
-                  const parts = str.split(" ");
-                  const dPart = parts[0];
-                  const tPart = parts[1] || "00:00:00";
-                  if (!str.includes("Z") && !str.includes("+")) {
-                    dt = new Date(`${dPart}T${tPart}Z`);
-                  } else {
-                    dt = new Date(str);
-                  }
-                } else {
-                  dt = new Date(str);
-                }
-
-                if (isNaN(dt.getTime())) {
-                  if (dateVal.includes(":")) {
-                    const parts = dateVal.split(" ");
-                    const timePart = parts.find((p) => p.includes(":")) || dateVal;
+                if (str.includes(" ")) {
+                  const timePart = str.split(" ")[1];
+                  if (timePart && timePart.includes(":")) {
                     return timePart.substring(0, 5);
                   }
-                  return dateVal;
                 }
 
-                return dt.toLocaleTimeString("id-ID", {
-                  timeZone: "Asia/Jakarta",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: false,
-                }).replace(".", ":");
+                if (str.includes("T")) {
+                  const timePart = str.split("T")[1];
+                  if (timePart && timePart.includes(":")) {
+                    return timePart.substring(0, 5);
+                  }
+                }
+
+                const dt = new Date(str);
+                if (isNaN(dt.getTime())) return "-";
+
+                const hours = String(dt.getHours()).padStart(2, "0");
+                const minutes = String(dt.getMinutes()).padStart(2, "0");
+                return `${hours}:${minutes}`;
               } catch (e) {
-                return String(dateVal).substring(0, 5);
+                return "-";
               }
             };
 

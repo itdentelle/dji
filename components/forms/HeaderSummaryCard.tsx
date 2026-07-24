@@ -37,7 +37,7 @@ export default function HeaderSummaryCard({
 
   if (isBottom) {
     return (
-      <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden mb-0 h-full flex flex-col justify-between">
+      <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden mb-0 flex flex-col justify-between">
         <div className="grid grid-cols-2 grow">
           <div className="p-2.5 sm:p-3 lg:p-4 bg-sky-50/80">
             <div className="flex items-center gap-1 mb-0.5">
@@ -51,16 +51,14 @@ export default function HeaderSummaryCard({
             </p>
           </div>
 
-          <div className="p-2.5 sm:p-3 lg:p-4 bg-emerald-50/70">
+          <div className="p-2.5 sm:p-3 lg:p-4 bg-slate-50/80">
             <div className="flex items-center gap-1 mb-0.5">
-              <CheckCircle2 className={`w-3 h-3 lg:w-3.5 lg:h-3.5 shrink-0 ${statusMatching === "OK" ? "text-emerald-600" : "text-rose-600"}`} />
-              <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+              <CheckCircle2 className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-slate-600 shrink-0" />
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                 Status Matching
               </span>
             </div>
-            <p
-              className={`text-xs sm:text-sm font-black leading-tight break-words ${statusMatching === "OK" ? "text-emerald-700" : "text-rose-700"}`}
-            >
+            <p className="text-xs sm:text-sm font-black text-slate-900 leading-tight break-words">
               {statusMatching || "-"}
             </p>
           </div>
@@ -77,10 +75,10 @@ export default function HeaderSummaryCard({
             </p>
           </div>
 
-          <div className="p-2.5 sm:p-3 lg:p-4 bg-indigo-50/70">
+          <div className="p-2.5 sm:p-3 lg:p-4 bg-sky-50/80">
             <div className="flex items-center gap-1 mb-0.5">
-              <Box className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-indigo-600 shrink-0" />
-              <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+              <Box className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-sky-600 shrink-0" />
+              <span className="text-[9px] sm:text-[10px] font-bold text-sky-600 uppercase tracking-wider">
                 Potongan Ke
               </span>
             </div>

@@ -632,13 +632,13 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
   };
 
   return (
-    <div className={showMeterInput ? "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-start" : "flex flex-col space-y-4 mb-6"}>
+    <div className={showMeterInput ? "grid grid-cols-1 sm:grid-cols-2 gap-4 items-start" : "flex flex-col space-y-4 h-full justify-between"}>
       {/* 1. SEKSI BLOCK MESIN (SEKSUIL TERPISAH DI ATAS CARD DOWNTIME BIASA) */}
       {!activeBlock ? (
-        <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mb-2">
+        <div className={`bg-slate-50 border-2 border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col justify-between ${showMeterInput ? "min-h-[195px]" : "min-h-[156px]"}`}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0">
                 <Lock className="w-4 h-4" />
               </div>
               <div>
@@ -658,7 +658,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
               </div>
             </div>
             <span className="text-[9px] font-extrabold text-slate-700 bg-slate-200 px-2.5 py-1 rounded-full border border-slate-300 shrink-0 self-start sm:self-auto">
-              Mesin Stop Total
+              Mesin Stop
             </span>
           </div>
 
@@ -681,33 +681,31 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
           <button
             type="button"
             onClick={handleInitiateBlock}
-            className="flex items-center justify-center gap-2 w-full h-11 mt-2 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-slate-800/20 active:scale-[0.98] cursor-pointer"
+            className="flex items-center justify-center gap-2 w-full h-11 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs uppercase tracking-wide rounded-2xl transition-all shadow-md shadow-slate-800/20 active:scale-[0.98] cursor-pointer"
           >
             <Lock className="w-4 h-4" /> Block Mesin
           </button>
         </div>
       ) : (
         /* Banner Active Block Mesin (Multi Shift) - Minimalist & Sleek */
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-3xl shadow-xs animate-fadeIn space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <div className="w-9 h-9 rounded-2xl bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-sm">
+        <div className="p-3.5 sm:p-4 bg-slate-50 border border-slate-200 rounded-3xl shadow-xs animate-fadeIn space-y-3">
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-2xl bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
                 <Lock className="w-4 h-4" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">
-                    Mesin Diblok (Dalam Perbaikan)
-                  </h4>
-                </div>
-                <p className="text-[10px] font-semibold text-slate-500 mt-0.5">
-                  Mulai perbaikan {activeBlock.startDateStr} pkl {activeBlock.startTimeStr} • Pelapor: <strong>{activeBlock.initialReporter}</strong>
+              <div className="min-w-0">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide truncate">
+                  Mesin Diblok (Dalam Perbaikan)
+                </h4>
+                <p className="text-[10px] font-semibold text-slate-500 mt-0.5 leading-snug">
+                  Mulai perbaikan {activeBlock.startDateStr} pkl {activeBlock.startTimeStr} • Pelapor: <strong className="text-slate-700">{activeBlock.initialReporter}</strong>
                 </p>
               </div>
             </div>
 
-            <div className="text-right shrink-0">
-              <span className="text-[9px] font-bold uppercase text-slate-500 block">Total Stop:</span>
+            <div className="text-right shrink-0 bg-white/80 px-2.5 py-1 rounded-xl border border-slate-200/80 shadow-2xs">
+              <span className="text-[9px] font-extrabold uppercase text-slate-400 block">Total Stop:</span>
               <span className="text-sm font-black text-slate-800 font-mono">
                 {formatTimer(blockLiveSeconds)}
               </span>
@@ -736,43 +734,45 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
             </div>
           )}
 
-          {/* Action Buttons: 1 Sleek Row */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleCancelBlock}
-              className="px-3 py-2 rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 font-bold text-xs transition-all border border-transparent hover:border-red-200 flex items-center gap-1.5 cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>Batalkan Block</span>
-            </button>
-
-            <div className="flex flex-wrap items-center gap-2">
+          {/* Action Buttons Container - Responsive Layout for Mobile, Tab, & Desktop */}
+          <div className="pt-1.5 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setShowAddNoteModal(true)}
-                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all border border-slate-200 flex items-center gap-1.5 cursor-pointer active:scale-95"
+                className="w-full py-2 px-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs transition-all border border-slate-200/80 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer whitespace-nowrap"
               >
-                <FileText className="w-3.5 h-3.5" />
+                <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                 <span>Catat Progres</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setShowHandoffModal(true)}
-                className="px-3 py-2 rounded-xl bg-[#0070bc]/10 hover:bg-[#0070bc]/20 text-[#0070bc] font-bold text-xs transition-all border border-[#0070bc]/20 flex items-center gap-1.5 cursor-pointer active:scale-95"
+                className="w-full py-2 px-2.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-extrabold text-xs transition-all border border-sky-200/70 flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer whitespace-nowrap"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="w-3.5 h-3.5 text-sky-600 shrink-0" />
                 <span>Serah Terima</span>
               </button>
+            </div>
 
+            <button
+              type="button"
+              onClick={handleUnblockMachine}
+              className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-[0.98] cursor-pointer"
+            >
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>UNBLOCK MESIN</span>
+            </button>
+
+            <div className="flex justify-center pt-0.5">
               <button
                 type="button"
-                onClick={handleUnblockMachine}
-                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
+                onClick={handleCancelBlock}
+                className="text-red-500 hover:text-red-700 hover:bg-red-50/80 font-bold text-[11px] transition-all flex items-center gap-1.5 px-3 py-1 rounded-lg cursor-pointer"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>UNBLOCK</span>
+                <X className="w-3.5 h-3.5 shrink-0" />
+                <span>Batalkan Block</span>
               </button>
             </div>
           </div>
@@ -833,7 +833,7 @@ export default function DowntimeTracker({ control, watch, setValue, showBlockInp
                   className="flex items-center justify-center gap-2 w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wide rounded-xl transition-all shadow-md shadow-amber-500/20 active:scale-[0.98]"
                 >
                   <AlertTriangle className="w-4 h-4 fill-current" />
-                  Mulai Downtime Singkat
+                  Downtime Singkat
                 </button>
               </div>
             ) : (

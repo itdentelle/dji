@@ -717,24 +717,40 @@ export default function DashboardPage() {
       let ungraded_sum = 0;
 
       if (metricMode === "PCS") {
-        gradeA_sum = new Set(
-          items.filter((i) => i.grade === "GRADE A").map((i) => i.header_id),
-        ).size;
-        gradeB_sum = new Set(
-          items.filter((i) => i.grade === "GRADE B").map((i) => i.header_id),
-        ).size;
-        bs_sum = new Set(
-          items.filter((i) => i.grade === "BS").map((i) => i.header_id),
-        ).size;
-        ungraded_sum = new Set(
-          items
-            .filter(
-              (i) =>
-                i.grade === "UNGRADED" ||
-                !["GRADE A", "GRADE B", "BS"].includes(i.grade),
-            )
-            .map((i) => i.header_id),
-        ).size;
+        const calcPanelForGrade = (subItems: typeof items) => {
+          const pMap = new Map<string, number>();
+          subItems.forEach((item) => {
+            if ((item.hasil_meter || 0) === 0 && item.potongan_ke) {
+              const groupKey = `${item.tanggal}_${item.mesin_id}_${item.potongan_ke}`;
+              const currentMax = pMap.get(groupKey) || 0;
+              if (item.panel_no && item.panel_no > currentMax) {
+                pMap.set(groupKey, item.panel_no);
+              }
+            }
+          });
+          let total = 0;
+          pMap.forEach((max) => (total += max));
+
+          if (total === 0 && subItems.length > 0) {
+            total = new Set(subItems.map((i) => i.header_id)).size;
+          }
+          return total;
+        };
+
+        gradeA_sum = calcPanelForGrade(
+          items.filter((i) => i.grade === "GRADE A"),
+        );
+        gradeB_sum = calcPanelForGrade(
+          items.filter((i) => i.grade === "GRADE B"),
+        );
+        bs_sum = calcPanelForGrade(items.filter((i) => i.grade === "BS"));
+        ungraded_sum = calcPanelForGrade(
+          items.filter(
+            (i) =>
+              i.grade === "UNGRADED" ||
+              !["GRADE A", "GRADE B", "BS"].includes(i.grade),
+          ),
+        );
       } else {
         const uniqueHeadersMap = new Map<string, (typeof items)[0]>();
         items.forEach((item) => {
@@ -1108,7 +1124,7 @@ export default function DashboardPage() {
               transform: `translateX(-${metricMode === "PCS" ? 0 : 50}%)`,
             }}
           >
-            {/* Slide 0: Total Produksi (PCS) */}
+            {/* Slide 0: Total Produksi (Panel) */}
             <div
               onClick={() => {
                 setActiveFilter("ALL");
@@ -1118,7 +1134,7 @@ export default function DashboardPage() {
             >
               <div className="flex justify-between items-start relative z-10">
                 <span className="text-sky-100 text-[10px] font-bold uppercase tracking-wider">
-                  Total Produksi Panel
+                  TOTAL PRODUKSI (SEMUA)
                 </span>
                 <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] font-bold">
                   All
@@ -1127,11 +1143,11 @@ export default function DashboardPage() {
               <div className="mt-2 relative z-10">
                 <div className="text-3xl font-black tracking-tight flex items-baseline gap-1">
                   {stats.totalProduksi.toLocaleString()}
-                  <span className="text-sm font-semibold opacity-80">Pcs</span>
+                  <span className="text-sm font-semibold opacity-80">Panel</span>
                 </div>
                 <div className="flex items-center gap-1 mt-1 text-[11px] text-sky-200 font-semibold">
                   <TrendingUp className="w-3.5 h-3.5" />
-                  <span>Berdasarkan pcs panel</span>
+                  <span>Panel</span>
                 </div>
               </div>
             </div>

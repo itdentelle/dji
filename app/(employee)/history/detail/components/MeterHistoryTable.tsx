@@ -5,6 +5,40 @@ import Link from "next/link";
 import { Edit, CheckCircle2, XCircle } from "lucide-react";
 import { PROBLEM_DETAILS } from "@/app/qc/page";
 
+const formatWibTime = (dateVal?: string): string => {
+  if (!dateVal || dateVal === "-" || dateVal === "—") return "-";
+  try {
+    let str = String(dateVal).trim();
+    if (!str) return "-";
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+      return str.substring(0, 5);
+    }
+
+    if (str.includes(" ")) {
+      const timePart = str.split(" ")[1];
+      if (timePart && timePart.includes(":")) {
+        return timePart.substring(0, 5);
+      }
+    }
+
+    if (str.includes("T")) {
+      const timePart = str.split("T")[1];
+      if (timePart && timePart.includes(":")) {
+        return timePart.substring(0, 5);
+      }
+    }
+
+    const dt = new Date(str);
+    if (isNaN(dt.getTime())) return "-";
+
+    const hours = String(dt.getHours()).padStart(2, "0");
+    const minutes = String(dt.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  } catch (e) {
+    return "-";
+  }
+};
+
 const cleanMeterVal = (val: any) => {
   if (val === null || val === undefined) return "";
   const str = String(val);
@@ -84,6 +118,8 @@ export default function MeterHistoryTable({
       const opr = actualOpr;
       const grp = h.groups?.nama_grup || "";
       const tgl = h.tgl || "";
+      const rawJam = h.tanggal_jam || h.created_at || item.tanggal_jam || item.created_at || "";
+      const jamStr = rawJam ? formatWibTime(rawJam) : "-";
       const operatorStr = (grp ? `(${grp}) ` : '') + opr;
 
       let hasRealDefectsMap = false;
@@ -114,6 +150,7 @@ export default function MeterHistoryTable({
         opr,
         grp,
         tgl,
+        jamStr,
         operatorStr,
         hasIstirahat,
         backupOp: h.operator_backup,
@@ -129,7 +166,7 @@ export default function MeterHistoryTable({
     let lastOprString = "";
 
     processed.forEach((p: any, idx: number) => {
-      const { item, isIstirahat, isGradable, opr, grp, tgl, operatorStr, hasIstirahat, backupOp } = p;
+      const { item, isIstirahat, isGradable, opr, grp, tgl, jamStr, operatorStr, hasIstirahat, backupOp } = p;
       const h = item.production_headers || {};
 
       let cacatLines: string[] = [];
@@ -331,6 +368,7 @@ export default function MeterHistoryTable({
           isMeter: true,
           displayNo: (globalRowCount + 1).toString(),
           tglStr: startTglStr,
+          jamStr,
           grpStr: grp,
           oprStr: opr,
           meterDisplay: startMeter,
@@ -470,6 +508,7 @@ export default function MeterHistoryTable({
           isMeter: true,
           displayNo: (globalRowCount + 1).toString(),
           tglStr: tgl,
+          jamStr,
           grpStr: grp,
           oprStr: opr,
           meterDisplay,
@@ -513,6 +552,7 @@ export default function MeterHistoryTable({
         <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
           <th className="px-1 py-2 w-8 text-center border-r border-slate-100">NO</th>
           <th className="px-1 py-2 w-20 border-r border-slate-100">TGL</th>
+          <th className="px-1 py-2 w-14 text-center border-r border-slate-100">JAM</th>
           <th className="px-1 py-2 w-10 text-center border-r border-slate-100">Group</th>
           <th className="px-1 py-2 w-24 border-r border-slate-100">Operator</th>
           <th className="px-1 py-2 text-center w-12 border-r border-slate-100">METER</th>
@@ -527,7 +567,7 @@ export default function MeterHistoryTable({
           if (item.isTotalRow) {
             return (
               <tr key={item.id || index} className="bg-slate-100 border-t-2 border-b-2 border-slate-300">
-                <td colSpan={9} className="px-3 py-2 text-center text-xs font-semibold text-slate-600">
+                <td colSpan={10} className="px-3 py-2 text-center text-xs font-semibold text-slate-600">
                   {item.totalLabel} <span className="font-extrabold text-slate-800 ml-1">{item.totalMeter}</span>
                 </td>
               </tr>
@@ -542,6 +582,9 @@ export default function MeterHistoryTable({
                 </td>
                 <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100 border-b border-slate-100">
                   {item.tglStr}
+                </td>
+                <td className="px-1 py-1.5 text-slate-600 text-center font-mono text-[11px] whitespace-nowrap border-r border-slate-100 border-b border-slate-100">
+                  {item.jamStr || "-"}
                 </td>
                 <td className="px-1 py-1.5 font-medium text-slate-700 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100">
                   {item.grpStr}
@@ -578,6 +621,9 @@ export default function MeterHistoryTable({
               </td>
               <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap text-xs w-24 border-r border-slate-100 border-b border-slate-100">
                 {item.hasIstirahat ? "" : (item.showTgl ? item.tglStr : "")}
+              </td>
+              <td className="px-1 py-1.5 text-slate-600 text-center font-mono text-[11px] whitespace-nowrap border-r border-slate-100 border-b border-slate-100">
+                {item.hasIstirahat ? "" : (item.jamStr || "-")}
               </td>
               <td className={`px-1 py-1.5 text-center text-xs w-12 border-r border-slate-100 border-b border-slate-100 font-medium text-slate-700`}>
                 {item.hasIstirahat ? "" : (item.showGrp ? item.grpStr : "")}

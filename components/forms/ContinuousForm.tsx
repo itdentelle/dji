@@ -378,6 +378,19 @@ export default function ContinuousForm({
   const [isLastRoll, setIsLastRoll] = useState(false);
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
   const [activeInfo, setActiveInfo] = useState<string | null>(null);
+  const [showReportCardInfo, setShowReportCardInfo] = useState(false);
+
+  const handleCancelAdvancedActions = () => {
+    setIsLastRoll(false);
+    setValue("tanggalPotong", "");
+    if (fields && fields.length > 0) {
+      fields.forEach((_, index) => {
+        setValue(`pcsData.${index}.isBs` as const, false);
+      });
+    }
+    setActiveInfo(null);
+    setShowAdvancedActions(false);
+  };
   const [machineInputTypes, setMachineInputTypes] = useState<Record<string, "PANEL" | "METER">>({});
 
   useEffect(() => {
@@ -1631,7 +1644,6 @@ export default function ContinuousForm({
                   design={watch("designId") || ""}
                   statusMatching={watch("statusMatching") || ""}
                   potonganKe={watch("potonganKe")}
-                  pcsCount={fields.length}
                   onEdit={() => {
                     setIsHeaderModalOpen(true);
                     setHighlightPotonganKe(false);
@@ -1667,6 +1679,27 @@ export default function ContinuousForm({
                 data-tour="meter-final-report"
                 className="w-full min-h-full p-3 sm:p-4 lg:p-6 bg-emerald-50/80 border-2 border-emerald-200 rounded-2xl relative shadow-md flex flex-col justify-center"
               >
+                <button
+                  type="button"
+                  onClick={() => setShowReportCardInfo((prev) => !prev)}
+                  className={`absolute top-2.5 right-2.5 transition-colors z-20 cursor-pointer p-0.5 rounded-full ${
+                    showReportCardInfo
+                      ? "text-emerald-900"
+                      : "text-emerald-600/80 hover:text-emerald-800"
+                  }`}
+                  title="Info Laporan"
+                >
+                  <Info className="w-4 h-4" />
+                </button>
+
+                {showReportCardInfo && (
+                  <div className="absolute top-10 left-2.5 right-2.5 p-3 bg-slate-900 text-white text-[11px] font-medium leading-relaxed rounded-xl z-30 shadow-xl border border-slate-700 animate-fadeIn">
+                    {watch("nomorMc") === "T2A"
+                      ? "Gunakan tombol di bawah untuk melaporkan meter produksi."
+                      : "Gunakan tombol di bawah jika ingin istirahat, jika beres potongan atau shift selesai."}
+                  </div>
+                )}
+
                 <div className="absolute -top-3.5 lg:-top-4 left-1/2 -translate-x-1/2 bg-emerald-600 px-3 lg:px-5 py-1 lg:py-1.5 text-[9px] lg:text-[11px] font-black text-white uppercase tracking-widest border-2 border-white rounded-full shadow-md whitespace-nowrap">
                   {watch("nomorMc") === "T2A"
                     ? "Laporan Meter"
@@ -1680,16 +1713,11 @@ export default function ContinuousForm({
                         ? "Laporan Meter"
                         : "Laporan Istirahat dan Shift"}
                     </h4>
-                    <p className="text-[10px] sm:text-xs text-emerald-700 mt-1 sm:mt-2 max-w-sm mx-auto">
-                      {watch("nomorMc") === "T2A"
-                        ? "Gunakan tombol di bawah untuk melaporkan meter produksi."
-                        : "Gunakan tombol di bawah jika ingin istirahat, jika beres potongan atau shift selesai."}
-                    </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsMeterModalOpen(true)}
-                    className="w-full max-w-xs px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2.5"
+                    className="w-full max-w-xs px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2.5 cursor-pointer"
                   >
                     <FileText className="w-5 h-5" />
                     {watch("nomorMc") === "T2A"
@@ -1750,7 +1778,13 @@ export default function ContinuousForm({
           {/* Tindakan Akhir Panel Toggle Button */}
           <button
             type="button"
-            onClick={() => setShowAdvancedActions(!showAdvancedActions)}
+            onClick={() => {
+              if (showAdvancedActions) {
+                handleCancelAdvancedActions();
+              } else {
+                setShowAdvancedActions(true);
+              }
+            }}
             className="w-full flex items-center justify-center gap-2 py-3 mb-4 rounded-xl border-2 border-slate-200 border-dashed text-slate-500 font-bold text-sm hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300 transition-all duration-200"
           >
             {showAdvancedActions ? (
@@ -1764,7 +1798,7 @@ export default function ContinuousForm({
           {showAdvancedActions && (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
-              onClick={() => setShowAdvancedActions(false)}
+              onClick={handleCancelAdvancedActions}
             >
               <div
                 className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-scaleIn"
@@ -1776,7 +1810,7 @@ export default function ContinuousForm({
                   </h3>
                   <button
                     type="button"
-                    onClick={() => setShowAdvancedActions(false)}
+                    onClick={handleCancelAdvancedActions}
                     className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -1909,7 +1943,7 @@ export default function ContinuousForm({
                 <div className="p-4 sm:p-5 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowAdvancedActions(false)}
+                    onClick={handleCancelAdvancedActions}
                     className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-all uppercase tracking-wider cursor-pointer"
                   >
                     Batal

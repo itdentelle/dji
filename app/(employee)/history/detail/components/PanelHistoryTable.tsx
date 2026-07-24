@@ -5,6 +5,40 @@ import Link from "next/link";
 import { Edit, CheckCircle2, XCircle } from "lucide-react";
 import { PROBLEM_DETAILS } from "@/app/qc/page";
 
+const formatWibTime = (dateVal?: string): string => {
+  if (!dateVal || dateVal === "-" || dateVal === "—") return "-";
+  try {
+    let str = String(dateVal).trim();
+    if (!str) return "-";
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+      return str.substring(0, 5);
+    }
+
+    if (str.includes(" ")) {
+      const timePart = str.split(" ")[1];
+      if (timePart && timePart.includes(":")) {
+        return timePart.substring(0, 5);
+      }
+    }
+
+    if (str.includes("T")) {
+      const timePart = str.split("T")[1];
+      if (timePart && timePart.includes(":")) {
+        return timePart.substring(0, 5);
+      }
+    }
+
+    const dt = new Date(str);
+    if (isNaN(dt.getTime())) return "-";
+
+    const hours = String(dt.getHours()).padStart(2, "0");
+    const minutes = String(dt.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  } catch (e) {
+    return "-";
+  }
+};
+
 export default function PanelHistoryTable({
   panels,
   pcsKey,
@@ -45,6 +79,8 @@ export default function PanelHistoryTable({
       const opr = h.operators?.nama_operator || h.pic || "";
       const grp = h.groups?.nama_grup || "";
       const tgl = h.tgl || "";
+      const rawJam = h.tanggal_jam || h.created_at || item.tanggal_jam || item.created_at || "";
+      const jamStr = rawJam ? formatWibTime(rawJam) : "-";
       const operatorStr = (grp ? `(${grp}) ` : '') + opr;
 
       const hasIstirahatDetail = (item.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT");
@@ -74,6 +110,7 @@ export default function PanelHistoryTable({
         opr,
         grp,
         tgl,
+        jamStr,
         operatorStr,
       };
     });
@@ -85,7 +122,7 @@ export default function PanelHistoryTable({
     let lastOpr = "";
 
     processed.forEach((p: any, i: number) => {
-      const { item, isIstirahatOnly, hasIstirahat, isGradable, opr, grp, tgl, operatorStr } = p;
+      const { item, isIstirahatOnly, hasIstirahat, isGradable, opr, grp, tgl, jamStr, operatorStr } = p;
 
       if (item.kategori_masalah !== "X") {
         currentOpCount += 1;
@@ -134,6 +171,7 @@ export default function PanelHistoryTable({
         oprStr: opr,
         grpStr: grp,
         tglStr: tgl,
+        jamStr,
         hasErrorDetail: !!item.kategori_masalah || !!item.detail_masalah
       });
 
@@ -167,7 +205,8 @@ export default function PanelHistoryTable({
       <thead>
         <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
           <th className="px-1 py-2 w-8 text-center border-r border-slate-100">PNL</th>
-          <th className="px-1 py-2 w-20 border-r border-slate-100">Tgl</th>
+          <th className="px-1 py-2 w-20 border-r border-slate-100">TGL</th>
+          <th className="px-1 py-2 w-14 text-center border-r border-slate-100">JAM</th>
           <th className="px-1 py-2 w-10 text-center border-r border-slate-100">Group</th>
           <th className="px-1 py-2 w-24 border-r border-slate-100">Operator</th>
           <th className="px-1 py-2 text-center w-12 border-r border-slate-100">KET ✓/X</th>
@@ -181,7 +220,7 @@ export default function PanelHistoryTable({
           if (item.isTotalRow) {
             return (
               <tr key={item.id || idx} className="bg-slate-100 border-t border-b border-slate-200 font-semibold text-slate-700">
-                <td colSpan={4} className="px-3 py-2 text-right whitespace-nowrap">
+                <td colSpan={5} className="px-3 py-2 text-right whitespace-nowrap">
                   {item.totalLabel}
                 </td>
                 <td className="px-1 py-2 text-center text-slate-800 font-extrabold whitespace-nowrap">
@@ -199,6 +238,7 @@ export default function PanelHistoryTable({
           const hasIstirahat = item.hasIstirahat;
           const displayOp = item.showOpr ? (item.oprStr || "-") : "";
           const displayTgl = item.showTgl ? (item.tglStr || "-") : "";
+          const displayJam = item.jamStr || "-";
           const displayGrp = item.showGrp ? (item.grpStr || "-") : "";
 
           let downtimeDisplay = "-";
@@ -412,6 +452,9 @@ export default function PanelHistoryTable({
               </td>
               <td className="px-1 py-1 text-slate-600 whitespace-nowrap border-r border-slate-100">
                 {displayTgl}
+              </td>
+              <td className="px-1 py-1 text-slate-600 text-center font-mono text-[11px] whitespace-nowrap border-r border-slate-100">
+                {displayJam}
               </td>
               <td className={`px-1 py-1 font-medium text-center text-slate-700 border-r border-slate-100`}>
                 {displayGrp}

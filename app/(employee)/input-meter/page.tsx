@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, Info } from "lucide-react";
 import ContinuousForm from "@/components/forms/ContinuousForm";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 export default function ContinuousInputPage() {
   const { user } = useAuth();
   const [isDbConnected, setIsDbConnected] = useState(false);
+  const [showHeaderInfo, setShowHeaderInfo] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("last_input_route", "/input-meter");
@@ -39,28 +40,34 @@ export default function ContinuousInputPage() {
       {/* Title Header Card */}
       <div className="w-full bg-white border border-[#e9ecef] rounded-[24px] p-6 sm:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 relative z-10 mb-6">
         <div className="flex flex-col gap-2 relative z-10">
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex flex-wrap items-center gap-3 leading-tight">
-            <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
-              Portal Operator Produksi
-            </span>
-          </h1>
-          <p className="text-slate-500 text-sm sm:text-base font-medium max-w-2xl leading-relaxed flex items-start gap-1.5 mt-1">
-            <svg
-              className="w-5 h-5 text-sky-500 shrink-0 mt-0.5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth="2.5"
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowHeaderInfo((prev) => !prev)}
+              className={`p-1.5 sm:p-2 rounded-xl transition-all cursor-pointer ${
+                showHeaderInfo
+                  ? "bg-sky-600 text-white shadow-xs"
+                  : "bg-sky-50 text-sky-600 hover:bg-sky-100"
+              }`}
+              title="Info Parameter"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            Pastikan data parameter mesin rajut sudah benar sebelum mengirimkan
-            formulir.
-          </p>
+              <Info className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
+              <span className="bg-gradient-to-r from-slate-900 via-[#004777] to-[#0070bc] bg-clip-text text-transparent drop-shadow-sm">
+                Portal Operator Produksi
+              </span>
+            </h1>
+          </div>
+
+          {showHeaderInfo && (
+            <div className="mt-2 p-3 bg-sky-50 border border-sky-200/80 rounded-2xl text-sky-900 text-xs sm:text-sm font-medium flex items-center gap-2.5 animate-fadeIn shadow-xs max-w-xl">
+              <Info className="w-4 h-4 text-sky-600 shrink-0" />
+              <span>
+                Pastikan data parameter mesin rajut sudah benar sebelum mengirimkan formulir.
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">

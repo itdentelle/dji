@@ -40,6 +40,7 @@ import {
   Info,
   Lock,
   AlertTriangle,
+  Hash,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import HeaderSummaryCard from "./HeaderSummaryCard";
@@ -354,6 +355,18 @@ export default function EmployeeForm({
   const [highlightOperator, setHighlightOperator] = useState(false);
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
   const [activeInfo, setActiveInfo] = useState<string | null>(null);
+
+  const handleCancelAdvancedActions = () => {
+    setIsLastPanel(false);
+    setValue("tanggalPotong", "");
+    if (fields && fields.length > 0) {
+      fields.forEach((_, index) => {
+        setValue(`pcsData.${index}.isBs` as const, false);
+      });
+    }
+    setActiveInfo(null);
+    setShowAdvancedActions(false);
+  };
   const [machineInputTypes, setMachineInputTypes] = useState<Record<string, "PANEL" | "METER">>({});
 
   useEffect(() => {
@@ -362,7 +375,7 @@ export default function EmployeeForm({
       try {
         const saved = localStorage.getItem("dji_machine_input_types");
         if (saved) localTypes = JSON.parse(saved);
-      } catch (e) {}
+      } catch (e) { }
 
       const cfgRes = await getMachineConfigs();
       if (cfgRes.success && cfgRes.data) {
@@ -387,7 +400,7 @@ export default function EmployeeForm({
   // Backup Operator state
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [backupOperatorName, setBackupOperatorName] = useState("");
-  
+
   // Persist backupOperatorName to localStorage for drafts
   useEffect(() => {
     if (isEdit) return;
@@ -562,12 +575,12 @@ export default function EmployeeForm({
     if (initialData && isEdit) {
       let isIstirahat = false;
       if (initialData.details && initialData.details.length > 0) {
-        isIstirahat = initialData.details.some((d: any) => 
+        isIstirahat = initialData.details.some((d: any) =>
           (d.keterangan_cacat || "").toUpperCase().includes("ISTIRAHAT") ||
           (d.detail_masalah || "").toUpperCase().includes("ISTIRAHAT")
         );
       }
-      
+
       let parsedDowntimeEvents: any[] = [];
       try {
         if (initialData.downtime_events) {
@@ -578,13 +591,13 @@ export default function EmployeeForm({
       } catch (e) {
         console.error("Error parsing downtime_events", e);
       }
-      
+
       let rawPanelNo = String(initialData.panel_no || "1");
-        let isGagal = false;
-        if (rawPanelNo.includes("(GAGAL)") || rawPanelNo.includes("(BS)")) {
-          isGagal = true;
-          rawPanelNo = rawPanelNo.replace(/\(GAGAL\)/g, "").replace(/\(BS\)/g, "").trim();
-        }
+      let isGagal = false;
+      if (rawPanelNo.includes("(GAGAL)") || rawPanelNo.includes("(BS)")) {
+        isGagal = true;
+        rawPanelNo = rawPanelNo.replace(/\(GAGAL\)/g, "").replace(/\(BS\)/g, "").trim();
+      }
 
       reset({
         operatorId: String(initialData.operator_id || ""),
@@ -629,7 +642,7 @@ export default function EmployeeForm({
       if (initialData.tanggal_potong) {
         setIsLastPanel(true);
       }
-      
+
       if (initialData.operator_backup) {
         setBackupOperatorName(initialData.operator_backup);
       }
@@ -784,7 +797,7 @@ export default function EmployeeForm({
               const mcUpper = watchNomorMc.toUpperCase();
               if (map[mcUpper] !== undefined) localPcs = parseInt(map[mcUpper]);
             }
-          } catch (e) {}
+          } catch (e) { }
 
           if (localPcs) {
             handleChangePcsCount(localPcs);
@@ -858,7 +871,7 @@ export default function EmployeeForm({
     if (data.jenisLaporan === "Istirahat" && backupOperatorName) {
       data.jenisLaporan = `Istirahat (Backup: ${backupOperatorName})`;
     }
-    
+
     // Add backup operator name to payload if exists
     data.operatorBackup = backupOperatorName || undefined;
 
@@ -1265,7 +1278,7 @@ export default function EmployeeForm({
           <div className="bg-white border border-slate-200 shadow-sm rounded-[20px] p-3 sm:p-4 lg:p-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 items-start">
               {/* Kolom Kiri: Info Header & Info Panel */}
-              <div className="flex flex-col gap-3 sm:gap-4 lg:gap-5">
+              <div className="flex flex-col gap-3 sm:gap-4 lg:gap-5 self-start sm:min-h-[345px]">
                 <div data-tour="header-summary" className="w-full">
                   <HeaderSummaryCard
                     operatorName={getOperatorName(watch("operatorId"))}
@@ -1274,7 +1287,6 @@ export default function EmployeeForm({
                     design={watch("designId") || ""}
                     statusMatching={watch("statusMatching") || ""}
                     potonganKe={watch("potonganKe")}
-                    pcsCount={fields.length}
                     onEdit={() => setIsHeaderModalOpen(true)}
                     showEditButton
                     showEditButtonPlacement="bottom"
@@ -1284,31 +1296,38 @@ export default function EmployeeForm({
                 {/* Data Panel Umum */}
                 <div
                   data-tour="panel-info"
-                  className="w-full mt-3.5 sm:mt-4 p-4 lg:p-5 bg-slate-50 border border-slate-200 rounded-2xl relative shadow-sm flex flex-col justify-center items-center"
+                  className="w-full flex-1 bg-slate-50 border-2 border-slate-200 rounded-3xl overflow-hidden relative min-h-[100px] grid grid-cols-2"
                 >
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-600 px-3.5 py-0.5 text-[10px] font-black text-white uppercase tracking-widest border border-white rounded-full shadow-sm whitespace-nowrap">
-                    Info Panel
+                  <input type="hidden" {...register("panelNo")} />
+
+                  {/* Kiri: Label */}
+                  <div className="flex flex-col items-center justify-center gap-1.5 border-r border-slate-200 p-4">
+                    <div className="w-7 h-7 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                      <Hash className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest text-center">
+                      Nomor Panel:
+                    </span>
                   </div>
 
-                  <div className="mt-2 flex flex-col items-center justify-center w-full">
-                    <input type="hidden" {...register("panelNo")} />
-                    <div className="w-full max-w-xs flex items-center justify-center pt-2">
-                      <div className="h-16 sm:h-20 w-full flex items-center justify-center rounded-xl bg-white border border-slate-200 text-3xl sm:text-4xl font-extrabold text-slate-700 shadow-inner">
-                        {String(watch("panelNo") || "-")}
-                      </div>
-                    </div>
-                    {errors.panelNo && (
-                      <span className="text-red-500 text-[10px] font-bold mt-2">
-                        {errors.panelNo.message}
-                      </span>
-                    )}
+                  {/* Kanan: Angka */}
+                  <div className="flex items-center justify-center p-4">
+                    <span className="text-5xl sm:text-6xl font-black text-slate-800 leading-none">
+                      {String(watch("panelNo") || "-")}
+                    </span>
                   </div>
+
+                  {errors.panelNo && (
+                    <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-red-500 text-[10px] font-bold whitespace-nowrap">
+                      {errors.panelNo.message}
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Kolom Kanan: Downtime Tracker */}
-              <div className="flex flex-col w-full">
-                <div data-tour="downtime" className="w-full">
+              <div className="flex flex-col w-full h-full">
+                <div data-tour="downtime" className="w-full h-full">
                   <DowntimeTracker
                     control={control}
                     setValue={setValue}
@@ -1319,27 +1338,27 @@ export default function EmployeeForm({
                   />
                 </div>
               </div>
-
-              <ProductionHeaderModal
-                isOpen={isHeaderModalOpen}
-                onClose={() => {
-                  setIsHeaderModalOpen(false);
-                  setHighlightPotonganKe(false);
-                  setHighlightOperator(false);
-                }}
-                register={register}
-                errors={errors}
-                watch={watch}
-                groups={groups}
-                operators={activeOperators}
-                activeShiftName={activeShiftName}
-                onClearHeader={handleClearHeader}
-                highlightPotonganKe={highlightPotonganKe}
-                highlightOperator={highlightOperator}
-                pcsCount={fields.length}
-                onChangePcsCount={handleChangePcsCount}
-              />
             </div>
+
+            <ProductionHeaderModal
+              isOpen={isHeaderModalOpen}
+              onClose={() => {
+                setIsHeaderModalOpen(false);
+                setHighlightPotonganKe(false);
+                setHighlightOperator(false);
+              }}
+              register={register}
+              errors={errors}
+              watch={watch}
+              groups={groups}
+              operators={activeOperators}
+              activeShiftName={activeShiftName}
+              onClearHeader={handleClearHeader}
+              highlightPotonganKe={highlightPotonganKe}
+              highlightOperator={highlightOperator}
+              pcsCount={fields.length}
+              onChangePcsCount={handleChangePcsCount}
+            />
 
             {/* Hidden PCS fields to match the array structure for form submission */}
             {fields.map((field, index) => (
@@ -1355,7 +1374,13 @@ export default function EmployeeForm({
           {/* Tindakan Akhir Panel Toggle Button */}
           <button
             type="button"
-            onClick={() => setShowAdvancedActions(!showAdvancedActions)}
+            onClick={() => {
+              if (showAdvancedActions) {
+                handleCancelAdvancedActions();
+              } else {
+                setShowAdvancedActions(true);
+              }
+            }}
             className="w-full flex items-center justify-center gap-2 py-3 mb-4 rounded-xl border-2 border-slate-200 border-dashed text-slate-500 font-bold text-sm hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300 transition-all duration-200"
           >
             {showAdvancedActions ? (
@@ -1367,36 +1392,32 @@ export default function EmployeeForm({
 
           {/* Tindakan Akhir Panel Modal */}
           {showAdvancedActions && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn" onClick={() => setShowAdvancedActions(false)}>
-              <div 
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn" onClick={handleCancelAdvancedActions}>
+              <div
                 className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-scaleIn"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50">
                   <h3 className="font-black text-slate-800 text-lg">Opsi Lanjutan Panel</h3>
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      setShowAdvancedActions(false);
-                      setActiveInfo(null);
-                    }}
+                  <button
+                    type="button"
+                    onClick={handleCancelAdvancedActions}
                     className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                
-                <div 
+
+                <div
                   className="p-5 sm:p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/30 custom-scrollbar"
                   onClick={() => setActiveInfo(null)}
                 >
                   {/* Potong Kain Toggle */}
                   <div className="flex flex-col gap-2 relative" data-tour="cut-panel">
-                    <label className={`relative flex flex-col items-center justify-center p-4 h-32 rounded-2xl border-2 cursor-pointer transition-all duration-300 text-center ${
-                      isLastPanel 
-                        ? "bg-gradient-to-br from-[#0070bc] to-[#004777] border-transparent shadow-lg shadow-sky-500/30 text-white" 
+                    <label className={`relative flex flex-col items-center justify-center p-4 h-32 rounded-2xl border-2 cursor-pointer transition-all duration-300 text-center ${isLastPanel
+                        ? "bg-gradient-to-br from-[#0070bc] to-[#004777] border-transparent shadow-lg shadow-sky-500/30 text-white"
                         : "bg-white border-slate-200 hover:border-sky-300 text-slate-600 hover:bg-sky-50"
-                    }`}>
+                      }`}>
                       <input
                         type="checkbox"
                         checked={isLastPanel}
@@ -1412,7 +1433,7 @@ export default function EmployeeForm({
                       />
                       <Scissors className={`w-8 h-8 mb-2 transition-transform duration-300 ${isLastPanel ? "-rotate-12 scale-110" : "text-slate-400"}`} style={{ transform: isLastPanel ? "scaleX(-1) rotate(12deg)" : "scaleX(-1)" }} />
                       <span className="font-black uppercase text-xs tracking-wide">Potong Kain</span>
-                      
+
                       {isLastPanel && (
                         <div className="absolute top-2 right-2 bg-white/20 rounded-full p-1">
                           <CheckCircle2 className="w-4 h-4 text-white" />
@@ -1427,11 +1448,10 @@ export default function EmployeeForm({
                         e.stopPropagation();
                         setActiveInfo(activeInfo === "potong" ? null : "potong");
                       }}
-                      className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${
-                        activeInfo === "potong" 
-                          ? "bg-slate-800 text-white" 
+                      className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${activeInfo === "potong"
+                          ? "bg-slate-800 text-white"
                           : isLastPanel ? "bg-white/20 text-white hover:bg-white/30" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                      }`}
+                        }`}
                     >
                       <Info className="w-4 h-4" />
                     </button>
@@ -1458,7 +1478,7 @@ export default function EmployeeForm({
                       <div className="relative flex flex-col items-center justify-center p-4 min-h-32 h-auto rounded-2xl border-2 bg-gradient-to-br from-rose-50 to-white border-rose-200 text-center shadow-sm">
                         <AlertCircle className="w-7 h-7 mb-2 text-rose-500" />
                         <span className="font-black uppercase text-xs text-rose-700 tracking-wide mb-2">Tandai PCS BS</span>
-                        
+
                         <div className="flex flex-wrap justify-center gap-1.5 w-full">
                           {fields.map((field, index) => (
                             <div key={field.id} className="relative flex-1 min-w-[45%] z-10">
@@ -1483,9 +1503,8 @@ export default function EmployeeForm({
                           e.stopPropagation();
                           setActiveInfo(activeInfo === "pcs" ? null : "pcs");
                         }}
-                        className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${
-                          activeInfo === "pcs" ? "bg-slate-800 text-white" : "bg-rose-100 text-rose-400 hover:bg-rose-200"
-                        }`}
+                        className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${activeInfo === "pcs" ? "bg-slate-800 text-white" : "bg-rose-100 text-rose-400 hover:bg-rose-200"
+                          }`}
                       >
                         <Info className="w-4 h-4" />
                       </button>
@@ -1501,7 +1520,7 @@ export default function EmployeeForm({
                 <div className="p-4 sm:p-5 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowAdvancedActions(false)}
+                    onClick={handleCancelAdvancedActions}
                     className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-all uppercase tracking-wider cursor-pointer"
                   >
                     Batal
@@ -1527,7 +1546,7 @@ export default function EmployeeForm({
             <label className="text-xs font-bold text-slate-700 uppercase">
               Jenis Laporan / Info Istirahat
             </label>
-            
+
             <div className="grid grid-cols-2 gap-3">
               {/* Normal */}
               <div className="relative">
@@ -1542,7 +1561,7 @@ export default function EmployeeForm({
                   }}
                   className="peer hidden"
                 />
-                <label 
+                <label
                   htmlFor="jenisLaporanNormal"
                   className="flex items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-[#0070bc]/40 hover:bg-sky-50 text-slate-600 font-black text-xs sm:text-sm uppercase peer-checked:border-[#0070bc] peer-checked:bg-sky-50 peer-checked:text-[#0070bc] shadow-sm peer-checked:shadow-md"
                 >
@@ -1563,7 +1582,7 @@ export default function EmployeeForm({
                   }}
                   className="peer hidden"
                 />
-                <label 
+                <label
                   htmlFor="jenisLaporanIstirahat"
                   className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 text-center bg-white border-slate-200 hover:border-amber-400 hover:bg-amber-50 text-slate-600 font-black text-xs sm:text-sm uppercase peer-checked:border-amber-500 peer-checked:bg-gradient-to-br peer-checked:from-amber-400 peer-checked:to-amber-500 peer-checked:text-white shadow-sm peer-checked:shadow-md peer-checked:shadow-amber-500/30"
                 >
@@ -1578,7 +1597,7 @@ export default function EmployeeForm({
                 </label>
               </div>
             </div>
-            
+
             <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-1">
               Pilih <strong>Istirahat</strong> jika panel ini adalah hasil kerja saat Anda beristirahat (operator pengganti).
             </p>
@@ -1760,7 +1779,7 @@ export default function EmployeeForm({
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-orange-500"></div>
                 <h4 className="text-lg font-bold text-slate-800 mb-2">Pilih Backup</h4>
                 <p className="text-xs text-slate-500 mb-4">Siapa yang menjaga mesin ini (Backup) saat Anda beristirahat?</p>
-                
+
                 <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto mb-4 p-1">
                   {backupOperators.length > 0 ? backupOperators.map((op: any) => (
                     <button
