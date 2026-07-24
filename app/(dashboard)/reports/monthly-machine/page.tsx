@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { getMonthlyMachineReport, MonthlyMachineReportData } from "@/actions/report-actions";
 import { getMachineStatuses } from "@/actions/dashboard-actions";
-import { FileSpreadsheet, Loader2, Calendar, Monitor, AlertCircle, ArrowLeft, CloudUpload, X, Info } from "lucide-react";
+import { FileSpreadsheet, Loader2, Calendar, Monitor, AlertCircle, ArrowLeft, CloudUpload, X, Info, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 // Helper to format seconds as HH:MM:SS
@@ -28,6 +28,14 @@ export default function MonthlyMachineReportPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMeterMachine, setIsMeterMachine] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   // Modal State for Keterangan
   const [modalData, setModalData] = useState<{ isOpen: boolean; title: string; contentObj: Record<string, string[]> | null }>({
@@ -85,7 +93,11 @@ export default function MonthlyMachineReportPage() {
     try {
       const sheetUrl = process.env.NEXT_PUBLIC_REPORT_GOOGLE_SHEET_URL;
       if (!sheetUrl) {
-        alert("URL Google Sheets belum diatur di .env (NEXT_PUBLIC_REPORT_GOOGLE_SHEET_URL)");
+        setToast({
+          type: "error",
+          title: "Konfigurasi URL Belum Ada",
+          message: "URL Google Sheets belum diatur di .env (NEXT_PUBLIC_REPORT_GOOGLE_SHEET_URL)",
+        });
         return;
       }
 
@@ -179,9 +191,17 @@ export default function MonthlyMachineReportPage() {
       });
 
       if (!response.ok) throw new Error("Gagal terhubung ke Google Sheets API.");
-      alert(`Sukses sinkronisasi laporan ${selectedMachine} ke Google Sheets!`);
+      setToast({
+        type: "success",
+        title: "Sinkronisasi Berhasil",
+        message: `Sukses sinkronisasi laporan ${selectedMachine} ke Google Sheets!`,
+      });
     } catch (err: any) {
-      alert("Error: " + err.message);
+      setToast({
+        type: "error",
+        title: "Sinkronisasi Gagal",
+        message: err.message || "Terjadi kesalahan saat terhubung ke Google Sheets.",
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -612,6 +632,44 @@ export default function MonthlyMachineReportPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Modern Toast Notification */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-3.5 bg-slate-900/95 text-white px-5 py-4 rounded-2xl shadow-2xl border border-slate-700/80 backdrop-blur-md animate-fadeIn max-w-md">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              toast.type === "success"
+                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                : toast.type === "error"
+                ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                : "bg-sky-500/20 text-sky-400 border border-sky-500/30"
+            }`}
+          >
+            {toast.type === "success" ? (
+              <CheckCircle2 className="w-5 h-5" />
+            ) : toast.type === "error" ? (
+              <AlertCircle className="w-5 h-5" />
+            ) : (
+              <Info className="w-5 h-5" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs font-black text-white tracking-wide uppercase">
+              {toast.title}
+            </h4>
+            <p className="text-xs font-medium text-slate-300 mt-0.5 leading-relaxed break-words">
+              {toast.message}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

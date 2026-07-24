@@ -45,6 +45,9 @@ export async function getMonthlyMachineReport(
     // Construct start and end dates for the month
     const startDate = new Date(year, month - 1, 1).toISOString().split("T")[0];
     const endDate = new Date(year, month, 0).toISOString().split("T")[0];
+    // Fetch records slightly wider to catch Shift 3 spanning midnight
+    const prevDate = new Date(year, month - 1, 0).toISOString().split("T")[0];
+    const nextDate = new Date(year, month, 2).toISOString().split("T")[0];
 
     // Fetch all production details joined with headers for the specific machine and month
     const { data, error } = await supabase
@@ -75,8 +78,8 @@ export async function getMonthlyMachineReport(
         )
       `)
       .eq("production_headers.nomor_mc", machineId)
-      .gte("production_headers.tgl", startDate)
-      .lte("production_headers.tgl", endDate);
+      .gte("production_headers.tgl", prevDate)
+      .lte("production_headers.tgl", nextDate);
 
     if (error) {
       console.error("Error fetching report data:", error);
@@ -100,6 +103,56 @@ export async function getMonthlyMachineReport(
       });
     }
 
+    // Helper to determine shift date for a record (Shift 3: 23:10 - 07:10 belongs to start date)
+    function getShiftDayForHeader(tglStr: string, timestampStr?: string): { day: number; month: number; year: number } {
+      let dt: Date;
+      if (timestampStr) {
+        if (timestampStr.includes("T")) {
+          dt = new Date(timestampStr);
+        } else if (timestampStr.includes(" ")) {
+          const parts = timestampStr.split(" ");
+          dt = new Date(`${parts[0]}T${parts[1]}+07:00`);
+        } else {
+          dt = new Date(timestampStr);
+        }
+      } else {
+        dt = new Date(tglStr);
+      }
+
+      if (isNaN(dt.getTime())) {
+        const d = new Date(tglStr);
+        return { day: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() };
+      }
+
+      // Check time in WIB
+      const hourStr = dt.toLocaleTimeString("en-US", { timeZone: "Asia/Jakarta", hour: "2-digit", hour12: false });
+      const minStr = dt.toLocaleTimeString("en-US", { timeZone: "Asia/Jakarta", minute: "2-digit" });
+      const hour = parseInt(hourStr);
+      const min = parseInt(minStr);
+      const totalMinutes = (isNaN(hour) ? 0 : hour) * 60 + (isNaN(min) ? 0 : min);
+
+      // Shift 3 runs 23:10 - 07:10.
+      // Entries between 00:00 and 07:10 AM (< 430 minutes) belong to Shift 3 of PREVIOUS DAY!
+      if (totalMinutes < 430) {
+        const prevDt = new Date(dt.getTime() - 24 * 60 * 60 * 1000);
+        const prevDateStr = prevDt.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+        const prevParts = prevDateStr.split("-");
+        return {
+          year: parseInt(prevParts[0]),
+          month: parseInt(prevParts[1]),
+          day: parseInt(prevParts[2]),
+        };
+      }
+
+      const dateStr = dt.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+      const parts = dateStr.split("-");
+      return {
+        year: parseInt(parts[0]),
+        month: parseInt(parts[1]),
+        day: parseInt(parts[2]),
+      };
+    }
+
     // To prevent double counting downtime per header, keep track of processed headers per team
     const processedHeaders = new Set<string>();
     // To track unique panels and whether they have failed/stopped
@@ -115,14 +168,15 @@ export async function getMonthlyMachineReport(
         isMeterMachine = true;
       }
 
-      const dateObj = new Date(header.tgl);
-      const day = dateObj.getDate();
+      const shiftDate = getShiftDayForHeader(header.tgl, header.tanggal_jam);
+      if (shiftDate.month !== month || shiftDate.year !== year) return;
+
+      const day = shiftDate.day;
+      const reportDay = reportMap.get(day);
+      if (!reportDay) return;
 
       const groupName = header.groups?.nama_grup || "A"; // Default to A if null
       const operatorName = header.operators?.nama_operator || header.pic || "";
-
-      const reportDay = reportMap.get(day);
-      if (!reportDay) return;
 
       // Update shift/day metadata
       if (header.design_id && !reportDay.desain) reportDay.desain = header.design_id;
@@ -394,16 +448,19 @@ export async function getMonthlyMachineReport(
         if (isNaN(dt.getTime())) return teamName;
 
         const hourStr = dt.toLocaleTimeString("en-US", { timeZone: "Asia/Jakarta", hour: "2-digit", hour12: false });
+        const minStr = dt.toLocaleTimeString("en-US", { timeZone: "Asia/Jakarta", minute: "2-digit" });
         const hour = parseInt(hourStr);
+        const min = parseInt(minStr);
+        const totalMinutes = (isNaN(hour) ? 0 : hour) * 60 + (isNaN(min) ? 0 : min);
 
-        if (hour >= 7 && hour < 15) {
-          // Shift 1: 07:00 - 15:00
+        if (totalMinutes >= 430 && totalMinutes < 910) {
+          // Shift 1: 07:10 - 15:10
           return teamName;
-        } else if (hour >= 15 && hour < 23) {
-          // Shift 2: 15:00 - 23:00
+        } else if (totalMinutes >= 910 && totalMinutes < 1390) {
+          // Shift 2: 15:10 - 23:10
           return getPrevTeam(teamName);
         } else {
-          // Shift 3: 23:00 - 07:00
+          // Shift 3: 23:10 - 07:10
           return getPrevTeam(getPrevTeam(teamName));
         }
       } catch (e) {

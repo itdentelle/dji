@@ -6,7 +6,7 @@ import { Users, Calendar as CalendarIcon, Clock, CheckCircle, Info, RefreshCw } 
 
 export default function InputKehadiranPage() {
   const { user } = useAuth();
-  const [shift, setShift] = useState("Pagi (07:00 - 15:00)");
+  const [shift, setShift] = useState("Pagi (07:10 - 15:10)");
   const [status, setStatus] = useState("Hadir");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -89,7 +89,7 @@ export default function InputKehadiranPage() {
               Pilih Shift Kerja
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {["Pagi (07:00 - 15:00)", "Sore (15:00 - 23:00)", "Malam (23:00 - 07:00)"].map((s) => (
+              {["Pagi (07:10 - 15:10)", "Sore (15:10 - 23:10)", "Malam (23:10 - 07:10)"].map((s) => (
                 <button
                   key={s}
                   type="button"
