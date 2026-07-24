@@ -370,74 +370,125 @@ function HistoryDetailContent() {
              return false;
            });
 
-           const cleanPenanggungJawab = (raw: string) => {
-              if (!raw) return "-";
+            const cleanPenanggungJawab = (raw: string | undefined | null) => {
+              if (!raw) return "Operator";
               const pkMatch = raw.match(/^Perbaikan Khusus\s*\((.*)\)$/i);
               if (pkMatch && pkMatch[1]) return pkMatch[1].trim();
               const opMatch = raw.match(/^Operator\s*\((.*)\)$/i);
               if (opMatch && opMatch[1]) return opMatch[1].trim();
               return raw.replace(/^Perbaikan Khusus\s*/i, "").replace(/^Operator\s*/i, "").trim() || raw;
-           };
+            };
 
-           const renderSection = (sourcePanels: any[], title: string, subtitle: string, variant: "blue" | "amber") => {
-             if (!sourcePanels || sourcePanels.length === 0) return null;
-             const rows: any[] = [];
-             sourcePanels.forEach((mp: any) => {
-               let dtEvents: any[] = [];
-               try { dtEvents = typeof mp.downtime_events === 'string' ? JSON.parse(mp.downtime_events) : (mp.downtime_events || []); } catch(e){}
-               if (dtEvents && dtEvents.length > 0) {
-                 dtEvents.forEach((ev: any, idx: number) => {
-                   const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
-                   if (ev.problems && ev.problems.length > 0) {
-                     ev.problems.forEach((p: any, pIdx: number) => {
-                       rows.push({
-                         id: `${mp.id}-${idx}-${pIdx}`,
-                         timeStr,
-                         penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
-                         shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
-                         durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
-                         kategori: p.kategori || ev.kategori || "-",
-                         detailMasalah: (p.details && Array.isArray(p.details)) ? p.details.join(", ") : (p.details || ev.detail || "-"),
-                       });
-                     });
-                   } else {
-                     rows.push({
-                       id: `${mp.id}-${idx}`,
-                       timeStr,
-                       penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
-                       shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
-                       durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
-                       kategori: ev.kategori || "-",
-                       detailMasalah: ev.detail || "-",
-                     });
-                   }
-                 });
-               } else if (mp.downtime_records && mp.downtime_records.length > 0) {
-                 mp.downtime_records.forEach((dr: any, dIdx: number) => {
-                   const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
-                   rows.push({
-                     id: `${mp.id}-dr-${dIdx}`,
-                     timeStr,
-                     penanggungJawab: cleanPenanggungJawab(dr.dikerjakan_oleh || mp.pic || mp.operators?.nama_operator),
-                     shift: mp.grup || mp.groups?.nama_grup || "-",
-                     durasiDisplay: formatDurationNice(dr.durasi_detik || mp.total_downtime_detik || 0),
-                     kategori: dr.kategori || "-",
-                     detailMasalah: dr.detail || "-",
-                   });
-                 });
-               } else if (mp.total_downtime_detik > 0) {
-                 const timeStr = mp.tanggal_jam ? (mp.tanggal_jam.includes("T") ? mp.tanggal_jam.split("T")[1].substring(0,5) : mp.tanggal_jam.split(" ")[1]?.substring(0,5)) : "-";
-                 rows.push({
-                   id: `${mp.id}-fallback`,
-                   timeStr,
-                   penanggungJawab: cleanPenanggungJawab(mp.pic || mp.operators?.nama_operator),
-                   shift: mp.grup || mp.groups?.nama_grup || "-",
-                   durasiDisplay: formatDurationNice(mp.total_downtime_detik || 0),
-                   kategori: mp.kategori_masalah || "-",
-                   detailMasalah: mp.detail_masalah || "-",
-                 });
-               }
-             });
+            const formatWibTime = (dateVal?: string): string => {
+              if (!dateVal || dateVal === "-" || dateVal === "—") return "-";
+              try {
+                let str = String(dateVal).trim();
+                if (!str) return "-";
+                if (/^\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+                  return str.substring(0, 5);
+                }
+
+                let dt: Date;
+                if (str.includes("T")) {
+                  if (!str.includes("Z") && !str.includes("+") && !str.includes("-", 10)) {
+                    str = str + "Z";
+                  }
+                  dt = new Date(str);
+                } else if (str.includes(" ")) {
+                  const parts = str.split(" ");
+                  const dPart = parts[0];
+                  const tPart = parts[1] || "00:00:00";
+                  if (!str.includes("Z") && !str.includes("+")) {
+                    dt = new Date(`${dPart}T${tPart}Z`);
+                  } else {
+                    dt = new Date(str);
+                  }
+                } else {
+                  dt = new Date(str);
+                }
+
+                if (isNaN(dt.getTime())) {
+                  if (dateVal.includes(":")) {
+                    const parts = dateVal.split(" ");
+                    const timePart = parts.find((p) => p.includes(":")) || dateVal;
+                    return timePart.substring(0, 5);
+                  }
+                  return dateVal;
+                }
+
+                return dt.toLocaleTimeString("id-ID", {
+                  timeZone: "Asia/Jakarta",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                }).replace(".", ":");
+              } catch (e) {
+                return String(dateVal).substring(0, 5);
+              }
+            };
+
+            const renderSection = (sourcePanels: any[], title: string, subtitle: string, variant: "blue" | "amber") => {
+              if (!sourcePanels || sourcePanels.length === 0) return null;
+              const rows: any[] = [];
+              sourcePanels.forEach((mp: any) => {
+                let dtEvents: any[] = [];
+                try { dtEvents = typeof mp.downtime_events === 'string' ? JSON.parse(mp.downtime_events) : (mp.downtime_events || []); } catch(e){}
+                if (dtEvents && dtEvents.length > 0) {
+                  dtEvents.forEach((ev: any, idx: number) => {
+                    const rawTime = ev.waktu || ev.timestamp || mp.tanggal_jam || mp.created_at;
+                    const timeStr = formatWibTime(rawTime);
+                    if (ev.problems && ev.problems.length > 0) {
+                      ev.problems.forEach((p: any, pIdx: number) => {
+                        rows.push({
+                          id: `${mp.id}-${idx}-${pIdx}`,
+                          timeStr,
+                          penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
+                          shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
+                          durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
+                          kategori: p.kategori || ev.kategori || "-",
+                          detailMasalah: (p.details && Array.isArray(p.details)) ? p.details.join(", ") : (p.details || ev.detail || "-"),
+                        });
+                      });
+                    } else {
+                      rows.push({
+                        id: `${mp.id}-${idx}`,
+                        timeStr,
+                        penanggungJawab: cleanPenanggungJawab(ev.dikerjakanOleh || mp.pic || mp.operators?.nama_operator),
+                        shift: mp.grup || mp.groups?.nama_grup || ev.shift || "-",
+                        durasiDisplay: formatDurationNice(ev.durasiDetik || mp.total_downtime_detik || 0),
+                        kategori: ev.kategori || "-",
+                        detailMasalah: ev.detail || "-",
+                      });
+                    }
+                  });
+                } else if (mp.downtime_records && mp.downtime_records.length > 0) {
+                  mp.downtime_records.forEach((dr: any, dIdx: number) => {
+                    const rawTime = dr.waktu || dr.created_at || dr.tanggal_jam || mp.tanggal_jam;
+                    const timeStr = formatWibTime(rawTime);
+                    rows.push({
+                      id: `${mp.id}-dr-${dIdx}`,
+                      timeStr,
+                      penanggungJawab: cleanPenanggungJawab(dr.dikerjakan_oleh || mp.pic || mp.operators?.nama_operator),
+                      shift: mp.grup || mp.groups?.nama_grup || "-",
+                      durasiDisplay: formatDurationNice(dr.durasi_detik || mp.total_downtime_detik || 0),
+                      kategori: dr.kategori || "-",
+                      detailMasalah: dr.detail || "-",
+                    });
+                  });
+                } else if (mp.total_downtime_detik > 0) {
+                  const rawTime = mp.tanggal_jam || mp.created_at;
+                  const timeStr = formatWibTime(rawTime);
+                  rows.push({
+                    id: `${mp.id}-fallback`,
+                    timeStr,
+                    penanggungJawab: cleanPenanggungJawab(mp.pic || mp.operators?.nama_operator),
+                    shift: mp.grup || mp.groups?.nama_grup || "-",
+                    durasiDisplay: formatDurationNice(mp.total_downtime_detik || 0),
+                    kategori: mp.kategori_masalah || "-",
+                    detailMasalah: mp.detail_masalah || "-",
+                  });
+                }
+              });
 
              if (rows.length === 0) return null;
 

@@ -43,7 +43,9 @@ export async function submitMechanicDowntime(data: {
         eventDate = parsed;
       }
     }
-    const tanggalJam = new Date(eventDate.getTime() - eventDate.getTimezoneOffset() * 60000).toISOString();
+    const utcMs = eventDate.getTime() + (eventDate.getTimezoneOffset() * 60000);
+    const wibMs = utcMs + (7 * 3600 * 1000);
+    const tanggalJam = new Date(wibMs).toISOString().replace('Z', '+07:00');
 
     const dt = data.downtimeEvent;
     const durasiSec = (dt && dt.durasiDetik && !isNaN(parseInt(dt.durasiDetik))) ? parseInt(dt.durasiDetik) : 0;

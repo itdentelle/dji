@@ -366,33 +366,85 @@ export async function getMonthlyMachineReport(
     }
     // --- END FETCH MECHANIC DOWNTIME ---
 
-    const results = Array.from(reportMap.values()).map((dayData) => {
-      const allTeamEntries = Object.entries(dayData.teamData).map(([name, data]) => ({
-        teamName: name,
-        data,
+    // Helper to determine shift 1 team and cyclic rotation (A -> B -> C -> A)
+    function getPrevTeam(team: string): string {
+      if (team === "A") return "C";
+      if (team === "B") return "A";
+      if (team === "C") return "B";
+      return "A";
+    }
+
+    function getShift1TeamFromRecord(teamName: string, dateStr?: string): string {
+      if (!dateStr) return teamName;
+      try {
+        let str = String(dateStr).trim();
+        let dt: Date;
+        if (str.includes("T")) {
+          if (!str.includes("Z") && !str.includes("+") && !str.includes("-", 10)) {
+            str = str + "Z";
+          }
+          dt = new Date(str);
+        } else if (str.includes(" ")) {
+          const parts = str.split(" ");
+          dt = new Date(`${parts[0]}T${parts[1]}+07:00`);
+        } else {
+          dt = new Date(str);
+        }
+
+        if (isNaN(dt.getTime())) return teamName;
+
+        const hourStr = dt.toLocaleTimeString("en-US", { timeZone: "Asia/Jakarta", hour: "2-digit", hour12: false });
+        const hour = parseInt(hourStr);
+
+        if (hour >= 7 && hour < 15) {
+          // Shift 1: 07:00 - 15:00
+          return teamName;
+        } else if (hour >= 15 && hour < 23) {
+          // Shift 2: 15:00 - 23:00
+          return getPrevTeam(teamName);
+        } else {
+          // Shift 3: 23:00 - 07:00
+          return getPrevTeam(getPrevTeam(teamName));
+        }
+      } catch (e) {
+        return teamName;
+      }
+    }
+
+    function getTeamCycle(shift1Team: string): string[] {
+      const t = (shift1Team || "A").toUpperCase().trim();
+      if (t === "B") return ["B", "C", "A"];
+      if (t === "C") return ["C", "A", "B"];
+      return ["A", "B", "C"];
+    }
+
+    let lastKnownShift1Team = "A";
+    const sortedDayValues = Array.from(reportMap.values()).sort((a, b) => a.tanggal - b.tanggal);
+
+    const results = sortedDayValues.map((dayData) => {
+      let earliestRecord: { team: string; timestamp: string } | null = null;
+
+      ["A", "B", "C"].forEach((teamName) => {
+        const td = dayData.teamData[teamName];
+        if (td && td.earliestTimestamp) {
+          if (!earliestRecord || td.earliestTimestamp < (earliestRecord as { team: string; timestamp: string }).timestamp) {
+            earliestRecord = { team: teamName, timestamp: td.earliestTimestamp };
+          }
+        }
+      });
+
+      let shift1Team = lastKnownShift1Team;
+      if (earliestRecord) {
+        const rec = earliestRecord as { team: string; timestamp: string };
+        shift1Team = getShift1TeamFromRecord(rec.team, rec.timestamp);
+        lastKnownShift1Team = shift1Team;
+      }
+
+      const cycle = getTeamCycle(shift1Team);
+      const orderedTeams = cycle.map((t) => ({
+        teamName: t,
+        data: dayData.teamData[t] || createEmptyTeamData(),
       }));
-
-      const active = allTeamEntries.filter(({ data }) => {
-        return (
-          data.hasil_produksi > 0 ||
-          data.downtime_detik > 0 ||
-          data.jumlah_cacat > 0 ||
-          !!data.operator_name ||
-          !!data.earliestTimestamp ||
-          (data.keterangan_per_kategori && Object.keys(data.keterangan_per_kategori).length > 0)
-        );
-      });
-
-      active.sort((a, b) => {
-        const tA = a.data.earliestTimestamp || "9999-99-99";
-        const tB = b.data.earliestTimestamp || "9999-99-99";
-        return tA.localeCompare(tB);
-      });
-
-      const usedNames = new Set(active.map((a) => a.teamName));
-      const inactive = allTeamEntries.filter(({ teamName }) => !usedNames.has(teamName));
-
-      const orderedTeams = [...active, ...inactive].slice(0, 3);
 
       return {
         ...dayData,

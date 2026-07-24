@@ -110,11 +110,15 @@ export default function MonthlyMachineReportPage() {
       const shiftDurationSecs = 28800;
       
       reportData.forEach((dayData) => {
-        const teams = ["A", "B", "C"];
-        teams.forEach((team, idx) => {
+        const teamsToRender = dayData.orderedTeams || [
+          { teamName: "A", data: dayData.teamData["A"] },
+          { teamName: "B", data: dayData.teamData["B"] },
+          { teamName: "C", data: dayData.teamData["C"] },
+        ];
+        teamsToRender.forEach((teamObj, idx) => {
           const isFirst = idx === 0;
-          // @ts-ignore
-          const td = dayData.teamData[team];
+          const team = teamObj.teamName;
+          const td = teamObj.data;
           
           const p100 = td.hasil_produksi > 0 && td.eff_100 > 0 ? ((td.hasil_produksi / td.eff_100) * 100).toFixed(2) + "%" : "0.00%";
           const pCacat = td.jumlah_cacat > 0 && td.hasil_produksi > 0 ? ((td.jumlah_cacat / td.hasil_produksi) * 100).toFixed(2) + "%" : "0.00%";

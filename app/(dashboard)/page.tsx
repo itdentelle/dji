@@ -1134,6 +1134,10 @@ export default function DashboardPage() {
           "Bolong corak",
           "L1/L2/L3 Benang timbul",
           "Benang Nyilang",
+          "Benang narik/Kendor",
+          "Perbaikan/Beset benang Dasar",
+          "Benang Kejepit/Jebol/Kusut",
+          "Jalur benang",
           "Beda warna benang/salah benang",
         ],
         B: [
@@ -1146,19 +1150,77 @@ export default function DashboardPage() {
           "Ganti Magnet",
           "Layar Komputer Error/Mati",
           "Ganti jarum Compoun Nedle, pattern",
+          "Ngampul",
+          "Ganti dari scaloop ke non scaloop atau sebaliknya",
+          "Ngegaris/Stopline",
+          "Keluar Jarum",
+          "Ganti String bar",
+          "Ganti PBO",
+          "Pressan As beam kendor",
+          "Tensi tensioner",
+          "Stripe/garis jarum",
+          "Lubang/bolong",
+          "Beda warna/stripe",
         ],
         C: [
+          "Loading design/Ganti Design",
           "Perbaikan corak/revisi",
+          "Salah ganti design",
+          "Error design",
+          "Proofing/PCB",
+          "Ganti Pattern Disk",
+          "Ganti pick",
           "Setel kain tebal/tipis",
           "Lolos kain ganti artikel",
           "Setting benang awal",
           "Ganti Jarum / Olah Mesin",
         ],
         D: [
+          "Ganti benang dasar L1/L2",
+          "Salah ganti benang dasar",
+          "Ganti benang Pattern Linner",
+          "Ganti benang Pattern Heavy",
+          "Ganti benang Pattern Shadow",
+          "Ganti benang pattern keseluruhan (L,H,S)",
+          "salah ganti benang pattern",
+          "Ngelancarin",
+          "Over Cone/Rewind",
+          "Tunggu benang dasar dari warping",
+          "Tunggu benang (benang belum datang)",
           "Menunggu mekanik",
           "Menunggu benang",
           "Cleaning mesin",
           "Istirahat",
+        ],
+        E: [
+          "Error Servo Drive",
+          "Ganti motor servo",
+          "Sensor Benang/Laser Stop",
+          "Perbaikan Eletrik lainnya",
+          "Konsleting",
+          "Perbaikan listrik",
+        ],
+        F: [
+          "Perbaikan cilynder Angin",
+          "Ganti Bellow",
+          "Perbaikan gear/Take Up Roll",
+          "Ganti rantai/pertensi",
+          "Ganti Black grip roll",
+          "Ganti Oli",
+          "Pelumasan/greace pada mesin",
+          "Ganti Vanbelt",
+          "Perawatan Panel Listrik",
+          "Servis Overhaul",
+        ],
+        G: [
+          "Hari Libur",
+          "Tidak ada order",
+          "Tunggu info",
+          "Demo",
+          "Bencana/gempa/banjir",
+          "Istirahat selama buka puasa",
+          "Tunggu Sparepart",
+          "Mati Listrik",
         ],
       };
 
@@ -1168,7 +1230,13 @@ export default function DashboardPage() {
             return cat;
           }
         }
-        return (fallbackCategory && fallbackCategory.trim() !== "" && fallbackCategory !== "X") ? fallbackCategory.toUpperCase() : "X";
+        if (fallbackCategory && fallbackCategory.trim() !== "" && fallbackCategory !== "X") {
+          const firstCat = fallbackCategory.split(/[,/]/)[0].trim().toUpperCase();
+          if (firstCat && firstCat.length === 1 && firstCat >= "A" && firstCat <= "Z") {
+            return firstCat;
+          }
+        }
+        return "X";
       };
 
       problemData.forEach((item) => {

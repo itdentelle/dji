@@ -52,24 +52,53 @@ function InfoField({ label, value, highlight }: { label: string; value: string; 
 function formatFullDateTime(dateVal?: string): string {
   if (!dateVal || dateVal === "-" || dateVal === "—") return "—";
 
-  const raw = dateVal.trim();
+  try {
+    let str = String(dateVal).trim();
+    if (!str) return "—";
 
-  if (raw.includes("T")) {
-    const [dPart, tPart] = raw.split("T");
-    const cleanTime = tPart.split(".")[0];
-    const formattedTime = cleanTime.length === 5 ? `${cleanTime}:00` : cleanTime.substring(0, 8);
-    return `${dPart} ${formattedTime}`;
-  }
-
-  if (raw.includes(" ")) {
-    const [dPart, tPart] = raw.split(" ");
-    if (tPart && tPart.includes(":")) {
-      const formattedTime = tPart.length === 5 ? `${tPart}:00` : tPart.substring(0, 8);
-      return `${dPart} ${formattedTime}`;
+    // If it's already a clean formatted date string without T/Z, return as is
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(str)) {
+      return str;
     }
-  }
 
-  return raw;
+    let dt: Date;
+    if (str.includes("T")) {
+      if (!str.includes("Z") && !str.includes("+") && !str.includes("-", 10)) {
+        str = str + "Z";
+      }
+      dt = new Date(str);
+    } else if (str.includes(" ")) {
+      const parts = str.split(" ");
+      const dPart = parts[0];
+      const tPart = parts[1] || "00:00:00";
+      if (!str.includes("Z") && !str.includes("+")) {
+        dt = new Date(`${dPart}T${tPart}Z`);
+      } else {
+        dt = new Date(str);
+      }
+    } else {
+      dt = new Date(str);
+    }
+
+    if (isNaN(dt.getTime())) {
+      return dateVal;
+    }
+
+    const year = dt.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta", year: "numeric" });
+    const month = dt.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" });
+    const day = dt.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta", day: "2-digit" });
+    const timeStr = dt.toLocaleTimeString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).replace(".", ":");
+
+    return `${year}-${month}-${day} ${timeStr}`;
+  } catch (e) {
+    return dateVal;
+  }
 }
 
 export default function CompactHeaderCard(props: CompactHeaderCardProps) {
@@ -129,7 +158,7 @@ export default function CompactHeaderCard(props: CompactHeaderCardProps) {
 
       {/* === BODY === */}
       <div className="bg-white">
-        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
 
           {/* LEFT: Spesifikasi Produksi */}
           <div className="p-5 sm:p-6">
